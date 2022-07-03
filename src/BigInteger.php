@@ -15,7 +15,7 @@ use function Safe\unpack;
 final class BigInteger
 {
     private function __construct(
-        private BrickBigInteger $value
+        private readonly BrickBigInteger $value
     ) {
     }
 

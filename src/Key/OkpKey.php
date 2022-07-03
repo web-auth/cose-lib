@@ -9,19 +9,19 @@ use Assert\Assertion;
 
 class OkpKey extends Key
 {
-    public const CURVE_X25519 = 4;
+    final public const CURVE_X25519 = 4;
 
-    public const CURVE_X448 = 5;
+    final public const CURVE_X448 = 5;
 
-    public const CURVE_ED25519 = 6;
+    final public const CURVE_ED25519 = 6;
 
-    public const CURVE_ED448 = 7;
+    final public const CURVE_ED448 = 7;
 
-    public const DATA_CURVE = -1;
+    final public const DATA_CURVE = -1;
 
-    public const DATA_X = -2;
+    final public const DATA_X = -2;
 
-    public const DATA_D = -4;
+    final public const DATA_D = -4;
 
     private const SUPPORTED_CURVES = [
         self::CURVE_X25519,

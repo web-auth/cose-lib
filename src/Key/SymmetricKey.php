@@ -8,7 +8,7 @@ use Assert\Assertion;
 
 class SymmetricKey extends Key
 {
-    public const DATA_K = -1;
+    final public const DATA_K = -1;
 
     /**
      * @param array<int|string, mixed> $data

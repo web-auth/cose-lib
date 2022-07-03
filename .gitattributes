@@ -3,3 +3,10 @@
 /.github export-ignore
 /.gitattributes export-ignore
 /README.md export-ignore
+/tests export-ignore
+/ecs.php export-ignore
+/infection.json export-ignore
+/Makefile export-ignore
+/phpunit.xml.dist export-ignore
+/README.md export-ignore
+/rector.php export-ignore

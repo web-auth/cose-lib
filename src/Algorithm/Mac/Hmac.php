@@ -12,7 +12,7 @@ abstract class Hmac implements Mac
     public function hash(string $data, Key $key): string
     {
         $this->checKey($key);
-        $signature = hash_hmac($this->getHashAlgorithm(), $data, $key->get(-1), true);
+        $signature = hash_hmac($this->getHashAlgorithm(), $data, (string) $key->get(-1), true);
 
         return mb_substr($signature, 0, intdiv($this->getSignatureLength(), 8), '8bit');
     }

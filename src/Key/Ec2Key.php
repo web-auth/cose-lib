@@ -15,21 +15,21 @@ use FG\ASN1\Universal\Sequence;
 
 class Ec2Key extends Key
 {
-    public const CURVE_P256 = 1;
+    final public const CURVE_P256 = 1;
 
-    public const CURVE_P256K = 8;
+    final public const CURVE_P256K = 8;
 
-    public const CURVE_P384 = 2;
+    final public const CURVE_P384 = 2;
 
-    public const CURVE_P521 = 3;
+    final public const CURVE_P521 = 3;
 
-    public const DATA_CURVE = -1;
+    final public const DATA_CURVE = -1;
 
-    public const DATA_X = -2;
+    final public const DATA_X = -2;
 
-    public const DATA_Y = -3;
+    final public const DATA_Y = -3;
 
-    public const DATA_D = -4;
+    final public const DATA_D = -4;
 
     private const SUPPORTED_CURVES = [self::CURVE_P256, self::CURVE_P256K, self::CURVE_P384, self::CURVE_P521];
 
