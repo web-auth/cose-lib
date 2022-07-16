@@ -9,6 +9,7 @@ use Cose\Key\OkpKey;
 use Cose\Key\SymmetricKey;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use function Safe\base64_decode;
 
 final class HS256Test extends TestCase
 {

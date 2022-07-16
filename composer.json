@@ -22,7 +22,8 @@
         "ext-mbstring": "*",
         "beberlei/assert": "^3.2",
         "brick/math": "^0.9|^0.10",
-        "fgrosse/phpasn1": "^2.1"
+        "fgrosse/phpasn1": "^2.1",
+        "thecodingmachine/safe": "^1.0|^2.0"
     },
     "autoload": {
         "psr-4": {
@@ -39,7 +40,9 @@
         "phpunit/phpunit": "^9.5",
         "rector/rector": "^0.13.6",
         "symplify/easy-coding-standard": "^11.0",
-        "symfony/phpunit-bridge": "^6.1"
+        "symfony/phpunit-bridge": "^6.1",
+        "ekino/phpstan-banned-code": "^1.0",
+        "thecodingmachine/phpstan-safe-rule": "^1.2"
     },
     "autoload-dev": {
         "psr-4": {
@@ -50,5 +53,9 @@
         "allow-plugins": {
             "infection/extension-installer": true
         }
+    },
+    "suggest": {
+        "ext-gmp": "For better performance, please install either GMP (recommended) or BCMath extension",
+        "ext-bcmath": "For better performance, please install either GMP (recommended) or BCMath extension"
     }
 }

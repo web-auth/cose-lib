@@ -1,6 +1,6 @@
 name: Static Analyze
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   tests:
@@ -30,6 +30,3 @@ jobs:
 
       - name: PHPStan
         run: make st
-
-      - name: "deptrac"
-        run: sh .github/workflows/test-flag-fail-on-uncovered.sh
