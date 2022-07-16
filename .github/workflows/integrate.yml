@@ -145,7 +145,7 @@ jobs:
         run: "make ci-cs"
 
   mutation_testing:
-    name: "3️⃣ Mutation Testing"
+    name: "5️⃣ Mutation Testing"
     needs:
       - "byte_level"
       - "syntax_errors"
@@ -173,7 +173,7 @@ jobs:
         run: "make ci-mu"
 
   rector_checkstyle:
-    name: "3️⃣ Rector Checkstyle"
+    name: "6️⃣ Rector Checkstyle"
     needs:
       - "byte_level"
       - "syntax_errors"
@@ -202,7 +202,7 @@ jobs:
         run: "make rector"
 
   exported_files:
-    name: "5️⃣ Exported files"
+    name: "7️⃣ Exported files"
     needs:
       - "byte_level"
       - "syntax_errors"
