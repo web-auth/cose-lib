@@ -10,4 +10,4 @@
 
 ## Reporting a Vulnerability
 
-If you think you have found a security issue, DO NOT open an issue. You MUST submit your issue at https://gitter.im/Spomky/.
+If you think you have found a security issue, DO NOT open an issue. You MUST submit email security AT spomky-labs.com
