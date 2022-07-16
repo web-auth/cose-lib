@@ -14,7 +14,7 @@ block_comment_start = /*
 block_comment = *
 block_comment_end = */
 
-[*.yml]
+[{*.yml,*.yaml}]
 indent_size = 2
 
 [*.md]
@@ -22,9 +22,6 @@ trim_trailing_whitespace = false
 
 [Makefile]
 indent_style = tab
-
-[.github/ISSUE_TEMPLATE/*]
-indent_size = unset
 
 # Generated file
 [infection.txt]
