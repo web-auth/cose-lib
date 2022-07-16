@@ -20,8 +20,11 @@ indent_size = 2
 [*.md]
 trim_trailing_whitespace = false
 
-[infection.txt]
-indent_size = unset
-
 [Makefile]
 indent_style = tab
+
+[.github/ISSUE_TEMPLATE/*]
+indent_size = unset
+
+[infection.txt]
+generated_code = true
