@@ -19,3 +19,9 @@ indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = false
+
+[infection.txt]
+indent_size = unset
+
+[Makefile]
+indent_style = tab
