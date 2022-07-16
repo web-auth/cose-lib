@@ -11,7 +11,7 @@ on:
 jobs:
   byte_level:
     name: "0️⃣ Byte-level"
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-latest"
     steps:
       - name: "Checkout code"
         uses: "actions/checkout@v3"
@@ -26,7 +26,7 @@ jobs:
 
   syntax_errors:
     name: "1️⃣ Syntax errors"
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-latest"
     steps:
       - name: "Set up PHP"
         uses: "shivammathur/setup-php@v2"
@@ -42,8 +42,7 @@ jobs:
           dependency-versions: "highest"
 
       - name: "Check source code for syntax errors"
-        run: "composer exec -- parallel-lint src/"
-        # @TODO Check template files for syntax errors
+        run: "composer exec -- parallel-lint src/ tests/"
 
   unit_tests:
     name: "2️⃣ Unit and functional tests"
