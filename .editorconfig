@@ -26,5 +26,7 @@ indent_style = tab
 [.github/ISSUE_TEMPLATE/*]
 indent_size = unset
 
+# Generated file
 [infection.txt]
-generated_code = true
+indent_size = unset
+trim_trailing_whitespace = unset
