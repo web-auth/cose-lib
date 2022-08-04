@@ -208,7 +208,7 @@ class RsaKey extends Key
         $data = unpack('H*', $value);
         $hex = current($data);
 
-        return (int)BigInteger::fromBase($hex, 16)->toBase(10);
+        return (int) BigInteger::fromBase($hex, 16)->toBase(10);
     }
 
     private function pem(string $type, string $der): string
