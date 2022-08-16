@@ -203,12 +203,12 @@ class RsaKey extends Key
         return $this->pem('PUBLIC KEY', $der->getBinary());
     }
 
-    private function fromBase64ToInteger(string $value): string
+    private function fromBase64ToInteger(string $value): int
     {
         $data = unpack('H*', $value);
         $hex = current($data);
 
-        return BigInteger::fromBase($hex, 16)->toBase(10);
+        return (int) BigInteger::fromBase($hex, 16)->toBase(10);
     }
 
     private function pem(string $type, string $der): string
