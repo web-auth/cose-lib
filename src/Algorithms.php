@@ -65,7 +65,12 @@ abstract class Algorithms
 
     final public const COSE_ALGORITHM_ES256 = -7;
 
+    /**
+     * @deprecated since v4.0.6. Please use COSE_ALGORITHM_EDDSA instead. Will be removed in v5.0.0
+     */
     final public const COSE_ALGORITHM_EdDSA = -8;
+
+    final public const COSE_ALGORITHM_EDDSA = -8;
 
     final public const COSE_ALGORITHM_ED256 = -260;
 

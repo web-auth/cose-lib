@@ -48,7 +48,7 @@ class EdDSA implements Signature
 
     public static function identifier(): int
     {
-        return Algorithms::COSE_ALGORITHM_EdDSA;
+        return Algorithms::COSE_ALGORITHM_EDDSA;
     }
 
     private function handleKey(Key $key): OkpKey
