@@ -119,3 +119,8 @@ parameters:
             message: "#^Method Cose\\\\Key\\\\SymmetricKey\\:\\:k\\(\\) should return string but returns mixed\\.$#"
             count: 1
             path: src/Key/SymmetricKey.php
+
+        -
+            message: "#^Parameter \\#1 \\$value of class FG\\\\ASN1\\\\Universal\\\\Integer constructor expects int, string given\\.$#"
+            count: 2
+            path: src/Key/RsaKey.php
