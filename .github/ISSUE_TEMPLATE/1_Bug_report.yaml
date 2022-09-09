@@ -1,7 +1,6 @@
 name: 🐛 Bug Report
 description: ⚠️ NEVER report security issues, email security AT spomky-labs.com instead
 labels: Bug
-
 body:
   - type: input
     id: affected-versions
@@ -14,8 +13,7 @@ body:
     id: description
     attributes:
       label: Description
-      description: |
-        A clear and concise description of the problem
+      description: A clear and concise description of the problem
     validations:
       required: true
   - type: textarea
@@ -41,5 +39,4 @@ body:
     id: additional-context
     attributes:
       label: Additional Context
-      description: |
-        Optional: any other context about the problem: log messages, screenshots, etc.
+      description: "Optional: any other context about the problem: log messages, screenshots, etc."

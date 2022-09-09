@@ -6,6 +6,9 @@ namespace Cose\Key;
 
 use Assert\Assertion;
 
+/**
+ * @final
+ */
 class SymmetricKey extends Key
 {
     final public const DATA_K = -1;
