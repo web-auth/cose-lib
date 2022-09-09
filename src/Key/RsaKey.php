@@ -14,31 +14,34 @@ use FG\ASN1\Universal\ObjectIdentifier;
 use FG\ASN1\Universal\Sequence;
 use function Safe\unpack;
 
+/**
+ * @final
+ */
 class RsaKey extends Key
 {
-    public const DATA_N = -1;
+    final public const DATA_N = -1;
 
-    public const DATA_E = -2;
+    final public const DATA_E = -2;
 
-    public const DATA_D = -3;
+    final public const DATA_D = -3;
 
-    public const DATA_P = -4;
+    final public const DATA_P = -4;
 
-    public const DATA_Q = -5;
+    final public const DATA_Q = -5;
 
-    public const DATA_DP = -6;
+    final public const DATA_DP = -6;
 
-    public const DATA_DQ = -7;
+    final public const DATA_DQ = -7;
 
-    public const DATA_QI = -8;
+    final public const DATA_QI = -8;
 
-    public const DATA_OTHER = -9;
+    final public const DATA_OTHER = -9;
 
-    public const DATA_RI = -10;
+    final public const DATA_RI = -10;
 
-    public const DATA_DI = -11;
+    final public const DATA_DI = -11;
 
-    public const DATA_TI = -12;
+    final public const DATA_TI = -12;
 
     /**
      * @param array<int|string, mixed> $data

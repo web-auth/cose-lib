@@ -30,7 +30,7 @@ final class Manager
     }
 
     /**
-     * @return int[]
+     * @return iterable<int>
      */
     public function list(): iterable
     {
@@ -38,7 +38,7 @@ final class Manager
     }
 
     /**
-     * @return Algorithm[]
+     * @return iterable<int, Algorithm>
      */
     public function all(): iterable
     {

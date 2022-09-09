@@ -30,7 +30,7 @@ class Key
     /**
      * @var array<int|string, mixed>
      */
-    private array $data;
+    private readonly array $data;
 
     /**
      * @param array<int|string, mixed> $data
@@ -61,7 +61,7 @@ class Key
             '2' => new Ec2Key($data),
             '3' => new RsaKey($data),
             '4' => new SymmetricKey($data),
-            default => new self($data),
+            default => self::create($data),
         };
     }
 
