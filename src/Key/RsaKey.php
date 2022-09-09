@@ -14,6 +14,9 @@ use FG\ASN1\Universal\ObjectIdentifier;
 use FG\ASN1\Universal\Sequence;
 use function Safe\unpack;
 
+/**
+ * @final
+ */
 class RsaKey extends Key
 {
     final public const DATA_N = -1;

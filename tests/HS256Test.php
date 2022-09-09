@@ -15,39 +15,34 @@ final class HS256Test extends TestCase
 {
     /**
      * @test
+     * @dataProvider getVectors
      */
-    public function aMacCanBeComputed(): void
+    public function aMacCanBeComputed(string $k, string $data, string $expectedHash): void
     {
         $algorithm = HS256::create();
         $key = SymmetricKey::create([
-            SymmetricKey::DATA_K => base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true),
+            SymmetricKey::DATA_K => $k,
             SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
         ]);
-        $hash = $algorithm->hash(
-            'eyJhbGciOiJIUzI1NiIsImtpZCI6IjAxOGMwYWU1LTRkOWItNDcxYi1iZmQ2LWVlZjMxNGJjNzAzNyJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdSBkb24ndCBrZWVwIHlvdXIgZmVldCwgdGhlcmXigJlzIG5vIGtub3dpbmcgd2hlcmUgeW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4',
-            $key
-        );
+        $hash = $algorithm->hash($data, $key);
 
         static::assertSame(5, HS256::identifier());
-        static::assertSame(base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true), $key->k());
-        static::assertSame(base64_decode('s0h6KThzkfBBBkLspW1h84VsJZFTsPPqMDA7g1Md7p0', true), $hash);
+        static::assertSame($k, $key->k());
+        static::assertSame($expectedHash, $hash);
     }
 
     /**
      * @test
+     * @dataProvider getVectors
      */
-    public function aMacCanBeVerified(): void
+    public function aMacCanBeVerified(string $k, string $data, string $hash): void
     {
         $algorithm = new HS256();
         $key = SymmetricKey::create([
-            SymmetricKey::DATA_K => base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true),
+            SymmetricKey::DATA_K => $k,
             SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
         ]);
-        $isValid = $algorithm->verify(
-            'eyJhbGciOiJIUzI1NiIsImtpZCI6IjAxOGMwYWU1LTRkOWItNDcxYi1iZmQ2LWVlZjMxNGJjNzAzNyJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdSBkb24ndCBrZWVwIHlvdXIgZmVldCwgdGhlcmXigJlzIG5vIGtub3dpbmcgd2hlcmUgeW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4',
-            $key,
-            base64_decode('s0h6KThzkfBBBkLspW1h84VsJZFTsPPqMDA7g1Md7p0', true)
-        );
+        $isValid = $algorithm->verify($data, $key, $hash);
 
         static::assertTrue($isValid);
     }
@@ -69,5 +64,17 @@ final class HS256Test extends TestCase
             'eyJhbGciOiJIUzI1NiIsImtpZCI6IjAxOGMwYWU1LTRkOWItNDcxYi1iZmQ2LWVlZjMxNGJjNzAzNyJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdSBkb24ndCBrZWVwIHlvdXIgZmVldCwgdGhlcmXigJlzIG5vIGtub3dpbmcgd2hlcmUgeW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4',
             $key
         );
+    }
+
+    /**
+     * @return array<string>[]
+     */
+    public function getVectors(): iterable
+    {
+        yield [
+            base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true),
+            'eyJhbGciOiJIUzI1NiIsImtpZCI6IjAxOGMwYWU1LTRkOWItNDcxYi1iZmQ2LWVlZjMxNGJjNzAzNyJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdSBkb24ndCBrZWVwIHlvdXIgZmVldCwgdGhlcmXigJlzIG5vIGtub3dpbmcgd2hlcmUgeW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4',
+            base64_decode('s0h6KThzkfBBBkLspW1h84VsJZFTsPPqMDA7g1Md7p0', true),
+        ];
     }
 }

@@ -7,6 +7,9 @@ namespace Cose\Key;
 use function array_key_exists;
 use Assert\Assertion;
 
+/**
+ * @final
+ */
 class OkpKey extends Key
 {
     final public const CURVE_X25519 = 4;

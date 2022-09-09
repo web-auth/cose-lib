@@ -13,6 +13,9 @@ use FG\ASN1\Universal\ObjectIdentifier;
 use FG\ASN1\Universal\OctetString;
 use FG\ASN1\Universal\Sequence;
 
+/**
+ * @final
+ */
 class Ec2Key extends Key
 {
     final public const CURVE_P256 = 1;

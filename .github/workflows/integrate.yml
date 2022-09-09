@@ -5,7 +5,7 @@ name: "Integrate"
 on:
   push:
     branches:
-      - "v4.0"
+      - "*.x"
   pull_request: null
 
 jobs:
@@ -32,6 +32,7 @@ jobs:
         uses: "shivammathur/setup-php@v2"
         with:
           php-version: "8.1"
+          coverage: "none"
 
       - name: "Checkout code"
         uses: "actions/checkout@v3"
@@ -64,7 +65,7 @@ jobs:
         uses: "shivammathur/setup-php@v2"
         with:
           php-version: "${{ matrix.php-version }}"
-          extensions: "json, mbstring, openssl, sqlite3, curl, uuid"
+          extensions: "ctype, dom, json, libxml, mbstring, openssl, phar, simplexml, tokenizer, xml, xmlwriter"
           coverage: "xdebug"
 
       - name: "Checkout code"
@@ -76,16 +77,16 @@ jobs:
           dependency-versions: "${{ matrix.dependencies }}"
           composer-options: "--optimize-autoloader"
 
-      - name: "Execute unit tests"
+      - name: "Execute tests (PHP)"
         run: "make ci-cc"
 
-#      - name: Send coverage to Coveralls
-#        if: "matrix.php-version == '8.1' && matrix.dependencies == 'highest'"
-#        env:
-#          COVERALLS_REPO_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-#        run: |
-#          wget "https://github.com/php-coveralls/php-coveralls/releases/download/v2.5.2/php-coveralls.phar"
-#          php ./php-coveralls.phar -v
+  #      - name: Send coverage to Coveralls
+  #        if: "matrix.php-version == '8.1' && matrix.dependencies == 'highest'"
+  #        env:
+  #          COVERALLS_REPO_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+  #        run: |
+  #          wget "https://github.com/php-coveralls/php-coveralls/releases/download/v2.5.2/php-coveralls.phar"
+  #          php ./php-coveralls.phar -v
 
   static_analysis:
     name: "3️⃣ Static Analysis"
@@ -98,7 +99,8 @@ jobs:
         uses: "shivammathur/setup-php@v2"
         with:
           php-version: "8.1"
-          extensions: "json, mbstring, openssl, sqlite3, curl, uuid"
+          extensions: "ctype, dom, json, libxml, mbstring, openssl, phar, simplexml, tokenizer, xml, xmlwriter"
+          coverage: "none"
 
       - name: "Checkout code"
         uses: "actions/checkout@v3"
@@ -111,6 +113,9 @@ jobs:
         with:
           dependency-versions: "highest"
           composer-options: "--optimize-autoloader"
+
+      - name: "Check PSR-4 mapping"
+        run: "composer dump-autoload --optimize --strict-psr"
 
       - name: "Execute static analysis"
         run: "make st"
@@ -126,7 +131,8 @@ jobs:
         uses: "shivammathur/setup-php@v2"
         with:
           php-version: "8.1"
-          extensions: "json, mbstring, openssl, sqlite3, curl, uuid"
+          extensions: "ctype, dom, json, libxml, mbstring, openssl, phar, simplexml, tokenizer, xml, xmlwriter"
+          coverage: "none"
 
       - name: "Checkout code"
         uses: "actions/checkout@v3"
@@ -143,6 +149,10 @@ jobs:
       - name: "Check coding style"
         run: "make ci-cs"
 
+      - name: "Deptrac"
+        run: |
+          vendor/bin/deptrac analyse --fail-on-uncovered --no-cache
+
   mutation_testing:
     name: "5️⃣ Mutation Testing"
     needs:
@@ -154,7 +164,8 @@ jobs:
         uses: "shivammathur/setup-php@v2"
         with:
           php-version: "8.1"
-          extensions: "json, mbstring, openssl, sqlite3, curl, uuid"
+          extensions: "ctype, dom, json, libxml, mbstring, openssl, phar, simplexml, tokenizer, xml, xmlwriter"
+          coverage: "xdebug"
 
       - name: "Checkout code"
         uses: "actions/checkout@v3"
@@ -182,7 +193,7 @@ jobs:
         uses: "shivammathur/setup-php@v2"
         with:
           php-version: "8.1"
-          extensions: "json, mbstring, openssl, sqlite3, curl, uuid"
+          extensions: "ctype, dom, json, libxml, mbstring, openssl, phar, simplexml, tokenizer, xml, xmlwriter"
           coverage: "xdebug"
 
       - name: "Checkout code"

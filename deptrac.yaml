@@ -1,0 +1,30 @@
+parameters:
+  paths:
+    - './src'
+  layers:
+    - name: 'CoseLib'
+      collectors:
+        - type: 'className'
+          regex: '^Cose\\'
+    - name: 'CBOR'
+      collectors:
+        - type: 'className'
+          regex: '^CBOR\\'
+    - name: 'Assertion'
+      collectors:
+        - type: 'className'
+          regex: '^Assert\\'
+    - name: 'Brick'
+      collectors:
+        - type: 'className'
+          regex: '^Brick\\'
+    - name: 'ASN1'
+      collectors:
+        - type: 'className'
+          regex: '^FG\\ASN1\\'
+  ruleset:
+    CoseLib:
+      - CBOR
+      - Assertion
+      - Brick
+      - ASN1
