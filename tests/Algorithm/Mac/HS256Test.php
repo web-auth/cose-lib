@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Cose\Tests;
+namespace Cose\Tests\Algorithm\Mac;
 
 use Cose\Algorithm\Mac\HS256;
 use Cose\Key\OkpKey;
