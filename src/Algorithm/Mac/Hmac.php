@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Mac;
 
-use Assert\Assertion;
 use Cose\Key\Key;
+use InvalidArgumentException;
 
 abstract class Hmac implements Mac
 {
@@ -28,7 +28,12 @@ abstract class Hmac implements Mac
 
     private function checKey(Key $key): void
     {
-        Assertion::eq($key->type(), 4, 'Invalid key. Must be of type symmetric');
-        Assertion::true($key->has(-1), 'Invalid key. The value of the key is missing');
+        if ($key->type() !== 4) {
+            throw new InvalidArgumentException('Invalid key. Must be of type symmetric');
+        }
+
+        if (! $key->has(-1)) {
+            throw new InvalidArgumentException('Invalid key. The value of the key is missing');
+        }
     }
 }

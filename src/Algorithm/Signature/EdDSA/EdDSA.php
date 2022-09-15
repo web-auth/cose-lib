@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Signature\EdDSA;
 
-use Assert\Assertion;
 use Cose\Algorithm\Signature\Signature;
 use Cose\Algorithms;
 use Cose\Key\Key;
@@ -19,7 +18,9 @@ class EdDSA implements Signature
     public function sign(string $data, Key $key): string
     {
         $key = $this->handleKey($key);
-        Assertion::true($key->isPrivate(), 'The key is not private');
+        if (! $key->isPrivate()) {
+            throw new InvalidArgumentException('The key is not private.');
+        }
 
         $x = $key->x();
         $d = $key->d();

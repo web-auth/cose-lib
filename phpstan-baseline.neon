@@ -11,8 +11,8 @@ parameters:
             path: src/Algorithm/Signature/RSA/PSSRSA.php
 
         -
-            message: "#^Cannot cast mixed to int\\.$#"
-            count: 2
+            message: "#^Cannot cast mixed to (string|int)\\.$#"
+            count: 3
             path: src/Key/Ec2Key.php
 
         -
@@ -42,7 +42,7 @@ parameters:
 
         -
             message: "#^Cannot cast mixed to int\\.$#"
-            count: 2
+            count: 1
             path: src/Key/OkpKey.php
 
         -

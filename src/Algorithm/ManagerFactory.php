@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm;
 
-use Assert\Assertion;
+use function array_key_exists;
+use InvalidArgumentException;
 
 final class ManagerFactory
 {
@@ -45,11 +46,9 @@ final class ManagerFactory
     {
         $manager = Manager::create();
         foreach ($aliases as $alias) {
-            Assertion::keyExists(
-                $this->algorithms,
-                $alias,
-                sprintf('The algorithm with alias "%s" is not supported', $alias)
-            );
+            if (! array_key_exists($alias, $this->algorithms)) {
+                throw new InvalidArgumentException(sprintf('The algorithm with alias "%s" is not supported', $alias));
+            }
             $manager->add($this->algorithms[$alias]);
         }
 

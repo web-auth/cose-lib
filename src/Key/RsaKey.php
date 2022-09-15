@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Cose\Key;
 
 use function array_key_exists;
-use Assert\Assertion;
 use Brick\Math\BigInteger;
 use FG\ASN1\Universal\BitString;
 use FG\ASN1\Universal\Integer;
 use FG\ASN1\Universal\NullObject;
 use FG\ASN1\Universal\ObjectIdentifier;
 use FG\ASN1\Universal\Sequence;
+use InvalidArgumentException;
+use LogicException;
 use function unpack;
 
 /**
@@ -49,13 +50,12 @@ class RsaKey extends Key
     public function __construct(array $data)
     {
         parent::__construct($data);
-        Assertion::eq(
-            $data[self::TYPE],
-            self::TYPE_RSA,
-            'Invalid RSA key. The key type does not correspond to a RSA key'
-        );
-        Assertion::keyExists($data, self::DATA_N, 'Invalid RSA key. The modulus is missing');
-        Assertion::keyExists($data, self::DATA_E, 'Invalid RSA key. The exponent is missing');
+        if (! isset($data[self::TYPE]) || $data[self::TYPE] !== self::TYPE_RSA) {
+            throw new InvalidArgumentException('Invalid RSA key. The key type does not correspond to a RSA key');
+        }
+        if (! isset($data[self::DATA_N]) || ! isset($data[self::DATA_E])) {
+            throw new InvalidArgumentException('Invalid RSA key. The modulus or the exponent is missing');
+        }
     }
 
     /**
@@ -78,42 +78,42 @@ class RsaKey extends Key
 
     public function d(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_D);
     }
 
     public function p(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_P);
     }
 
     public function q(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_Q);
     }
 
     public function dP(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_DP);
     }
 
     public function dQ(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_DQ);
     }
 
     public function QInv(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_QI);
     }
@@ -123,28 +123,28 @@ class RsaKey extends Key
      */
     public function other(): array
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_OTHER);
     }
 
     public function rI(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_RI);
     }
 
     public function dI(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_DI);
     }
 
     public function tI(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_TI);
     }
@@ -192,7 +192,9 @@ class RsaKey extends Key
 
     public function asPem(): string
     {
-        Assertion::false($this->isPrivate(), 'Unsupported for private keys.');
+        if ($this->isPrivate()) {
+            throw new LogicException('Unsupported for private keys.');
+        }
         $bitSring = new Sequence(
             new Integer($this->fromBase64ToInteger($this->n())),
             new Integer($this->fromBase64ToInteger($this->e()))
@@ -219,5 +221,12 @@ class RsaKey extends Key
         return sprintf("-----BEGIN %s-----\n", mb_strtoupper($type)) .
             chunk_split(base64_encode($der), 64, "\n") .
             sprintf("-----END %s-----\n", mb_strtoupper($type));
+    }
+
+    private function checkKeyIsPrivate(): void
+    {
+        if (! $this->isPrivate()) {
+            throw new InvalidArgumentException('The key is not private.');
+        }
     }
 }
