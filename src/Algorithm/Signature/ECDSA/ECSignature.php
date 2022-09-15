@@ -6,11 +6,11 @@ namespace Cose\Algorithm\Signature\ECDSA;
 
 use function bin2hex;
 use function dechex;
+use function hex2bin;
 use function hexdec;
 use InvalidArgumentException;
 use function mb_strlen;
 use function mb_substr;
-use function Safe\hex2bin;
 use function str_pad;
 use const STR_PAD_LEFT;
 
