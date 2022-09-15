@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Cose\Key;
 
 use function array_key_exists;
-use Assert\Assertion;
+use InvalidArgumentException;
 
 class Key
 {
@@ -37,7 +37,9 @@ class Key
      */
     public function __construct(array $data)
     {
-        Assertion::keyExists($data, self::TYPE, 'Invalid key: the type is not defined');
+        if (! array_key_exists(self::TYPE, $data)) {
+            throw new InvalidArgumentException('Invalid key: the type is not defined');
+        }
         $this->data = $data;
     }
 
@@ -54,7 +56,9 @@ class Key
      */
     public static function createFromData(array $data): self
     {
-        Assertion::keyExists($data, self::TYPE, 'Invalid key: the type is not defined');
+        if (! array_key_exists(self::TYPE, $data)) {
+            throw new InvalidArgumentException('Invalid key: the type is not defined');
+        }
 
         return match ($data[self::TYPE]) {
             '1' => new OkpKey($data),
@@ -90,7 +94,9 @@ class Key
 
     public function get(int|string $key): mixed
     {
-        Assertion::keyExists($this->data, $key, sprintf('The key has no data at index %d', $key));
+        if (! array_key_exists($key, $this->data)) {
+            throw new InvalidArgumentException(sprintf('The key has no data at index %d', $key));
+        }
 
         return $this->data[$key];
     }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Cose\Algorithm;
 
 use function array_key_exists;
-use Assert\Assertion;
+use InvalidArgumentException;
 
 final class Manager
 {
@@ -52,7 +52,9 @@ final class Manager
 
     public function get(int $identifier): Algorithm
     {
-        Assertion::true($this->has($identifier), 'Unsupported algorithm');
+        if (! $this->has($identifier)) {
+            throw new InvalidArgumentException('Unsupported algorithm');
+        }
 
         return $this->algorithms[$identifier];
     }

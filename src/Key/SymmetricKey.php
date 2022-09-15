@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cose\Key;
 
-use Assert\Assertion;
+use InvalidArgumentException;
 
 /**
  * @final
@@ -19,12 +19,14 @@ class SymmetricKey extends Key
     public function __construct(array $data)
     {
         parent::__construct($data);
-        Assertion::eq(
-            $data[self::TYPE],
-            self::TYPE_OCT,
-            'Invalid symmetric key. The key type does not correspond to a symmetric key'
-        );
-        Assertion::keyExists($data, self::DATA_K, 'Invalid symmetric key. The parameter "k" is missing');
+        if (! isset($data[self::TYPE]) || $data[self::TYPE] !== self::TYPE_OCT) {
+            throw new InvalidArgumentException(
+                'Invalid symmetric key. The key type does not correspond to a symmetric key'
+            );
+        }
+        if (! isset($data[self::DATA_K])) {
+            throw new InvalidArgumentException('Invalid symmetric key. The parameter "k" is missing');
+        }
     }
 
     /**
