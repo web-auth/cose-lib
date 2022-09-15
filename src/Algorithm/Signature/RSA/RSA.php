@@ -9,8 +9,8 @@ use Cose\Algorithm\Signature\Signature;
 use Cose\Key\Key;
 use Cose\Key\RsaKey;
 use InvalidArgumentException;
-use function Safe\openssl_sign;
-use function Safe\openssl_verify;
+use function openssl_sign;
+use function openssl_verify;
 use Throwable;
 
 abstract class RSA implements Signature
