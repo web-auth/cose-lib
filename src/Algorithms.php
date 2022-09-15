@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cose;
 
-use Assert\Assertion;
+use function array_key_exists;
+use InvalidArgumentException;
 use const OPENSSL_ALGO_SHA1;
 use const OPENSSL_ALGO_SHA256;
 use const OPENSSL_ALGO_SHA384;
@@ -156,22 +157,18 @@ abstract class Algorithms
 
     public static function getOpensslAlgorithmFor(int $algorithmIdentifier): int
     {
-        Assertion::keyExists(
-            self::COSE_ALGORITHM_MAP,
-            $algorithmIdentifier,
-            'The specified algorithm identifier is not supported'
-        );
+        if (! array_key_exists($algorithmIdentifier, self::COSE_ALGORITHM_MAP)) {
+            throw new InvalidArgumentException('The specified algorithm identifier is not supported');
+        }
 
         return self::COSE_ALGORITHM_MAP[$algorithmIdentifier];
     }
 
     public static function getHashAlgorithmFor(int $algorithmIdentifier): string
     {
-        Assertion::keyExists(
-            self::COSE_HASH_MAP,
-            $algorithmIdentifier,
-            'The specified algorithm identifier is not supported'
-        );
+        if (! array_key_exists($algorithmIdentifier, self::COSE_HASH_MAP)) {
+            throw new InvalidArgumentException('The specified algorithm identifier is not supported');
+        }
 
         return self::COSE_HASH_MAP[$algorithmIdentifier];
     }

@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Cose\Key;
 
 use function array_key_exists;
-use Assert\Assertion;
 use FG\ASN1\ExplicitlyTaggedObject;
 use FG\ASN1\Universal\BitString;
 use FG\ASN1\Universal\Integer;
 use FG\ASN1\Universal\ObjectIdentifier;
 use FG\ASN1\Universal\OctetString;
 use FG\ASN1\Universal\Sequence;
+use function in_array;
+use InvalidArgumentException;
 
 /**
  * @final
@@ -60,29 +61,21 @@ class Ec2Key extends Key
     public function __construct(array $data)
     {
         parent::__construct($data);
-        Assertion::eq(
-            $data[self::TYPE],
-            self::TYPE_EC2,
-            'Invalid EC2 key. The key type does not correspond to an EC2 key'
-        );
-        Assertion::keyExists($data, self::DATA_CURVE, 'Invalid EC2 key. The curve is missing');
-        Assertion::keyExists($data, self::DATA_X, 'Invalid EC2 key. The x coordinate is missing');
-        Assertion::keyExists($data, self::DATA_Y, 'Invalid EC2 key. The y coordinate is missing');
-        Assertion::length(
-            $data[self::DATA_X],
-            self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]],
-            'Invalid length for x coordinate',
-            null,
-            '8bit'
-        );
-        Assertion::length(
-            $data[self::DATA_Y],
-            self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]],
-            'Invalid length for y coordinate',
-            null,
-            '8bit'
-        );
-        Assertion::inArray((int) $data[self::DATA_CURVE], self::SUPPORTED_CURVES, 'The curve is not supported');
+        if (! isset($data[self::TYPE]) || $data[self::TYPE] !== self::TYPE_EC2) {
+            throw new InvalidArgumentException('Invalid EC2 key. The key type does not correspond to an EC2 key');
+        }
+        if (! isset($data[self::DATA_CURVE]) || ! isset($data[self::DATA_X]) || ! isset($data[self::DATA_Y])) {
+            throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x/y" coordinates are missing');
+        }
+        if (mb_strlen((string) $data[self::DATA_X], '8bit') !== self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]]) {
+            throw new InvalidArgumentException('Invalid length for x coordinate');
+        }
+        if (mb_strlen((string) $data[self::DATA_Y], '8bit') !== self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]]) {
+            throw new InvalidArgumentException('Invalid length for y coordinate');
+        }
+        if (! in_array($data[self::DATA_CURVE], self::SUPPORTED_CURVES, true)) {
+            throw new InvalidArgumentException('The curve is not supported');
+        }
     }
 
     /**
@@ -118,8 +111,9 @@ class Ec2Key extends Key
 
     public function d(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private');
-
+        if (! $this->isPrivate()) {
+            throw new InvalidArgumentException('The key is not private.');
+        }
         return $this->get(self::DATA_D);
     }
 

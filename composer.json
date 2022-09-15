@@ -20,7 +20,6 @@
         "ext-json": "*",
         "ext-openssl": "*",
         "ext-mbstring": "*",
-        "beberlei/assert": "^3.2",
         "brick/math": "^0.9|^0.10",
         "fgrosse/phpasn1": "^2.1"
     },
@@ -32,7 +31,6 @@
     "require-dev": {
         "infection/infection": "^0.26.12",
         "phpstan/phpstan": "^1.7",
-        "phpstan/phpstan-beberlei-assert": "^1.0",
         "phpstan/phpstan-deprecation-rules": "^1.0",
         "phpstan/phpstan-phpunit": "^1.1",
         "phpstan/phpstan-strict-rules": "^1.2",
