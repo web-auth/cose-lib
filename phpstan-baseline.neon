@@ -124,3 +124,5 @@ parameters:
             message: "#^Parameter \\#1 \\$value of class FG\\\\ASN1\\\\Universal\\\\Integer constructor expects int, string given\\.$#"
             count: 2
             path: src/Key/RsaKey.php
+        - '#Parameter \#\d+ \$.* of .* expects .*, .* given\.#'
+        - '#Method .* should return string but returns string\|false\.#'
