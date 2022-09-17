@@ -19,7 +19,7 @@ class SymmetricKey extends Key
     public function __construct(array $data)
     {
         parent::__construct($data);
-        if (! isset($data[self::TYPE]) || $data[self::TYPE] !== self::TYPE_OCT) {
+        if (! isset($data[self::TYPE]) || (int) $data[self::TYPE] !== self::TYPE_OCT) {
             throw new InvalidArgumentException(
                 'Invalid symmetric key. The key type does not correspond to a symmetric key'
             );

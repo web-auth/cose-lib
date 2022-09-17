@@ -12,8 +12,18 @@ parameters:
 
         -
             message: "#^Cannot cast mixed to (string|int)\\.$#"
-            count: 3
+            count: 4
             path: src/Key/Ec2Key.php
+
+        -
+            message: "#^Cannot cast mixed to int\\.$#"
+            count: 1
+            path: src/Key/RsaKey.php
+
+        -
+            message: "#^Cannot cast mixed to int\\.$#"
+            count: 1
+            path: src/Key/SymmetricKey.php
 
         -
             message: "#^Method Cose\\\\Key\\\\Ec2Key\\:\\:d\\(\\) should return string but returns mixed\\.$#"

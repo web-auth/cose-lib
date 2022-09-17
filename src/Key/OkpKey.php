@@ -40,10 +40,10 @@ class OkpKey extends Key
     public function __construct(array $data)
     {
         parent::__construct($data);
-        if (! isset($data[self::TYPE]) || $data[self::TYPE] !== self::TYPE_OKP) {
+        if (! isset($data[self::TYPE]) || (int) $data[self::TYPE] !== self::TYPE_OKP) {
             throw new InvalidArgumentException('Invalid OKP key. The key type does not correspond to an OKP key');
         }
-        if (! isset($data[self::DATA_CURVE]) || ! isset($data[self::DATA_X])) {
+        if (! isset($data[self::DATA_CURVE], $data[self::DATA_X])) {
             throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x" coordinate is missing');
         }
         if (! in_array($data[self::DATA_CURVE], self::SUPPORTED_CURVES, true)) {
