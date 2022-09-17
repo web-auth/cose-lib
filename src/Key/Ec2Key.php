@@ -67,13 +67,13 @@ class Ec2Key extends Key
         if (! isset($data[self::DATA_CURVE], $data[self::DATA_X], $data[self::DATA_Y])) {
             throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x/y" coordinates are missing');
         }
-        if (mb_strlen((string) $data[self::DATA_X], '8bit') !== self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]]) {
+        if (mb_strlen((string) $data[self::DATA_X], '8bit') !== self::CURVE_KEY_LENGTH[(int) $data[self::DATA_CURVE]]) {
             throw new InvalidArgumentException('Invalid length for x coordinate');
         }
-        if (mb_strlen((string) $data[self::DATA_Y], '8bit') !== self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]]) {
+        if (mb_strlen((string) $data[self::DATA_Y], '8bit') !== self::CURVE_KEY_LENGTH[(int) $data[self::DATA_CURVE]]) {
             throw new InvalidArgumentException('Invalid length for y coordinate');
         }
-        if (! in_array($data[self::DATA_CURVE], self::SUPPORTED_CURVES, true)) {
+        if (! in_array((int) $data[self::DATA_CURVE], self::SUPPORTED_CURVES, true)) {
             throw new InvalidArgumentException('The curve is not supported');
         }
     }
