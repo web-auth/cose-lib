@@ -50,10 +50,10 @@ class RsaKey extends Key
     public function __construct(array $data)
     {
         parent::__construct($data);
-        if (! isset($data[self::TYPE]) || $data[self::TYPE] !== self::TYPE_RSA) {
+        if (! isset($data[self::TYPE]) || (int) $data[self::TYPE] !== self::TYPE_RSA) {
             throw new InvalidArgumentException('Invalid RSA key. The key type does not correspond to a RSA key');
         }
-        if (! isset($data[self::DATA_N]) || ! isset($data[self::DATA_E])) {
+        if (! isset($data[self::DATA_N], $data[self::DATA_E])) {
             throw new InvalidArgumentException('Invalid RSA key. The modulus or the exponent is missing');
         }
     }

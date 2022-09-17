@@ -61,10 +61,10 @@ class Ec2Key extends Key
     public function __construct(array $data)
     {
         parent::__construct($data);
-        if (! isset($data[self::TYPE]) || $data[self::TYPE] !== self::TYPE_EC2) {
+        if (! isset($data[self::TYPE]) || (int) $data[self::TYPE] !== self::TYPE_EC2) {
             throw new InvalidArgumentException('Invalid EC2 key. The key type does not correspond to an EC2 key');
         }
-        if (! isset($data[self::DATA_CURVE]) || ! isset($data[self::DATA_X]) || ! isset($data[self::DATA_Y])) {
+        if (! isset($data[self::DATA_CURVE], $data[self::DATA_X], $data[self::DATA_Y])) {
             throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x/y" coordinates are missing');
         }
         if (mb_strlen((string) $data[self::DATA_X], '8bit') !== self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]]) {
