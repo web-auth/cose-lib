@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
 use Rector\Core\ValueObject\PhpVersion;
-use Rector\Php74\Rector\Property\TypedPropertyRector;
 use Rector\PHPUnit\Set\PHPUnitSetList;
 use Rector\Set\ValueObject\LevelSetList;
 use Rector\Set\ValueObject\SetList;
@@ -29,7 +28,4 @@ return static function (RectorConfig $config): void {
     $config->importNames();
     $config->importNames();
     $config->importShortClasses();
-
-    $services = $config->services();
-    $services->set(TypedPropertyRector::class);
 };
