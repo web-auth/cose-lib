@@ -46,7 +46,7 @@ class OkpKey extends Key
         if (! isset($data[self::DATA_CURVE], $data[self::DATA_X])) {
             throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x" coordinate is missing');
         }
-        if (! in_array($data[self::DATA_CURVE], self::SUPPORTED_CURVES, true)) {
+        if (! in_array((int) $data[self::DATA_CURVE], self::SUPPORTED_CURVES, true)) {
             throw new InvalidArgumentException('The curve is not supported');
         }
     }
