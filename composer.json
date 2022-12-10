@@ -40,7 +40,7 @@
         "symfony/phpunit-bridge": "^6.1",
         "ekino/phpstan-banned-code": "^1.0",
         "php-parallel-lint/php-parallel-lint": "^1.3",
-        "qossmic/deptrac-shim": "^0.24.0"
+        "qossmic/deptrac-shim": "^0.24.0 || ^1.0.0"
     },
     "autoload-dev": {
         "psr-4": {
