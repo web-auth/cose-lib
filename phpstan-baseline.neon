@@ -52,7 +52,7 @@ parameters:
 
         -
             message: "#^Cannot cast mixed to int\\.$#"
-            count: 1
+            count: 3
             path: src/Key/OkpKey.php
 
         -
