@@ -10,6 +10,7 @@ parameters:
       collectors:
         - { type: className, regex: '^CBOR\\' }
         - { type: className, regex: '^Brick\\' }
+        - { type: className, regex: '^SpomkyLabs\\Pki\\' }
   ruleset:
     CoseLib:
       - Vendors
