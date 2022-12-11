@@ -195,8 +195,8 @@ class RsaKey extends Key
                 $this->binaryToBigInteger($this->d()),
                 $this->binaryToBigInteger($this->p()),
                 $this->binaryToBigInteger($this->q()),
-                $this->binaryToBigInteger($this->dp()),
-                $this->binaryToBigInteger($this->dq()),
+                $this->binaryToBigInteger($this->dP()),
+                $this->binaryToBigInteger($this->dQ()),
                 $this->binaryToBigInteger($this->QInv())
             );
 
