@@ -44,7 +44,6 @@ abstract class PSSRSA implements Signature
     {
         $key = $this->handleKey($key);
         $modulusLength = mb_strlen($key->n(), '8bit');
-
         if (mb_strlen($signature, '8bit') !== $modulusLength) {
             throw new InvalidArgumentException('Invalid modulus length');
         }

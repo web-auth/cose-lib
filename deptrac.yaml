@@ -6,25 +6,10 @@ parameters:
       collectors:
         - type: 'className'
           regex: '^Cose\\'
-    - name: 'CBOR'
+    - name: 'Vendors'
       collectors:
-        - type: 'className'
-          regex: '^CBOR\\'
-    - name: 'Assertion'
-      collectors:
-        - type: 'className'
-          regex: '^Assert\\'
-    - name: 'Brick'
-      collectors:
-        - type: 'className'
-          regex: '^Brick\\'
-    - name: 'ASN1'
-      collectors:
-        - type: 'className'
-          regex: '^FG\\ASN1\\'
+        - { type: className, regex: '^CBOR\\' }
+        - { type: className, regex: '^Brick\\' }
   ruleset:
     CoseLib:
-      - CBOR
-      - Assertion
-      - Brick
-      - ASN1
+      - Vendors
