@@ -21,8 +21,7 @@
         "ext-openssl": "*",
         "ext-mbstring": "*",
         "brick/math": "^0.9|^0.10",
-        "spomky-labs/pki-framework": "^1.0",
-        "fgrosse/phpasn1": "^2.3"
+        "spomky-labs/pki-framework": "^1.0"
     },
     "autoload": {
         "psr-4": {
