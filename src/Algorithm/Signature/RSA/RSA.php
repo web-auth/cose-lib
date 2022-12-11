@@ -34,7 +34,7 @@ abstract class RSA implements Signature
     {
         $key = $this->handleKey($key);
 
-        return openssl_verify($data, $signature, $key->asPem(), $this->getHashAlgorithm()) === 1;
+        return openssl_verify($data, $signature, $key->toPublic()->asPem(), $this->getHashAlgorithm()) === 1;
     }
 
     abstract protected function getHashAlgorithm(): int;

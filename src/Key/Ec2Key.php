@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Cose\Key;
 
 use function array_key_exists;
-use FG\ASN1\ExplicitlyTaggedObject;
-use FG\ASN1\Universal\BitString;
-use FG\ASN1\Universal\Integer;
-use FG\ASN1\Universal\ObjectIdentifier;
-use FG\ASN1\Universal\OctetString;
-use FG\ASN1\Universal\Sequence;
 use function in_array;
 use InvalidArgumentException;
+use SpomkyLabs\Pki\ASN1\Type\Constructed\Sequence;
+use SpomkyLabs\Pki\ASN1\Type\Primitive\BitString;
+use SpomkyLabs\Pki\ASN1\Type\Primitive\Integer;
+use SpomkyLabs\Pki\ASN1\Type\Primitive\ObjectIdentifier;
+use SpomkyLabs\Pki\ASN1\Type\Primitive\OctetString;
+use SpomkyLabs\Pki\ASN1\Type\Tagged\ExplicitlyTaggedType;
 
 /**
  * @final
@@ -125,22 +125,25 @@ class Ec2Key extends Key
     public function asPEM(): string
     {
         if ($this->isPrivate()) {
-            $der = new Sequence(
-                new Integer(1),
-                new OctetString(bin2hex($this->d())),
-                new ExplicitlyTaggedObject(0, new ObjectIdentifier($this->getCurveOid())),
-                new ExplicitlyTaggedObject(1, new BitString(bin2hex($this->getUncompressedCoordinates())))
+            $der = Sequence::create(
+                Integer::create(1),
+                OctetString::create($this->d()),
+                ExplicitlyTaggedType::create(0, ObjectIdentifier::create($this->getCurveOid())),
+                ExplicitlyTaggedType::create(1, BitString::create($this->getUncompressedCoordinates())),
             );
 
-            return $this->pem('EC PRIVATE KEY', $der->getBinary());
+            return $this->pem('EC PRIVATE KEY', $der->toDER());
         }
 
-        $der = new Sequence(
-            new Sequence(new ObjectIdentifier('1.2.840.10045.2.1'), new ObjectIdentifier($this->getCurveOid())),
-            new BitString(bin2hex($this->getUncompressedCoordinates()))
+        $der = Sequence::create(
+            Sequence::create(
+                ObjectIdentifier::create('1.2.840.10045.2.1'),
+                ObjectIdentifier::create($this->getCurveOid())
+            ),
+            BitString::create($this->getUncompressedCoordinates())
         );
 
-        return $this->pem('PUBLIC KEY', $der->getBinary());
+        return $this->pem('PUBLIC KEY', $der->toDER());
     }
 
     public function getUncompressedCoordinates(): string

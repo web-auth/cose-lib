@@ -26,7 +26,6 @@ abstract class ECDSA implements Signature
         $key = $this->handleKey($key);
         $publicKey = $key->toPublic();
         $signature = ECSignature::toAsn1($signature, $this->getSignaturePartLength());
-
         return openssl_verify($data, $signature, $publicKey->asPEM(), $this->getHashAlgorithm()) === 1;
     }
 
