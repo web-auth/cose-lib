@@ -8,6 +8,7 @@ use function array_key_exists;
 use Brick\Math\BigInteger;
 use function in_array;
 use InvalidArgumentException;
+use SpomkyLabs\Pki\CryptoTypes\Asymmetric\PublicKeyInfo;
 use SpomkyLabs\Pki\CryptoTypes\Asymmetric\RSA\RSAPrivateKey;
 use SpomkyLabs\Pki\CryptoTypes\Asymmetric\RSA\RSAPublicKey;
 
@@ -208,8 +209,9 @@ class RsaKey extends Key
             $this->binaryToBigInteger($this->n()),
             $this->binaryToBigInteger($this->e())
         );
+        $rsaKey = PublicKeyInfo::fromPublicKey($publicKey);
 
-        return $publicKey->toPEM()
+        return $rsaKey->toPEM()
             ->string();
     }
 
