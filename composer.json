@@ -20,7 +20,7 @@
         "ext-json": "*",
         "ext-openssl": "*",
         "ext-mbstring": "*",
-        "brick/math": "^0.9|^0.10",
+        "brick/math": "^0.9|^0.10|^0.11",
         "spomky-labs/pki-framework": "^1.0"
     },
     "autoload": {
