@@ -9,13 +9,13 @@ use Cose\Algorithm\Signature\EdDSA\Ed256;
 use Cose\Algorithm\Signature\EdDSA\Ed512;
 use Cose\Algorithm\Signature\EdDSA\EdDSA;
 use Cose\Key\OkpKey;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 final class EdDSATest extends TestCase
 {
-    /**
-     * @test
-     */
+    #[Test]
     public function theAlgorithmsHaveCorrectInnerParameters(): void
     {
         // Then
@@ -24,10 +24,8 @@ final class EdDSATest extends TestCase
         static::assertSame(-8, Ed25519::identifier());
     }
 
-    /**
-     * @test
-     * @dataProvider getVectors
-     */
+    #[Test]
+    #[DataProvider('getVectors')]
     public function aSignatureCanBeComputedAndVerified(
         EdDSA $algorithm,
         int $curve,
@@ -51,10 +49,8 @@ final class EdDSATest extends TestCase
         static::assertTrue($isValid);
     }
 
-    /**
-     * @test
-     * @dataProvider getVectors
-     */
+    #[Test]
+    #[DataProvider('getVectors')]
     public function aSignatureCanBeVerified(
         EdDSA $algorithm,
         int $curve,
@@ -81,7 +77,7 @@ final class EdDSATest extends TestCase
     /**
      * @return array<string>[]
      */
-    public function getVectors(): iterable
+    public static function getVectors(): iterable
     {
         yield [
             'alg' => Ed25519::create(),

@@ -12,13 +12,13 @@ use Cose\Algorithm\Signature\ECDSA\ES512;
 use Cose\Key\Ec2Key;
 use Cose\Key\OkpKey;
 use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 final class ECDSATest extends TestCase
 {
-    /**
-     * @test
-     */
+    #[Test]
     public function theAlgorithmsHaveCorrectInnerParameters(): void
     {
         // Then
@@ -28,10 +28,8 @@ final class ECDSATest extends TestCase
         static::assertSame(-36, ES512::identifier());
     }
 
-    /**
-     * @test
-     * @dataProvider getVectors
-     */
+    #[Test]
+    #[DataProvider('getVectors')]
     public function aSignatureCanBeComputedAndVerified(
         ECDSA $algorithm,
         int $curve,
@@ -57,10 +55,8 @@ final class ECDSATest extends TestCase
         static::assertTrue($isValid);
     }
 
-    /**
-     * @test
-     * @dataProvider getVectors
-     */
+    #[Test]
+    #[DataProvider('getVectors')]
     public function aSignatureCanBeVerified(
         ECDSA $algorithm,
         int $curve,
@@ -86,9 +82,7 @@ final class ECDSATest extends TestCase
         static::assertTrue($isValid);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function theKeyTypeIsNotValid(): void
     {
         // Then
@@ -110,9 +104,7 @@ final class ECDSATest extends TestCase
         );
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function theKeyCurveTypeIsNotValid(): void
     {
         // Then
@@ -139,7 +131,7 @@ final class ECDSATest extends TestCase
     /**
      * @return array<string>[]
      */
-    public function getVectors(): iterable
+    public static function getVectors(): iterable
     {
         yield [
             'alg' => ES256::create(),
