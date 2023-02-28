@@ -13,14 +13,14 @@ use Rector\Symfony\Set\SymfonySetList;
 return static function (RectorConfig $config): void {
     $config->import(SetList::DEAD_CODE);
     $config->import(LevelSetList::UP_TO_PHP_81);
-    $config->import(SymfonyLevelSetList::UP_TO_SYMFONY_60);
+    $config->import(SymfonyLevelSetList::UP_TO_SYMFONY_62);
     $config->import(SymfonySetList::SYMFONY_CODE_QUALITY);
     $config->import(SymfonySetList::SYMFONY_52_VALIDATOR_ATTRIBUTES);
     $config->import(SymfonySetList::SYMFONY_CONSTRUCTOR_INJECTION);
     $config->import(SymfonySetList::ANNOTATIONS_TO_ATTRIBUTES);
     $config->import(PHPUnitSetList::PHPUNIT_EXCEPTION);
     $config->import(PHPUnitSetList::PHPUNIT_SPECIFIC_METHOD);
-    $config->import(PHPUnitSetList::PHPUNIT_91);
+    $config->import(PHPUnitSetList::PHPUNIT_100);
     $config->import(PHPUnitSetList::PHPUNIT_YIELD_DATA_PROVIDER);
     $config->paths([__DIR__ . '/src', __DIR__ . '/tests']);
     $config->phpVersion(PhpVersion::PHP_81);

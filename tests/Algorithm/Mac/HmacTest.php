@@ -12,15 +12,15 @@ use Cose\Algorithm\Mac\HS512;
 use Cose\Key\OkpKey;
 use Cose\Key\SymmetricKey;
 use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use function Safe\base64_decode;
 
 final class HmacTest extends TestCase
 {
-    /**
-     * @test
-     * @dataProvider getVectors
-     */
+    #[Test]
+    #[DataProvider('getVectors')]
     public function theAlgorithsmHaveCorrectInnerParameters(): void
     {
         // Then
@@ -30,10 +30,8 @@ final class HmacTest extends TestCase
         static::assertSame(7, HS512::identifier());
     }
 
-    /**
-     * @test
-     * @dataProvider getVectors
-     */
+    #[Test]
+    #[DataProvider('getVectors')]
     public function aMacCanBeComputed(Hmac $algorithm, string $k, string $data, string $expectedHash): void
     {
         // Given
@@ -51,10 +49,8 @@ final class HmacTest extends TestCase
         static::assertSame($expectedHash, $hash);
     }
 
-    /**
-     * @test
-     * @dataProvider getVectors
-     */
+    #[Test]
+    #[DataProvider('getVectors')]
     public function aMacCanBeVerified(Hmac $algorithm, string $k, string $data, string $hash): void
     {
         // Given
@@ -70,9 +66,7 @@ final class HmacTest extends TestCase
         static::assertTrue($isValid);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function theKeyTypeIsInvalid(): void
     {
         // Then
@@ -94,9 +88,7 @@ final class HmacTest extends TestCase
         );
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function theKeyDataIsInvalid(): void
     {
         // Then
@@ -119,7 +111,7 @@ final class HmacTest extends TestCase
     /**
      * @return array<string>[]
      */
-    public function getVectors(): iterable
+    public static function getVectors(): iterable
     {
         yield [
             HS256::create(),
