@@ -6,13 +6,12 @@ namespace Cose\Tests\Key;
 
 use Cose\Algorithm\Signature\RSA\RS256;
 use Cose\Key\RsaKey;
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 final class RSAKeyTest extends TestCase
 {
-    /**
-     * @test
-     */
+    #[Test]
     public function theKeyIsCorrectlyEncoded(): void
     {
         // Given

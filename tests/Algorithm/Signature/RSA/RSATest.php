@@ -14,13 +14,13 @@ use Cose\Algorithm\Signature\RSA\RS384;
 use Cose\Algorithm\Signature\RSA\RS512;
 use Cose\Algorithm\Signature\RSA\RSA;
 use Cose\Key\RsaKey;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 final class RSATest extends TestCase
 {
-    /**
-     * @test
-     */
+    #[Test]
     public function theAlgorithmsHaveCorrectInnerParameters(): void
     {
         // Then
@@ -33,10 +33,8 @@ final class RSATest extends TestCase
         static::assertSame(-39, PS512::identifier());
     }
 
-    /**
-     * @test
-     * @dataProvider getVectors
-     */
+    #[Test]
+    #[DataProvider('getVectors')]
     public function aSignatureCanBeComputedAndVerified(RSA|PSSRSA $algorithm, RsaKey $key, string $data): void
     {
         // Given
@@ -49,10 +47,8 @@ final class RSATest extends TestCase
         static::assertTrue($isValid);
     }
 
-    /**
-     * @test
-     * @dataProvider getVectors
-     */
+    #[Test]
+    #[DataProvider('getVectors')]
     public function aSignatureCanBeVerified(RSA|PSSRSA $algorithm, RsaKey $key, string $data, string $signature): void
     {
         // Given
@@ -67,7 +63,7 @@ final class RSATest extends TestCase
     /**
      * @return array<string>[]
      */
-    public function getVectors(): iterable
+    public static function getVectors(): iterable
     {
         $key1 = RsaKey::create([
             RsaKey::TYPE => RsaKey::TYPE_RSA,
