@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Mac;
 
-use Assert\Assertion;
 use Cose\Key\Key;
+use Cose\Key\SymmetricKey;
+use InvalidArgumentException;
 
 abstract class Hmac implements Mac
 {
     public function hash(string $data, Key $key): string
     {
         $this->checKey($key);
-        $signature = hash_hmac($this->getHashAlgorithm(), $data, (string) $key->get(-1), true);
+        $signature = hash_hmac($this->getHashAlgorithm(), $data, (string) $key->get(SymmetricKey::DATA_K), true);
 
         return mb_substr($signature, 0, intdiv($this->getSignatureLength(), 8), '8bit');
     }
@@ -28,7 +29,12 @@ abstract class Hmac implements Mac
 
     private function checKey(Key $key): void
     {
-        Assertion::eq($key->type(), 4, 'Invalid key. Must be of type symmetric');
-        Assertion::true($key->has(-1), 'Invalid key. The value of the key is missing');
+        if ($key->type() !== Key::TYPE_OCT) {
+            throw new InvalidArgumentException('Invalid key. Must be of type symmetric');
+        }
+
+        if (! $key->has(SymmetricKey::DATA_K)) {
+            throw new InvalidArgumentException('Invalid key. The value of the key is missing');
+        }
     }
 }

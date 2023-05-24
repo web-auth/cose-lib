@@ -16,9 +16,9 @@ use InvalidArgumentException;
 use function mb_strlen;
 use function mb_substr;
 use function ord;
+use function pack;
 use function random_bytes;
 use RuntimeException;
-use function Safe\pack;
 use function str_pad;
 use const STR_PAD_LEFT;
 use function str_repeat;
@@ -44,7 +44,6 @@ abstract class PSSRSA implements Signature
     {
         $key = $this->handleKey($key);
         $modulusLength = mb_strlen($key->n(), '8bit');
-
         if (mb_strlen($signature, '8bit') !== $modulusLength) {
             throw new InvalidArgumentException('Invalid modulus length');
         }

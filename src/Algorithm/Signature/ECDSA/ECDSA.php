@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Signature\ECDSA;
 
-use Assert\Assertion;
 use Cose\Algorithm\Signature\Signature;
 use Cose\Key\Ec2Key;
 use Cose\Key\Key;
-use function Safe\openssl_sign;
-use function Safe\openssl_verify;
+use InvalidArgumentException;
+use function openssl_sign;
+use function openssl_verify;
 
 abstract class ECDSA implements Signature
 {
@@ -26,7 +26,6 @@ abstract class ECDSA implements Signature
         $key = $this->handleKey($key);
         $publicKey = $key->toPublic();
         $signature = ECSignature::toAsn1($signature, $this->getSignaturePartLength());
-
         return openssl_verify($data, $signature, $publicKey->asPEM(), $this->getHashAlgorithm()) === 1;
     }
 
@@ -39,7 +38,9 @@ abstract class ECDSA implements Signature
     private function handleKey(Key $key): Ec2Key
     {
         $key = Ec2Key::create($key->getData());
-        Assertion::eq($key->curve(), $this->getCurve(), 'This key cannot be used with this algorithm');
+        if ($key->curve() !== $this->getCurve()) {
+            throw new InvalidArgumentException('This key cannot be used with this algorithm');
+        }
 
         return $key;
     }

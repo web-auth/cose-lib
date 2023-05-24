@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Signature\RSA;
 
-use Assert\Assertion;
 use Cose\Algorithm\Signature\Signature;
 use Cose\Key\Key;
 use Cose\Key\RsaKey;
 use InvalidArgumentException;
-use function Safe\openssl_sign;
-use function Safe\openssl_verify;
+use function openssl_sign;
+use function openssl_verify;
 use Throwable;
 
 abstract class RSA implements Signature
@@ -18,7 +17,9 @@ abstract class RSA implements Signature
     public function sign(string $data, Key $key): string
     {
         $key = $this->handleKey($key);
-        Assertion::true($key->isPrivate(), 'The key is not private');
+        if (! $key->isPrivate()) {
+            throw new InvalidArgumentException('The key is not private.');
+        }
 
         try {
             openssl_sign($data, $signature, $key->asPem(), $this->getHashAlgorithm());
@@ -33,7 +34,7 @@ abstract class RSA implements Signature
     {
         $key = $this->handleKey($key);
 
-        return openssl_verify($data, $signature, $key->asPem(), $this->getHashAlgorithm()) === 1;
+        return openssl_verify($data, $signature, $key->toPublic()->asPem(), $this->getHashAlgorithm()) === 1;
     }
 
     abstract protected function getHashAlgorithm(): int;

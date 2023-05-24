@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Cose\Key;
 
 use function array_key_exists;
-use Assert\Assertion;
-use FG\ASN1\ExplicitlyTaggedObject;
-use FG\ASN1\Universal\BitString;
-use FG\ASN1\Universal\Integer;
-use FG\ASN1\Universal\ObjectIdentifier;
-use FG\ASN1\Universal\OctetString;
-use FG\ASN1\Universal\Sequence;
+use function in_array;
+use InvalidArgumentException;
+use SpomkyLabs\Pki\ASN1\Type\Constructed\Sequence;
+use SpomkyLabs\Pki\ASN1\Type\Primitive\BitString;
+use SpomkyLabs\Pki\ASN1\Type\Primitive\Integer;
+use SpomkyLabs\Pki\ASN1\Type\Primitive\ObjectIdentifier;
+use SpomkyLabs\Pki\ASN1\Type\Primitive\OctetString;
+use SpomkyLabs\Pki\ASN1\Type\Tagged\ExplicitlyTaggedType;
 
 /**
  * @final
@@ -60,29 +61,21 @@ class Ec2Key extends Key
     public function __construct(array $data)
     {
         parent::__construct($data);
-        Assertion::eq(
-            $data[self::TYPE],
-            self::TYPE_EC2,
-            'Invalid EC2 key. The key type does not correspond to an EC2 key'
-        );
-        Assertion::keyExists($data, self::DATA_CURVE, 'Invalid EC2 key. The curve is missing');
-        Assertion::keyExists($data, self::DATA_X, 'Invalid EC2 key. The x coordinate is missing');
-        Assertion::keyExists($data, self::DATA_Y, 'Invalid EC2 key. The y coordinate is missing');
-        Assertion::length(
-            $data[self::DATA_X],
-            self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]],
-            'Invalid length for x coordinate',
-            null,
-            '8bit'
-        );
-        Assertion::length(
-            $data[self::DATA_Y],
-            self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]],
-            'Invalid length for y coordinate',
-            null,
-            '8bit'
-        );
-        Assertion::inArray((int) $data[self::DATA_CURVE], self::SUPPORTED_CURVES, 'The curve is not supported');
+        if (! isset($data[self::TYPE]) || (int) $data[self::TYPE] !== self::TYPE_EC2) {
+            throw new InvalidArgumentException('Invalid EC2 key. The key type does not correspond to an EC2 key');
+        }
+        if (! isset($data[self::DATA_CURVE], $data[self::DATA_X], $data[self::DATA_Y])) {
+            throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x/y" coordinates are missing');
+        }
+        if (mb_strlen((string) $data[self::DATA_X], '8bit') !== self::CURVE_KEY_LENGTH[(int) $data[self::DATA_CURVE]]) {
+            throw new InvalidArgumentException('Invalid length for x coordinate');
+        }
+        if (mb_strlen((string) $data[self::DATA_Y], '8bit') !== self::CURVE_KEY_LENGTH[(int) $data[self::DATA_CURVE]]) {
+            throw new InvalidArgumentException('Invalid length for y coordinate');
+        }
+        if (! in_array((int) $data[self::DATA_CURVE], self::SUPPORTED_CURVES, true)) {
+            throw new InvalidArgumentException('The curve is not supported');
+        }
     }
 
     /**
@@ -118,8 +111,9 @@ class Ec2Key extends Key
 
     public function d(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private');
-
+        if (! $this->isPrivate()) {
+            throw new InvalidArgumentException('The key is not private.');
+        }
         return $this->get(self::DATA_D);
     }
 
@@ -131,22 +125,25 @@ class Ec2Key extends Key
     public function asPEM(): string
     {
         if ($this->isPrivate()) {
-            $der = new Sequence(
-                new Integer(1),
-                new OctetString(bin2hex($this->d())),
-                new ExplicitlyTaggedObject(0, new ObjectIdentifier($this->getCurveOid())),
-                new ExplicitlyTaggedObject(1, new BitString(bin2hex($this->getUncompressedCoordinates())))
+            $der = Sequence::create(
+                Integer::create(1),
+                OctetString::create($this->d()),
+                ExplicitlyTaggedType::create(0, ObjectIdentifier::create($this->getCurveOid())),
+                ExplicitlyTaggedType::create(1, BitString::create($this->getUncompressedCoordinates())),
             );
 
-            return $this->pem('EC PRIVATE KEY', $der->getBinary());
+            return $this->pem('EC PRIVATE KEY', $der->toDER());
         }
 
-        $der = new Sequence(
-            new Sequence(new ObjectIdentifier('1.2.840.10045.2.1'), new ObjectIdentifier($this->getCurveOid())),
-            new BitString(bin2hex($this->getUncompressedCoordinates()))
+        $der = Sequence::create(
+            Sequence::create(
+                ObjectIdentifier::create('1.2.840.10045.2.1'),
+                ObjectIdentifier::create($this->getCurveOid())
+            ),
+            BitString::create($this->getUncompressedCoordinates())
         );
 
-        return $this->pem('PUBLIC KEY', $der->getBinary());
+        return $this->pem('PUBLIC KEY', $der->toDER());
     }
 
     public function getUncompressedCoordinates(): string

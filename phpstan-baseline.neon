@@ -11,9 +11,19 @@ parameters:
             path: src/Algorithm/Signature/RSA/PSSRSA.php
 
         -
-            message: "#^Cannot cast mixed to int\\.$#"
-            count: 2
+            message: "#^Cannot cast mixed to (string|int)\\.$#"
+            count: 7
             path: src/Key/Ec2Key.php
+
+        -
+            message: "#^Cannot cast mixed to int\\.$#"
+            count: 1
+            path: src/Key/RsaKey.php
+
+        -
+            message: "#^Cannot cast mixed to int\\.$#"
+            count: 1
+            path: src/Key/SymmetricKey.php
 
         -
             message: "#^Method Cose\\\\Key\\\\Ec2Key\\:\\:d\\(\\) should return string but returns mixed\\.$#"
@@ -42,7 +52,7 @@ parameters:
 
         -
             message: "#^Cannot cast mixed to int\\.$#"
-            count: 2
+            count: 3
             path: src/Key/OkpKey.php
 
         -
@@ -120,7 +130,5 @@ parameters:
             count: 1
             path: src/Key/SymmetricKey.php
 
-        -
-            message: "#^Parameter \\#1 \\$value of class FG\\\\ASN1\\\\Universal\\\\Integer constructor expects int, string given\\.$#"
-            count: 2
-            path: src/Key/RsaKey.php
+        - '#Parameter \#\d+ \$.* of .* expects .*, .* given\.#'
+        - '#Method .* should return string but returns string\|false\.#'

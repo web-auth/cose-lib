@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Cose\Key;
 
 use function array_key_exists;
-use Assert\Assertion;
+use function in_array;
+use InvalidArgumentException;
 
 /**
  * @final
@@ -39,14 +40,15 @@ class OkpKey extends Key
     public function __construct(array $data)
     {
         parent::__construct($data);
-        Assertion::eq(
-            $data[self::TYPE],
-            self::TYPE_OKP,
-            'Invalid OKP key. The key type does not correspond to an OKP key'
-        );
-        Assertion::keyExists($data, self::DATA_CURVE, 'Invalid EC2 key. The curve is missing');
-        Assertion::keyExists($data, self::DATA_X, 'Invalid OKP key. The x coordinate is missing');
-        Assertion::inArray((int) $data[self::DATA_CURVE], self::SUPPORTED_CURVES, 'The curve is not supported');
+        if (! isset($data[self::TYPE]) || (int) $data[self::TYPE] !== self::TYPE_OKP) {
+            throw new InvalidArgumentException('Invalid OKP key. The key type does not correspond to an OKP key');
+        }
+        if (! isset($data[self::DATA_CURVE], $data[self::DATA_X])) {
+            throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x" coordinate is missing');
+        }
+        if (! in_array((int) $data[self::DATA_CURVE], self::SUPPORTED_CURVES, true)) {
+            throw new InvalidArgumentException('The curve is not supported');
+        }
     }
 
     /**
@@ -69,7 +71,9 @@ class OkpKey extends Key
 
     public function d(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private');
+        if (! $this->isPrivate()) {
+            throw new InvalidArgumentException('The key is not private.');
+        }
 
         return $this->get(self::DATA_D);
     }

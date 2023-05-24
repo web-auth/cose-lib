@@ -5,14 +5,12 @@ declare(strict_types=1);
 namespace Cose\Key;
 
 use function array_key_exists;
-use Assert\Assertion;
 use Brick\Math\BigInteger;
-use FG\ASN1\Universal\BitString;
-use FG\ASN1\Universal\Integer;
-use FG\ASN1\Universal\NullObject;
-use FG\ASN1\Universal\ObjectIdentifier;
-use FG\ASN1\Universal\Sequence;
-use function Safe\unpack;
+use function in_array;
+use InvalidArgumentException;
+use SpomkyLabs\Pki\CryptoTypes\Asymmetric\PublicKeyInfo;
+use SpomkyLabs\Pki\CryptoTypes\Asymmetric\RSA\RSAPrivateKey;
+use SpomkyLabs\Pki\CryptoTypes\Asymmetric\RSA\RSAPublicKey;
 
 /**
  * @final
@@ -49,13 +47,12 @@ class RsaKey extends Key
     public function __construct(array $data)
     {
         parent::__construct($data);
-        Assertion::eq(
-            $data[self::TYPE],
-            self::TYPE_RSA,
-            'Invalid RSA key. The key type does not correspond to a RSA key'
-        );
-        Assertion::keyExists($data, self::DATA_N, 'Invalid RSA key. The modulus is missing');
-        Assertion::keyExists($data, self::DATA_E, 'Invalid RSA key. The exponent is missing');
+        if (! isset($data[self::TYPE]) || (int) $data[self::TYPE] !== self::TYPE_RSA) {
+            throw new InvalidArgumentException('Invalid RSA key. The key type does not correspond to a RSA key');
+        }
+        if (! isset($data[self::DATA_N], $data[self::DATA_E])) {
+            throw new InvalidArgumentException('Invalid RSA key. The modulus or the exponent is missing');
+        }
     }
 
     /**
@@ -78,42 +75,42 @@ class RsaKey extends Key
 
     public function d(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_D);
     }
 
     public function p(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_P);
     }
 
     public function q(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_Q);
     }
 
     public function dP(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_DP);
     }
 
     public function dQ(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_DQ);
     }
 
     public function QInv(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_QI);
     }
@@ -123,28 +120,28 @@ class RsaKey extends Key
      */
     public function other(): array
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_OTHER);
     }
 
     public function rI(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_RI);
     }
 
     public function dI(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_DI);
     }
 
     public function tI(): string
     {
-        Assertion::true($this->isPrivate(), 'The key is not private.');
+        $this->checkKeyIsPrivate();
 
         return $this->get(self::DATA_TI);
     }
@@ -192,32 +189,68 @@ class RsaKey extends Key
 
     public function asPem(): string
     {
-        Assertion::false($this->isPrivate(), 'Unsupported for private keys.');
-        $bitSring = new Sequence(
-            new Integer($this->fromBase64ToInteger($this->n())),
-            new Integer($this->fromBase64ToInteger($this->e()))
-        );
+        if ($this->isPrivate()) {
+            $privateKey = RSAPrivateKey::create(
+                $this->binaryToBigInteger($this->n()),
+                $this->binaryToBigInteger($this->e()),
+                $this->binaryToBigInteger($this->d()),
+                $this->binaryToBigInteger($this->p()),
+                $this->binaryToBigInteger($this->q()),
+                $this->binaryToBigInteger($this->dP()),
+                $this->binaryToBigInteger($this->dQ()),
+                $this->binaryToBigInteger($this->QInv())
+            );
 
-        $der = new Sequence(
-            new Sequence(new ObjectIdentifier('1.2.840.113549.1.1.1'), new NullObject()),
-            new BitString(bin2hex($bitSring->getBinary()))
-        );
+            return $privateKey->toPEM()
+                ->string();
+        }
 
-        return $this->pem('PUBLIC KEY', $der->getBinary());
+        $publicKey = RSAPublicKey::create(
+            $this->binaryToBigInteger($this->n()),
+            $this->binaryToBigInteger($this->e())
+        );
+        $rsaKey = PublicKeyInfo::fromPublicKey($publicKey);
+
+        return $rsaKey->toPEM()
+            ->string();
     }
 
-    private function fromBase64ToInteger(string $value): string
+    public function toPublic(): static
     {
-        $data = unpack('H*', $value);
-        $hex = current($data);
+        $toBeRemoved = [
+            self::DATA_D,
+            self::DATA_P,
+            self::DATA_Q,
+            self::DATA_DP,
+            self::DATA_DQ,
+            self::DATA_QI,
+            self::DATA_OTHER,
+            self::DATA_RI,
+            self::DATA_DI,
+            self::DATA_TI,
+        ];
+        $data = $this->getData();
+        foreach ($data as $k => $v) {
+            if (in_array($k, $toBeRemoved, true)) {
+                unset($data[$k]);
+            }
+        }
 
-        return BigInteger::fromBase($hex, 16)->toBase(10);
+        return new static($data);
     }
 
-    private function pem(string $type, string $der): string
+    private function checkKeyIsPrivate(): void
     {
-        return sprintf("-----BEGIN %s-----\n", mb_strtoupper($type)) .
-            chunk_split(base64_encode($der), 64, "\n") .
-            sprintf("-----END %s-----\n", mb_strtoupper($type));
+        if (! $this->isPrivate()) {
+            throw new InvalidArgumentException('The key is not private.');
+        }
+    }
+
+    private function binaryToBigInteger(string $data): string
+    {
+        $res = unpack('H*', $data);
+        $res = current($res);
+
+        return BigInteger::fromBase($res, 16)->toBase(10);
     }
 }
