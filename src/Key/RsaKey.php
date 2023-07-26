@@ -14,6 +14,7 @@ use function in_array;
 
 /**
  * @final
+ * @see \Cose\Tests\Key\RsaKeyTest
  */
 class RsaKey extends Key
 {

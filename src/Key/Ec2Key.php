@@ -17,6 +17,7 @@ use function is_int;
 
 /**
  * @final
+ * @see \Cose\Tests\Key\Ec2KeyTest
  */
 class Ec2Key extends Key
 {
