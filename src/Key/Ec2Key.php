@@ -81,6 +81,11 @@ class Ec2Key extends Key
      */
     public function __construct(array $data)
     {
+        foreach ([self::DATA_CURVE, self::TYPE] as $key) {
+            if (is_numeric($data[$key])) {
+                $data[$key] = (int) $data[$key];
+            }
+        }
         parent::__construct($data);
         if ($data[self::TYPE] !== self::TYPE_EC2 && $data[self::TYPE] !== self::TYPE_NAME_EC2) {
             throw new InvalidArgumentException('Invalid EC2 key. The key type does not correspond to an EC2 key');

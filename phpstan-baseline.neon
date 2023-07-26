@@ -22,7 +22,7 @@ parameters:
 
         -
             message: "#^Parameter \\#2 \\$secret_key of function sodium_crypto_sign_detached expects non\\-empty\\-string, string given\\.$#"
-            count: 1
+            count: 2
             path: src/Algorithm/Signature/EdDSA/EdDSA.php
 
         -

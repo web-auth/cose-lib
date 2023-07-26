@@ -7,7 +7,6 @@ namespace Cose\Key;
 use InvalidArgumentException;
 use function array_key_exists;
 use function in_array;
-use function is_int;
 
 /**
  * @final
@@ -23,6 +22,14 @@ class OkpKey extends Key
 
     final public const CURVE_ED448 = 7;
 
+    final public const CURVE_NAME_X25519 = 'X25519';
+
+    final public const CURVE_NAME_X448 = 'X448';
+
+    final public const CURVE_NAME_ED25519 = 'Ed25519';
+
+    final public const CURVE_NAME_ED448 = 'Ed448';
+
     final public const DATA_CURVE = -1;
 
     final public const DATA_X = -2;
@@ -36,13 +43,23 @@ class OkpKey extends Key
         self::CURVE_ED448,
     ];
 
-    private const SUPPORTED_CURVES_NAME = ['X25519', 'X448,', 'Ed25519', 'Ed448'];
+    private const SUPPORTED_CURVES_NAME = [
+        self::CURVE_NAME_X25519,
+        self::CURVE_NAME_X448,
+        self::CURVE_NAME_ED25519,
+        self::CURVE_NAME_ED448,
+    ];
 
     /**
      * @param array<int|string, mixed> $data
      */
     public function __construct(array $data)
     {
+        foreach ([self::DATA_CURVE, self::TYPE] as $key) {
+            if (is_numeric($data[$key])) {
+                $data[$key] = (int) $data[$key];
+            }
+        }
         parent::__construct($data);
         if ($data[self::TYPE] !== self::TYPE_OKP && $data[self::TYPE] !== self::TYPE_NAME_OKP) {
             throw new InvalidArgumentException('Invalid OKP key. The key type does not correspond to an OKP key');
@@ -50,8 +67,8 @@ class OkpKey extends Key
         if (! isset($data[self::DATA_CURVE], $data[self::DATA_X])) {
             throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x" coordinate is missing');
         }
-        if (is_int($data[self::DATA_CURVE])) {
-            if (! in_array($data[self::DATA_CURVE], self::SUPPORTED_CURVES_INT, true)) {
+        if (is_numeric($data[self::DATA_CURVE])) {
+            if (! in_array((int) $data[self::DATA_CURVE], self::SUPPORTED_CURVES_INT, true)) {
                 throw new InvalidArgumentException('The curve is not supported');
             }
         } elseif (! in_array($data[self::DATA_CURVE], self::SUPPORTED_CURVES_NAME, true)) {
