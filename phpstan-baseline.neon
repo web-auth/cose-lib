@@ -6,24 +6,59 @@ parameters:
             path: src/Algorithm/Mac/Hmac.php
 
         -
+            message: "#^Method Cose\\\\Algorithm\\\\Signature\\\\ECDSA\\\\ECSignature\\:\\:fromAsn1\\(\\) should return string but returns string\\|false\\.$#"
+            count: 1
+            path: src/Algorithm/Signature/ECDSA/ECSignature.php
+
+        -
+            message: "#^Method Cose\\\\Algorithm\\\\Signature\\\\ECDSA\\\\ECSignature\\:\\:toAsn1\\(\\) should return string but returns string\\|false\\.$#"
+            count: 1
+            path: src/Algorithm/Signature/ECDSA/ECSignature.php
+
+        -
+            message: "#^Parameter \\#1 \\$signature of function sodium_crypto_sign_verify_detached expects non\\-empty\\-string, string given\\.$#"
+            count: 1
+            path: src/Algorithm/Signature/EdDSA/EdDSA.php
+
+        -
+            message: "#^Parameter \\#2 \\$secret_key of function sodium_crypto_sign_detached expects non\\-empty\\-string, string given\\.$#"
+            count: 1
+            path: src/Algorithm/Signature/EdDSA/EdDSA.php
+
+        -
+            message: "#^Parameter \\#3 \\$public_key of function sodium_crypto_sign_verify_detached expects non\\-empty\\-string, string given\\.$#"
+            count: 1
+            path: src/Algorithm/Signature/EdDSA/EdDSA.php
+
+        -
             message: "#^Parameter \\#1 \\$length of function random_bytes expects int\\<1, max\\>, int given\\.$#"
             count: 1
             path: src/Algorithm/Signature/RSA/PSSRSA.php
 
         -
-            message: "#^Cannot cast mixed to (string|int)\\.$#"
-            count: 7
+            message: "#^Parameter \\#1 \\$array of function current expects array\\|object, array\\|false given\\.$#"
+            count: 1
+            path: src/BigInteger.php
+
+        -
+            message: "#^Parameter \\#1 \\$string of function ltrim expects string, string\\|false given\\.$#"
+            count: 1
+            path: src/BigInteger.php
+
+        -
+            message: "#^Cannot cast mixed to int\\.$#"
+            count: 1
             path: src/Key/Ec2Key.php
 
         -
-            message: "#^Cannot cast mixed to int\\.$#"
-            count: 1
-            path: src/Key/RsaKey.php
+            message: "#^Cannot cast mixed to string\\.$#"
+            count: 2
+            path: src/Key/Ec2Key.php
 
         -
-            message: "#^Cannot cast mixed to int\\.$#"
+            message: "#^Method Cose\\\\Key\\\\Ec2Key\\:\\:curve\\(\\) should return int\\|string but returns mixed\\.$#"
             count: 1
-            path: src/Key/SymmetricKey.php
+            path: src/Key/Ec2Key.php
 
         -
             message: "#^Method Cose\\\\Key\\\\Ec2Key\\:\\:d\\(\\) should return string but returns mixed\\.$#"
@@ -52,7 +87,12 @@ parameters:
 
         -
             message: "#^Cannot cast mixed to int\\.$#"
-            count: 3
+            count: 1
+            path: src/Key/OkpKey.php
+
+        -
+            message: "#^Method Cose\\\\Key\\\\OkpKey\\:\\:curve\\(\\) should return int\\|string but returns mixed\\.$#"
+            count: 1
             path: src/Key/OkpKey.php
 
         -
@@ -64,6 +104,11 @@ parameters:
             message: "#^Method Cose\\\\Key\\\\OkpKey\\:\\:x\\(\\) should return string but returns mixed\\.$#"
             count: 1
             path: src/Key/OkpKey.php
+
+        -
+            message: "#^Cannot cast mixed to int\\.$#"
+            count: 1
+            path: src/Key/RsaKey.php
 
         -
             message: "#^Method Cose\\\\Key\\\\RsaKey\\:\\:QInv\\(\\) should return string but returns mixed\\.$#"
@@ -126,9 +171,16 @@ parameters:
             path: src/Key/RsaKey.php
 
         -
-            message: "#^Method Cose\\\\Key\\\\SymmetricKey\\:\\:k\\(\\) should return string but returns mixed\\.$#"
+            message: "#^Parameter \\#1 \\$array of function current expects array\\|object, array\\|false given\\.$#"
+            count: 1
+            path: src/Key/RsaKey.php
+
+        -
+            message: "#^Cannot cast mixed to int\\.$#"
             count: 1
             path: src/Key/SymmetricKey.php
 
-        - '#Parameter \#\d+ \$.* of .* expects .*, .* given\.#'
-        - '#Method .* should return string but returns string\|false\.#'
+        -
+            message: "#^Method Cose\\\\Key\\\\SymmetricKey\\:\\:k\\(\\) should return string but returns mixed\\.$#"
+            count: 1
+            path: src/Key/SymmetricKey.php

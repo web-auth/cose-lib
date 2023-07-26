@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Cose\Key;
 
+use InvalidArgumentException;
 use function array_key_exists;
 use function in_array;
-use InvalidArgumentException;
+use function is_int;
 
 /**
  * @final
+ * @see \Cose\Tests\Key\OkpKeyTest
  */
 class OkpKey extends Key
 {
@@ -27,12 +29,14 @@ class OkpKey extends Key
 
     final public const DATA_D = -4;
 
-    private const SUPPORTED_CURVES = [
+    private const SUPPORTED_CURVES_INT = [
         self::CURVE_X25519,
         self::CURVE_X448,
         self::CURVE_ED25519,
         self::CURVE_ED448,
     ];
+
+    private const SUPPORTED_CURVES_NAME = ['X25519', 'X448,', 'Ed25519', 'Ed448'];
 
     /**
      * @param array<int|string, mixed> $data
@@ -46,7 +50,11 @@ class OkpKey extends Key
         if (! isset($data[self::DATA_CURVE], $data[self::DATA_X])) {
             throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x" coordinate is missing');
         }
-        if (! in_array((int) $data[self::DATA_CURVE], self::SUPPORTED_CURVES, true)) {
+        if (is_int($data[self::DATA_CURVE])) {
+            if (! in_array($data[self::DATA_CURVE], self::SUPPORTED_CURVES_INT, true)) {
+                throw new InvalidArgumentException('The curve is not supported');
+            }
+        } elseif (! in_array($data[self::DATA_CURVE], self::SUPPORTED_CURVES_NAME, true)) {
             throw new InvalidArgumentException('The curve is not supported');
         }
     }
@@ -78,8 +86,8 @@ class OkpKey extends Key
         return $this->get(self::DATA_D);
     }
 
-    public function curve(): int
+    public function curve(): int|string
     {
-        return (int) $this->get(self::DATA_CURVE);
+        return $this->get(self::DATA_CURVE);
     }
 }

@@ -8,6 +8,9 @@ use Cose\Key\Key;
 use Cose\Key\SymmetricKey;
 use InvalidArgumentException;
 
+/**
+ * @see \Cose\Tests\Algorithm\Mac\HmacTest
+ */
 abstract class Hmac implements Mac
 {
     public function hash(string $data, Key $key): string
