@@ -48,7 +48,7 @@ class RsaKey extends Key
     public function __construct(array $data)
     {
         parent::__construct($data);
-        if (! isset($data[self::TYPE]) || (int) $data[self::TYPE] !== self::TYPE_RSA) {
+        if ($data[self::TYPE] !== self::TYPE_RSA && $data[self::TYPE] !== self::TYPE_NAME_RSA) {
             throw new InvalidArgumentException('Invalid RSA key. The key type does not correspond to a RSA key');
         }
         if (! isset($data[self::DATA_N], $data[self::DATA_E])) {

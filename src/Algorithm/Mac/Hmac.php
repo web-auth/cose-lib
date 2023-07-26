@@ -32,7 +32,7 @@ abstract class Hmac implements Mac
 
     private function checKey(Key $key): void
     {
-        if ($key->type() !== Key::TYPE_OCT) {
+        if ($key->type() !== Key::TYPE_OCT && $key->type() !== Key::TYPE_NAME_OCT) {
             throw new InvalidArgumentException('Invalid key. Must be of type symmetric');
         }
 
