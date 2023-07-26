@@ -20,19 +20,18 @@ use PhpCsFixer\Fixer\Phpdoc\PhpdocTrimConsecutiveBlankLineSeparationFixer;
 use PhpCsFixer\Fixer\PhpTag\LinebreakAfterOpeningTagFixer;
 use PhpCsFixer\Fixer\PhpUnit\PhpUnitTestAnnotationFixer;
 use PhpCsFixer\Fixer\PhpUnit\PhpUnitTestCaseStaticMethodCallsFixer;
-use PhpCsFixer\Fixer\PhpUnit\PhpUnitTestClassRequiresCoversFixer;
 use PhpCsFixer\Fixer\ReturnNotation\SimplifiedNullReturnFixer;
 use PhpCsFixer\Fixer\Strict\DeclareStrictTypesFixer;
 use PhpCsFixer\Fixer\Strict\StrictComparisonFixer;
 use PhpCsFixer\Fixer\Strict\StrictParamFixer;
 use PhpCsFixer\Fixer\Whitespace\ArrayIndentationFixer;
 use PhpCsFixer\Fixer\Whitespace\CompactNullableTypehintFixer;
+use PhpCsFixer\Fixer\Whitespace\MethodChainingIndentationFixer;
 use Symplify\EasyCodingStandard\Config\ECSConfig;
 use Symplify\EasyCodingStandard\ValueObject\Set\SetList;
 
-$header = '';
-
-return static function (ECSConfig $config) use ($header): void {
+return static function (ECSConfig $config): void {
+    $header = '';
     $config->import(SetList::PSR_12);
     $config->import(SetList::CLEAN_CODE);
     $config->import(SetList::DOCTRINE_ANNOTATIONS);
@@ -87,9 +86,11 @@ return static function (ECSConfig $config) use ($header): void {
         'import_constants' => true,
         'import_functions' => true,
     ]);
-
-    $config->services()
-        ->remove(PhpUnitTestClassRequiresCoversFixer::class);
+    $config->skip([
+        MethodChainingIndentationFixer::class => [
+            __DIR__ . '*/DependencyInjection/Configuration.php',
+        ],
+    ]);
 
     $config->parallel();
     $config->paths([

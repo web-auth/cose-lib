@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Cose\Key;
 
-use function array_key_exists;
 use Brick\Math\BigInteger;
-use function in_array;
 use InvalidArgumentException;
 use SpomkyLabs\Pki\CryptoTypes\Asymmetric\PublicKeyInfo;
 use SpomkyLabs\Pki\CryptoTypes\Asymmetric\RSA\RSAPrivateKey;
 use SpomkyLabs\Pki\CryptoTypes\Asymmetric\RSA\RSAPublicKey;
+use function array_key_exists;
+use function in_array;
 
 /**
  * @final

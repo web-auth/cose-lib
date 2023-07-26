@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.0/phpunit.xsd"
+    xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
     colors="true"
-    cacheDirectory=".phpunit.cache"
 >
-    <coverage>
-        <include>
-            <directory suffix=".php">src</directory>
-        </include>
-    </coverage>
+    <coverage/>
     <testsuites>
         <testsuite name="all">
             <directory>tests/</directory>
@@ -23,4 +18,9 @@
         <server name="SHELL_VERBOSITY" value="-1"/>
         <env name="SYMFONY_DEPRECATIONS_HELPER" value="weak"/>
     </php>
+    <source>
+        <include>
+            <directory suffix=".php">src</directory>
+        </include>
+    </source>
 </phpunit>
