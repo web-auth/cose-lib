@@ -46,11 +46,6 @@ parameters:
             path: src/BigInteger.php
 
         -
-            message: "#^Cannot cast mixed to int\\.$#"
-            count: 1
-            path: src/Key/Ec2Key.php
-
-        -
             message: "#^Cannot cast mixed to string\\.$#"
             count: 2
             path: src/Key/Ec2Key.php
@@ -84,11 +79,6 @@ parameters:
             message: "#^Method Cose\\\\Key\\\\Key\\:\\:type\\(\\) should return int\\|string but returns mixed\\.$#"
             count: 1
             path: src/Key/Key.php
-
-        -
-            message: "#^Cannot cast mixed to int\\.$#"
-            count: 1
-            path: src/Key/OkpKey.php
 
         -
             message: "#^Method Cose\\\\Key\\\\OkpKey\\:\\:curve\\(\\) should return int\\|string but returns mixed\\.$#"

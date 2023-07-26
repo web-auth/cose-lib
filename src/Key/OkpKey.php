@@ -44,7 +44,7 @@ class OkpKey extends Key
     public function __construct(array $data)
     {
         parent::__construct($data);
-        if (! isset($data[self::TYPE]) || (int) $data[self::TYPE] !== self::TYPE_OKP) {
+        if ($data[self::TYPE] !== self::TYPE_OKP && $data[self::TYPE] !== self::TYPE_NAME_OKP) {
             throw new InvalidArgumentException('Invalid OKP key. The key type does not correspond to an OKP key');
         }
         if (! isset($data[self::DATA_CURVE], $data[self::DATA_X])) {
