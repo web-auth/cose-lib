@@ -31,6 +31,7 @@ class EdDSA implements Signature
 
         return match ($key->curve()) {
             OkpKey::CURVE_ED25519 => sodium_crypto_sign_detached($data, $secret),
+            OkpKey::CURVE_NAME_ED25519 => sodium_crypto_sign_detached($data, $secret),
             default => throw new InvalidArgumentException('Unsupported curve'),
         };
     }
@@ -38,7 +39,7 @@ class EdDSA implements Signature
     public function verify(string $data, Key $key, string $signature): bool
     {
         $key = $this->handleKey($key);
-        if ($key->curve() !== OkpKey::CURVE_ED25519) {
+        if ($key->curve() !== OkpKey::CURVE_ED25519 && $key->curve() !== OkpKey::CURVE_NAME_ED25519) {
             throw new InvalidArgumentException('Unsupported curve');
         }
         try {
