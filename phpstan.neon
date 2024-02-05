@@ -1,8 +1,8 @@
 parameters:
-    level: max
-    paths:
-        - src
+	level: max
+	paths:
+		- src
 
 includes:
-    - vendor/phpstan/phpstan/conf/bleedingEdge.neon
-    - phpstan-baseline.neon
+	- vendor/phpstan/phpstan/conf/bleedingEdge.neon
+	- phpstan-baseline.neon
