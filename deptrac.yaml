@@ -4,13 +4,13 @@ parameters:
   layers:
     - name: 'CoseLib'
       collectors:
-        - type: 'className'
-          regex: '^Cose\\'
+        - type: 'classLike'
+          value: '^Cose\\'
     - name: 'Vendors'
       collectors:
-        - { type: className, regex: '^CBOR\\' }
-        - { type: className, regex: '^Brick\\' }
-        - { type: className, regex: '^SpomkyLabs\\Pki\\' }
+        - { type: 'classLike', value: '^CBOR\\' }
+        - { type: 'classLike', value: '^Brick\\' }
+        - { type: 'classLike', value: '^SpomkyLabs\\Pki\\' }
   ruleset:
     CoseLib:
       - Vendors

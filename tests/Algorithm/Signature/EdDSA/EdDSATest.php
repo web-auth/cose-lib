@@ -31,7 +31,8 @@ final class EdDSATest extends TestCase
         int $curve,
         string $d,
         string $x,
-        string $data
+        string $data,
+        string $signature
     ): void {
         // Given
         $key = OkpKey::create([
@@ -43,10 +44,12 @@ final class EdDSATest extends TestCase
 
         // When
         $hash = $algorithm->sign($data, $key);
-        $isValid = $algorithm->verify($data, $key, $hash);
+        $hashIsValid = $algorithm->verify($data, $key, $hash);
+        $signatureIsValid = $algorithm->verify($data, $key, $hash);
 
         // Then
-        static::assertTrue($isValid);
+        static::assertTrue($hashIsValid);
+        static::assertTrue($signatureIsValid);
     }
 
     #[Test]
@@ -80,12 +83,12 @@ final class EdDSATest extends TestCase
     public static function getVectors(): iterable
     {
         yield [
-            'alg' => Ed25519::create(),
-            'crv' => OkpKey::CURVE_ED25519,
+            'algorithm' => Ed25519::create(),
+            'curve' => OkpKey::CURVE_ED25519,
             'd' => base64_decode('nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A', true),
             'x' => base64_decode('11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo', true),
             'data' => 'eyJhbGciOiJFZERTQSJ9.RXhhbXBsZSBvZiBFZDI1NTE5IHNpZ25pbmc',
-            'sig' => base64_decode(
+            'signature' => base64_decode(
                 'hgyY0il/MGCjP0JzlnLWG1PPOt7+09PGcvMg3AIbQR6dWbhijcNR4ki4iylGjg5BhVsPt9g7sVvpAr/MuM0KAg',
                 true
             ),
