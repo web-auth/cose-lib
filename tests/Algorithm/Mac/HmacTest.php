@@ -20,7 +20,6 @@ use function Safe\base64_decode;
 final class HmacTest extends TestCase
 {
     #[Test]
-    #[DataProvider('getVectors')]
     public function theAlgorithsmHaveCorrectInnerParameters(): void
     {
         // Then
