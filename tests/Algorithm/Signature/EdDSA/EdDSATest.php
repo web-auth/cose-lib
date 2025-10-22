@@ -83,15 +83,40 @@ final class EdDSATest extends TestCase
     public static function getVectors(): iterable
     {
         yield [
-            'algorithm' => Ed25519::create(),
-            'curve' => OkpKey::CURVE_ED25519,
-            'd' => base64_decode('nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A', true),
-            'x' => base64_decode('11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo', true),
-            'data' => 'eyJhbGciOiJFZERTQSJ9.RXhhbXBsZSBvZiBFZDI1NTE5IHNpZ25pbmc',
-            'signature' => base64_decode(
+            Ed25519::create(),
+            OkpKey::CURVE_ED25519,
+            base64_decode('nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A', true),
+            base64_decode('11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo', true),
+            'eyJhbGciOiJFZERTQSJ9.RXhhbXBsZSBvZiBFZDI1NTE5IHNpZ25pbmc',
+            base64_decode(
                 'hgyY0il/MGCjP0JzlnLWG1PPOt7+09PGcvMg3AIbQR6dWbhijcNR4ki4iylGjg5BhVsPt9g7sVvpAr/MuM0KAg',
                 true
             ),
         ];
+    }
+
+    #[Test]
+    public function anInvalidSignatureCannotBeVerified(): void
+    {
+        // Given
+        $algorithm = Ed25519::create();
+
+        $key = OkpKey::create([
+            OkpKey::DATA_X => base64_decode('11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo', true),
+            OkpKey::DATA_D => base64_decode('nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A', true),
+            OkpKey::DATA_CURVE => OkpKey::CURVE_ED25519,
+            OkpKey::TYPE => OkpKey::TYPE_OKP,
+        ]);
+        $data = 'eyJhbGciOiJFZERTQSJ9.RXhhbXBsZSBvZiBFZDI1NTE5IHNpZ25pbmc';
+        $signature = base64_decode(
+            'hgyY0il/MGCjP0JzlnLWG1PPOt7+09PGcvMg3AIbQR6dWbhijcNR4ki4iylGjg5BhVsPt9g7sVvpAr/MuM0KAg',
+            true
+        );
+        $invalidSignature = $signature;
+        $invalidSignature[0] = $invalidSignature[0] ^ "\x01"; // Corrupt the signature
+        // When
+        $isValid = $algorithm->verify($data, $key, $invalidSignature);
+        // Then
+        static::assertFalse($isValid);
     }
 }
