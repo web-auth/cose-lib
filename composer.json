@@ -39,7 +39,7 @@
         "symfony/phpunit-bridge": "^6.4|^7.0",
         "ekino/phpstan-banned-code": "^1.0|^2.0|^3.0",
         "php-parallel-lint/php-parallel-lint": "^1.3",
-        "deptrac/deptrac": "^3.0",
+        "deptrac/deptrac": "^3.0 || ^4.0",
         "phpstan/extension-installer": "^1.3"
     },
     "autoload-dev": {
