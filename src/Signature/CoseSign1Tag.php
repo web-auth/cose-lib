@@ -6,9 +6,13 @@ namespace Cose\Signature;
 
 use CBOR\ByteStringObject;
 use CBOR\CBORObject;
+use CBOR\Decoder;
 use CBOR\ListObject;
 use CBOR\MapObject;
+use CBOR\OtherObject\OtherObjectManager;
+use CBOR\StringStream;
 use CBOR\Tag;
+use CBOR\Tag\TagManager;
 use InvalidArgumentException;
 
 final class CoseSign1Tag extends Tag
@@ -94,7 +98,10 @@ final class CoseSign1Tag extends Tag
 
     public function getProtectedHeaderAsMap(): MapObject
     {
-        $decoded = MapObject::createFromString($this->protectedHeader->getValue());
+        $stream = new StringStream($this->protectedHeader->getValue());
+        $decoder = Decoder::create(TagManager::create(), OtherObjectManager::create());
+        $decoded = $decoder->decode($stream);
+
         if (! $decoded instanceof MapObject) {
             throw new InvalidArgumentException('Protected header is not a valid Map object.');
         }
