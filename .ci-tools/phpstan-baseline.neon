@@ -265,12 +265,6 @@ parameters:
 			path: ../src/BigInteger.php
 
 		-
-			rawMessage: 'Call to an undefined static method CBOR\MapObject::createFromString().'
-			identifier: staticMethod.notFound
-			count: 1
-			path: ../src/Encryption/CoseEncrypt0Tag.php
-
-		-
 			rawMessage: Class "Cose\Encryption\CoseEncrypt0Tag" is not allowed to extend "CBOR\Tag".
 			identifier: ergebnis.noExtends
 			count: 1
@@ -289,10 +283,16 @@ parameters:
 			path: ../src/Encryption/CoseEncrypt0Tag.php
 
 		-
-			rawMessage: 'Call to an undefined static method CBOR\MapObject::createFromString().'
-			identifier: staticMethod.notFound
+			rawMessage: 'Method Cose\Encryption\CoseEncrypt0Tag::getProtectedHeaderAsMap() has parameter $decoder with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
 			count: 1
-			path: ../src/Encryption/CoseEncryptTag.php
+			path: ../src/Encryption/CoseEncrypt0Tag.php
+
+		-
+			rawMessage: 'Method Cose\Encryption\CoseEncrypt0Tag::getProtectedHeaderAsMap() has parameter $decoder with null as default value.'
+			identifier: ergebnis.noParameterWithNullDefaultValue
+			count: 1
+			path: ../src/Encryption/CoseEncrypt0Tag.php
 
 		-
 			rawMessage: Class "Cose\Encryption\CoseEncryptTag" is not allowed to extend "CBOR\Tag".
@@ -309,6 +309,18 @@ parameters:
 		-
 			rawMessage: 'Method Cose\Encryption\CoseEncryptTag::createFromLoadedData() has parameter $data with a nullable type declaration.'
 			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Encryption/CoseEncryptTag.php
+
+		-
+			rawMessage: 'Method Cose\Encryption\CoseEncryptTag::getProtectedHeaderAsMap() has parameter $decoder with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Encryption/CoseEncryptTag.php
+
+		-
+			rawMessage: 'Method Cose\Encryption\CoseEncryptTag::getProtectedHeaderAsMap() has parameter $decoder with null as default value.'
+			identifier: ergebnis.noParameterWithNullDefaultValue
 			count: 1
 			path: ../src/Encryption/CoseEncryptTag.php
 
@@ -559,12 +571,6 @@ parameters:
 			path: ../src/Key/SymmetricKey.php
 
 		-
-			rawMessage: 'Call to an undefined static method CBOR\MapObject::createFromString().'
-			identifier: staticMethod.notFound
-			count: 1
-			path: ../src/Mac/CoseMac0Tag.php
-
-		-
 			rawMessage: Class "Cose\Mac\CoseMac0Tag" is not allowed to extend "CBOR\Tag".
 			identifier: ergebnis.noExtends
 			count: 1
@@ -583,10 +589,16 @@ parameters:
 			path: ../src/Mac/CoseMac0Tag.php
 
 		-
-			rawMessage: 'Call to an undefined static method CBOR\MapObject::createFromString().'
-			identifier: staticMethod.notFound
+			rawMessage: 'Method Cose\Mac\CoseMac0Tag::getProtectedHeaderAsMap() has parameter $decoder with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
 			count: 1
-			path: ../src/Mac/CoseMacTag.php
+			path: ../src/Mac/CoseMac0Tag.php
+
+		-
+			rawMessage: 'Method Cose\Mac\CoseMac0Tag::getProtectedHeaderAsMap() has parameter $decoder with null as default value.'
+			identifier: ergebnis.noParameterWithNullDefaultValue
+			count: 1
+			path: ../src/Mac/CoseMac0Tag.php
 
 		-
 			rawMessage: Class "Cose\Mac\CoseMacTag" is not allowed to extend "CBOR\Tag".
@@ -607,10 +619,16 @@ parameters:
 			path: ../src/Mac/CoseMacTag.php
 
 		-
-			rawMessage: 'Call to an undefined static method CBOR\MapObject::createFromString().'
-			identifier: staticMethod.notFound
+			rawMessage: 'Method Cose\Mac\CoseMacTag::getProtectedHeaderAsMap() has parameter $decoder with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
 			count: 1
-			path: ../src/Signature/CoseSign1Tag.php
+			path: ../src/Mac/CoseMacTag.php
+
+		-
+			rawMessage: 'Method Cose\Mac\CoseMacTag::getProtectedHeaderAsMap() has parameter $decoder with null as default value.'
+			identifier: ergebnis.noParameterWithNullDefaultValue
+			count: 1
+			path: ../src/Mac/CoseMacTag.php
 
 		-
 			rawMessage: Class "Cose\Signature\CoseSign1Tag" is not allowed to extend "CBOR\Tag".
@@ -631,10 +649,16 @@ parameters:
 			path: ../src/Signature/CoseSign1Tag.php
 
 		-
-			rawMessage: 'Call to an undefined static method CBOR\MapObject::createFromString().'
-			identifier: staticMethod.notFound
+			rawMessage: 'Method Cose\Signature\CoseSign1Tag::getProtectedHeaderAsMap() has parameter $decoder with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
 			count: 1
-			path: ../src/Signature/CoseSignTag.php
+			path: ../src/Signature/CoseSign1Tag.php
+
+		-
+			rawMessage: 'Method Cose\Signature\CoseSign1Tag::getProtectedHeaderAsMap() has parameter $decoder with null as default value.'
+			identifier: ergebnis.noParameterWithNullDefaultValue
+			count: 1
+			path: ../src/Signature/CoseSign1Tag.php
 
 		-
 			rawMessage: Class "Cose\Signature\CoseSignTag" is not allowed to extend "CBOR\Tag".
@@ -651,5 +675,17 @@ parameters:
 		-
 			rawMessage: 'Method Cose\Signature\CoseSignTag::createFromLoadedData() has parameter $data with a nullable type declaration.'
 			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Signature/CoseSignTag.php
+
+		-
+			rawMessage: 'Method Cose\Signature\CoseSignTag::getProtectedHeaderAsMap() has parameter $decoder with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Signature/CoseSignTag.php
+
+		-
+			rawMessage: 'Method Cose\Signature\CoseSignTag::getProtectedHeaderAsMap() has parameter $decoder with null as default value.'
+			identifier: ergebnis.noParameterWithNullDefaultValue
 			count: 1
 			path: ../src/Signature/CoseSignTag.php
