@@ -2,8 +2,9 @@
 
 /.ci-tools export-ignore
 /.github export-ignore
-/performance export-ignore
+/doc export-ignore
 /tests export-ignore
 /.editorconfig export-ignore
 /.gitattributes export-ignore
 /.gitignore export-ignore
+/castor.php export-ignore
