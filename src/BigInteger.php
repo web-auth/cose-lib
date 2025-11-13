@@ -13,10 +13,10 @@ use function unpack;
 /**
  * @internal
  */
-final readonly class BigInteger
+final class BigInteger
 {
     private function __construct(
-        private BrickBigInteger $value
+        private readonly BrickBigInteger $value
     ) {
     }
 
