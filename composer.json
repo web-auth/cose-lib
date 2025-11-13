@@ -22,6 +22,9 @@
         "brick/math": "^0.9|^0.10|^0.11|^0.12|^0.13|^0.14",
         "spomky-labs/pki-framework": "^1.0"
     },
+    "require-dev": {
+        "spomky-labs/cbor-php": "^3.2.2"
+    },
     "autoload": {
         "psr-4": {
             "Cose\\": "src/"
@@ -34,6 +37,7 @@
     },
     "suggest": {
         "ext-gmp": "For better performance, please install either GMP (recommended) or BCMath extension",
-        "ext-bcmath": "For better performance, please install either GMP (recommended) or BCMath extension"
+        "ext-bcmath": "For better performance, please install either GMP (recommended) or BCMath extension",
+        "spomky-labs/cbor-php": "For COSE Signature support"
     }
 }
