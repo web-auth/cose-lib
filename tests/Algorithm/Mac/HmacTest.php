@@ -15,7 +15,7 @@ use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use function Safe\base64_decode;
+use function base64_decode;
 
 final class HmacTest extends TestCase
 {
