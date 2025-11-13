@@ -74,6 +74,32 @@ final class CoseSign1CreateAndVerifyTest extends TestCase
     }
 
     #[Test]
+    public function canUseCustomDecoderForProtectedHeader(): void
+    {
+        $protectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(1), NegativeIntegerObject::create(-7)),
+        ]);
+        $unprotectedHeader = MapObject::create();
+        $payload = ByteStringObject::create('test');
+        $signature = ByteStringObject::create(random_bytes(64));
+
+        $tag = CoseSign1Tag::create($protectedHeader, $unprotectedHeader, $payload, $signature);
+
+        // Create a custom decoder with custom tags
+        $customTagManager = TagManager::create()->add(CoseSign1Tag::class);
+        $customDecoder = Decoder::create($customTagManager, OtherObjectManager::create());
+
+        // Use the custom decoder
+        $decodedHeader = $tag->getProtectedHeaderAsMap($customDecoder);
+        static::assertInstanceOf(MapObject::class, $decodedHeader);
+        static::assertCount(1, $decodedHeader);
+
+        // Without custom decoder should still work
+        $decodedHeaderDefault = $tag->getProtectedHeaderAsMap();
+        static::assertEquals($decodedHeader, $decodedHeaderDefault);
+    }
+
+    #[Test]
     public function canDecodeExistingCovidCertificate(): void
     {
         $data = '0oRDoQEmoQRIf1sfUVIx8CBZAQ2kAWJERQQaYqh/zQYaYMdMTTkBA6EBpGF2gapiY2l4L1VSTjpVVkNJOjAxREUvSVoxMjM0NUEvMjFFMEpYRDdVUVk2RUNMTTNXVDdZRiM4YmNvYkRFYmRuAmJkdGoyMDIxLTA0LTAxYmlzdFJvYmVydCBLb2NoLUluc3RpdHV0Ym1hbU9SRy0xMDAwMzExODRibXBsRVUvMS8yMC8xNTA3YnNkAmJ0Z2k4NDA1MzkwMDZidnBqMTExOTM0OTAwN2Nkb2JqMTk2NC0wOC0xMmNuYW2kYmZuak11c3Rlcm1hbm5iZ25lRXJpa2FjZm50ak1VU1RFUk1BTk5jZ250ZUVSSUtBY3ZlcmUxLjAuMFhASoTSiWEI6NFgZVdxvtjgF9walgd6rmesxFMtVFxtseYIXm2N/YBp53na69PZcT/+xmpjtQNFOYWtmaCWxjiUYw==';

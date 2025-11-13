@@ -96,10 +96,10 @@ final class CoseSign1Tag extends Tag
         return $this->protectedHeader;
     }
 
-    public function getProtectedHeaderAsMap(): MapObject
+    public function getProtectedHeaderAsMap(?Decoder $decoder = null): MapObject
     {
         $stream = new StringStream($this->protectedHeader->getValue());
-        $decoder = Decoder::create(TagManager::create(), OtherObjectManager::create());
+        $decoder ??= Decoder::create(TagManager::create(), OtherObjectManager::create());
         $decoded = $decoder->decode($stream);
 
         if (! $decoded instanceof MapObject) {
