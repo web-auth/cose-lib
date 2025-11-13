@@ -265,6 +265,54 @@ parameters:
 			path: ../src/BigInteger.php
 
 		-
+			rawMessage: 'Call to an undefined static method CBOR\MapObject::createFromString().'
+			identifier: staticMethod.notFound
+			count: 1
+			path: ../src/Encryption/CoseEncrypt0Tag.php
+
+		-
+			rawMessage: Class "Cose\Encryption\CoseEncrypt0Tag" is not allowed to extend "CBOR\Tag".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Encryption/CoseEncrypt0Tag.php
+
+		-
+			rawMessage: 'Method Cose\Encryption\CoseEncrypt0Tag::__construct() has parameter $data with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Encryption/CoseEncrypt0Tag.php
+
+		-
+			rawMessage: 'Method Cose\Encryption\CoseEncrypt0Tag::createFromLoadedData() has parameter $data with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Encryption/CoseEncrypt0Tag.php
+
+		-
+			rawMessage: 'Call to an undefined static method CBOR\MapObject::createFromString().'
+			identifier: staticMethod.notFound
+			count: 1
+			path: ../src/Encryption/CoseEncryptTag.php
+
+		-
+			rawMessage: Class "Cose\Encryption\CoseEncryptTag" is not allowed to extend "CBOR\Tag".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Encryption/CoseEncryptTag.php
+
+		-
+			rawMessage: 'Method Cose\Encryption\CoseEncryptTag::__construct() has parameter $data with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Encryption/CoseEncryptTag.php
+
+		-
+			rawMessage: 'Method Cose\Encryption\CoseEncryptTag::createFromLoadedData() has parameter $data with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Encryption/CoseEncryptTag.php
+
+		-
 			rawMessage: Cannot cast mixed to string.
 			identifier: cast.string
 			count: 2
@@ -509,3 +557,99 @@ parameters:
 			identifier: return.type
 			count: 1
 			path: ../src/Key/SymmetricKey.php
+
+		-
+			rawMessage: 'Call to an undefined static method CBOR\MapObject::createFromString().'
+			identifier: staticMethod.notFound
+			count: 1
+			path: ../src/Mac/CoseMac0Tag.php
+
+		-
+			rawMessage: Class "Cose\Mac\CoseMac0Tag" is not allowed to extend "CBOR\Tag".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Mac/CoseMac0Tag.php
+
+		-
+			rawMessage: 'Method Cose\Mac\CoseMac0Tag::__construct() has parameter $data with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Mac/CoseMac0Tag.php
+
+		-
+			rawMessage: 'Method Cose\Mac\CoseMac0Tag::createFromLoadedData() has parameter $data with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Mac/CoseMac0Tag.php
+
+		-
+			rawMessage: 'Call to an undefined static method CBOR\MapObject::createFromString().'
+			identifier: staticMethod.notFound
+			count: 1
+			path: ../src/Mac/CoseMacTag.php
+
+		-
+			rawMessage: Class "Cose\Mac\CoseMacTag" is not allowed to extend "CBOR\Tag".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Mac/CoseMacTag.php
+
+		-
+			rawMessage: 'Method Cose\Mac\CoseMacTag::__construct() has parameter $data with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Mac/CoseMacTag.php
+
+		-
+			rawMessage: 'Method Cose\Mac\CoseMacTag::createFromLoadedData() has parameter $data with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Mac/CoseMacTag.php
+
+		-
+			rawMessage: 'Call to an undefined static method CBOR\MapObject::createFromString().'
+			identifier: staticMethod.notFound
+			count: 1
+			path: ../src/Signature/CoseSign1Tag.php
+
+		-
+			rawMessage: Class "Cose\Signature\CoseSign1Tag" is not allowed to extend "CBOR\Tag".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Signature/CoseSign1Tag.php
+
+		-
+			rawMessage: 'Method Cose\Signature\CoseSign1Tag::__construct() has parameter $data with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Signature/CoseSign1Tag.php
+
+		-
+			rawMessage: 'Method Cose\Signature\CoseSign1Tag::createFromLoadedData() has parameter $data with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Signature/CoseSign1Tag.php
+
+		-
+			rawMessage: 'Call to an undefined static method CBOR\MapObject::createFromString().'
+			identifier: staticMethod.notFound
+			count: 1
+			path: ../src/Signature/CoseSignTag.php
+
+		-
+			rawMessage: Class "Cose\Signature\CoseSignTag" is not allowed to extend "CBOR\Tag".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Signature/CoseSignTag.php
+
+		-
+			rawMessage: 'Method Cose\Signature\CoseSignTag::__construct() has parameter $data with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Signature/CoseSignTag.php
+
+		-
+			rawMessage: 'Method Cose\Signature\CoseSignTag::createFromLoadedData() has parameter $data with a nullable type declaration.'
+			identifier: ergebnis.noParameterWithNullableTypeDeclaration
+			count: 1
+			path: ../src/Signature/CoseSignTag.php
