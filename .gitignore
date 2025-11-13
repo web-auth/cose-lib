@@ -1,10 +1,8 @@
-.phpunit.result.cache
-report.md
-*.cache
-*.log
-node_modules
-yarn.lock
-yarn-error.log
-/composer.lock
-/vendor
+composer.lock
+.*.cache
+vendor/
+src/Bundle/JoseFramework/var/
 infection.txt
+.castor.stub.php
+/tmp*
+/.ci-tools/coverage

@@ -1,0 +1,511 @@
+parameters:
+	ignoreErrors:
+		-
+			rawMessage: Class "Cose\Algorithm\Mac\HS256" is not allowed to extend "Cose\Algorithm\Mac\Hmac".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Mac/HS256.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Mac\HS256Truncated64" is not allowed to extend "Cose\Algorithm\Mac\Hmac".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Mac/HS256Truncated64.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Mac\HS384" is not allowed to extend "Cose\Algorithm\Mac\Hmac".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Mac/HS384.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Mac\HS512" is not allowed to extend "Cose\Algorithm\Mac\Hmac".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Mac/HS512.php
+
+		-
+			rawMessage: Cannot cast mixed to string.
+			identifier: cast.string
+			count: 1
+			path: ../src/Algorithm/Mac/Hmac.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Mac\Hmac::hash() is not final, but since the containing class is abstract, it should be.'
+			identifier: ergebnis.finalInAbstractClass
+			count: 1
+			path: ../src/Algorithm/Mac/Hmac.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Mac\Hmac::verify() is not final, but since the containing class is abstract, it should be.'
+			identifier: ergebnis.finalInAbstractClass
+			count: 1
+			path: ../src/Algorithm/Mac/Hmac.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECDSA::sign() is not final, but since the containing class is abstract, it should be.'
+			identifier: ergebnis.finalInAbstractClass
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ECDSA.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECDSA::verify() is not final, but since the containing class is abstract, it should be.'
+			identifier: ergebnis.finalInAbstractClass
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ECDSA.php
+
+		-
+			rawMessage: 'Parameter #1 $signature of static method Cose\Algorithm\Signature\ECDSA\ECSignature::fromAsn1() expects string, mixed given.'
+			identifier: argument.type
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ECDSA.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECSignature::fromAsn1() should return string but returns string|false.'
+			identifier: return.type
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECSignature::readAsn1Content() has parameter $position that is passed by reference.'
+			identifier: ergebnis.noParameterPassedByReference
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECSignature::readAsn1Integer() has parameter $position that is passed by reference.'
+			identifier: ergebnis.noParameterPassedByReference
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECSignature::toAsn1() should return string but returns string|false.'
+			identifier: return.type
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\ECDSA\ES256" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ES256.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\ECDSA\ES256K" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ES256K.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\ECDSA\ES384" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ES384.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\ECDSA\ES512" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ES512.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\EdDSA\Ed25519" is not allowed to extend "Cose\Algorithm\Signature\EdDSA\EdDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/EdDSA/Ed25519.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\EdDSA\Ed256" is not allowed to extend "Cose\Algorithm\Signature\EdDSA\EdDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/EdDSA/Ed256.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\EdDSA\Ed512" is not allowed to extend "Cose\Algorithm\Signature\EdDSA\EdDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/EdDSA/Ed512.php
+
+		-
+			rawMessage: Class Cose\Algorithm\Signature\EdDSA\EdDSA is neither abstract nor final.
+			identifier: ergebnis.final
+			count: 1
+			path: ../src/Algorithm/Signature/EdDSA/EdDSA.php
+
+		-
+			rawMessage: 'Parameter #1 $signature of function sodium_crypto_sign_verify_detached expects non-empty-string, string given.'
+			identifier: argument.type
+			count: 1
+			path: ../src/Algorithm/Signature/EdDSA/EdDSA.php
+
+		-
+			rawMessage: 'Parameter #2 $secret_key of function sodium_crypto_sign_detached expects non-empty-string, string given.'
+			identifier: argument.type
+			count: 2
+			path: ../src/Algorithm/Signature/EdDSA/EdDSA.php
+
+		-
+			rawMessage: 'Parameter #3 $public_key of function sodium_crypto_sign_verify_detached expects non-empty-string, string given.'
+			identifier: argument.type
+			count: 1
+			path: ../src/Algorithm/Signature/EdDSA/EdDSA.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\RSA\PS256" is not allowed to extend "Cose\Algorithm\Signature\RSA\PSSRSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/PS256.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\RSA\PS384" is not allowed to extend "Cose\Algorithm\Signature\RSA\PSSRSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/PS384.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\RSA\PS512" is not allowed to extend "Cose\Algorithm\Signature\RSA\PSSRSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/PS512.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\RSA\PSSRSA::exponentiate() is not final, but since the containing class is abstract, it should be.'
+			identifier: ergebnis.finalInAbstractClass
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/PSSRSA.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\RSA\PSSRSA::sign() is not final, but since the containing class is abstract, it should be.'
+			identifier: ergebnis.finalInAbstractClass
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/PSSRSA.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\RSA\PSSRSA::verify() is not final, but since the containing class is abstract, it should be.'
+			identifier: ergebnis.finalInAbstractClass
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/PSSRSA.php
+
+		-
+			rawMessage: 'Parameter #1 $length of function random_bytes expects int<1, max>, int given.'
+			identifier: argument.type
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/PSSRSA.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\RSA\RS1" is not allowed to extend "Cose\Algorithm\Signature\RSA\RSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/RS1.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\RSA\RS256" is not allowed to extend "Cose\Algorithm\Signature\RSA\RSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/RS256.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\RSA\RS384" is not allowed to extend "Cose\Algorithm\Signature\RSA\RSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/RS384.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\RSA\RS512" is not allowed to extend "Cose\Algorithm\Signature\RSA\RSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/RS512.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\RSA\RSA::sign() is not final, but since the containing class is abstract, it should be.'
+			identifier: ergebnis.finalInAbstractClass
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/RSA.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\RSA\RSA::sign() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/RSA.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\RSA\RSA::verify() is not final, but since the containing class is abstract, it should be.'
+			identifier: ergebnis.finalInAbstractClass
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/RSA.php
+
+		-
+			rawMessage: 'Method Cose\Algorithms::getHashAlgorithmFor() is not final, but since the containing class is abstract, it should be.'
+			identifier: ergebnis.finalInAbstractClass
+			count: 1
+			path: ../src/Algorithms.php
+
+		-
+			rawMessage: 'Method Cose\Algorithms::getOpensslAlgorithmFor() is not final, but since the containing class is abstract, it should be.'
+			identifier: ergebnis.finalInAbstractClass
+			count: 1
+			path: ../src/Algorithms.php
+
+		-
+			rawMessage: 'Parameter #1 $array of function current expects array|object, array|false given.'
+			identifier: argument.type
+			count: 1
+			path: ../src/BigInteger.php
+
+		-
+			rawMessage: 'Parameter #1 $number of static method Brick\Math\BigInteger::fromBase() expects string, mixed given.'
+			identifier: argument.type
+			count: 1
+			path: ../src/BigInteger.php
+
+		-
+			rawMessage: 'Parameter #1 $string of function ltrim expects string, string|false given.'
+			identifier: argument.type
+			count: 1
+			path: ../src/BigInteger.php
+
+		-
+			rawMessage: Cannot cast mixed to string.
+			identifier: cast.string
+			count: 2
+			path: ../src/Key/Ec2Key.php
+
+		-
+			rawMessage: Class "Cose\Key\Ec2Key" is not allowed to extend "Cose\Key\Key".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Key/Ec2Key.php
+
+		-
+			rawMessage: Class Cose\Key\Ec2Key is neither abstract nor final.
+			identifier: ergebnis.final
+			count: 1
+			path: ../src/Key/Ec2Key.php
+
+		-
+			rawMessage: 'Language construct isset() should not be used.'
+			identifier: ergebnis.noIsset
+			count: 1
+			path: ../src/Key/Ec2Key.php
+
+		-
+			rawMessage: 'Method Cose\Key\Ec2Key::curve() should return int|string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/Ec2Key.php
+
+		-
+			rawMessage: 'Method Cose\Key\Ec2Key::d() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/Ec2Key.php
+
+		-
+			rawMessage: 'Method Cose\Key\Ec2Key::x() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/Ec2Key.php
+
+		-
+			rawMessage: 'Method Cose\Key\Ec2Key::y() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/Ec2Key.php
+
+		-
+			rawMessage: Possibly invalid array key type mixed.
+			identifier: offsetAccess.invalidOffset
+			count: 2
+			path: ../src/Key/Ec2Key.php
+
+		-
+			rawMessage: Cannot cast mixed to int.
+			identifier: cast.int
+			count: 1
+			path: ../src/Key/Key.php
+
+		-
+			rawMessage: Class Cose\Key\Key is neither abstract nor final.
+			identifier: ergebnis.final
+			count: 1
+			path: ../src/Key/Key.php
+
+		-
+			rawMessage: 'Method Cose\Key\Key::type() should return int|string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/Key.php
+
+		-
+			rawMessage: 'Parameter #2 of function sprintf is expected to be int by placeholder #1 ("%%d"), int|string given.'
+			identifier: argument.type
+			count: 1
+			path: ../src/Key/Key.php
+
+		-
+			rawMessage: Class "Cose\Key\OkpKey" is not allowed to extend "Cose\Key\Key".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Key/OkpKey.php
+
+		-
+			rawMessage: Class Cose\Key\OkpKey is neither abstract nor final.
+			identifier: ergebnis.final
+			count: 1
+			path: ../src/Key/OkpKey.php
+
+		-
+			rawMessage: 'Language construct isset() should not be used.'
+			identifier: ergebnis.noIsset
+			count: 1
+			path: ../src/Key/OkpKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\OkpKey::curve() should return int|string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/OkpKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\OkpKey::d() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/OkpKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\OkpKey::x() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/OkpKey.php
+
+		-
+			rawMessage: Class "Cose\Key\RsaKey" is not allowed to extend "Cose\Key\Key".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: Class Cose\Key\RsaKey is neither abstract nor final.
+			identifier: ergebnis.final
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Language construct isset() should not be used.'
+			identifier: ergebnis.noIsset
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\RsaKey::QInv() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\RsaKey::d() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\RsaKey::dI() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\RsaKey::dP() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\RsaKey::dQ() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\RsaKey::e() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\RsaKey::n() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\RsaKey::other() should return array<mixed> but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\RsaKey::p() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\RsaKey::q() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\RsaKey::rI() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\RsaKey::tI() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Parameter #1 $array of function current expects array|object, array|false given.'
+			identifier: argument.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: 'Parameter #1 $number of static method Brick\Math\BigInteger::fromBase() expects string, mixed given.'
+			identifier: argument.type
+			count: 1
+			path: ../src/Key/RsaKey.php
+
+		-
+			rawMessage: Cannot cast mixed to int.
+			identifier: cast.int
+			count: 1
+			path: ../src/Key/SymmetricKey.php
+
+		-
+			rawMessage: Class "Cose\Key\SymmetricKey" is not allowed to extend "Cose\Key\Key".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Key/SymmetricKey.php
+
+		-
+			rawMessage: Class Cose\Key\SymmetricKey is neither abstract nor final.
+			identifier: ergebnis.final
+			count: 1
+			path: ../src/Key/SymmetricKey.php
+
+		-
+			rawMessage: 'Language construct isset() should not be used.'
+			identifier: ergebnis.noIsset
+			count: 2
+			path: ../src/Key/SymmetricKey.php
+
+		-
+			rawMessage: 'Method Cose\Key\SymmetricKey::k() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Key/SymmetricKey.php
