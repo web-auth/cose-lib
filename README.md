@@ -1,10 +1,9 @@
 # COSE Library for PHP
 
-![Build Status](https://github.com/web-auth/cose-lib/workflows/Integrate/badge.svg)
-[![Latest Stable Version](https://poser.pugx.org/web-auth/cose-lib/v/stable.svg)](https://packagist.org/packages/web-auth/cose-lib)
-[![Total Downloads](https://poser.pugx.org/web-auth/cose-lib/downloads.svg)](https://packagist.org/packages/web-auth/cose-lib)
-[![License](https://poser.pugx.org/web-auth/cose-lib/license.svg)](https://packagist.org/packages/web-auth/cose-lib)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/web-auth/cose-lib/badge)](https://api.securityscorecards.dev/projects/github.com/web-auth/cose-lib)
+[![CI](https://github.com/web-auth/cose-lib/actions/workflows/ci.yml/badge.svg)](https://github.com/web-auth/cose-lib/actions/workflows/ci.yml)
+[![Latest Stable Version](https://poser.pugx.org/web-auth/cose-lib/v)](https://packagist.org/packages/web-auth/cose-lib)
+[![Total Downloads](https://poser.pugx.org/web-auth/cose-lib/downloads)](https://packagist.org/packages/web-auth/cose-lib)
+[![License](https://poser.pugx.org/web-auth/cose-lib/license)](https://packagist.org/packages/web-auth/cose-lib)
 
 **CBOR Object Signing and Encryption (COSE) for PHP** is a comprehensive library that provides full support for COSE operations including signing, encryption, and MAC (Message Authentication Code) operations.
 
