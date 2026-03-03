@@ -121,7 +121,7 @@ abstract class Algorithms
 
     final public const COSE_ALGORITHM_RSAES_OAEP_512 = -42;
 
-    final public const COSE_ALGORITHM_ES256K = -46;
+    final public const COSE_ALGORITHM_ES256K = -47;
 
     final public const COSE_ALGORITHM_RS256 = -257;
 
