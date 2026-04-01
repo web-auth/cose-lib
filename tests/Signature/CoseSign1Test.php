@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Cose\Tests\Signature;
 
+use function base64_decode;
 use CBOR\Decoder;
 use CBOR\OtherObject\OtherObjectManager;
 use CBOR\StringStream;
 use CBOR\Tag\TagManager;
 use Cose\Signature\CoseSign1Tag;
 use Cose\Signature\Signature1;
+use function openssl_verify;
 use PHPUnit\Framework\Attributes\Depends;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use function base64_decode;
-use function openssl_verify;
 
 final class CoseSign1Test extends TestCase
 {

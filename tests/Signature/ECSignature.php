@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Cose\Tests\Signature;
 
-use InvalidArgumentException;
 use function hex2bin;
+use InvalidArgumentException;
 use function mb_strlen;
 use function mb_strpos;
 use function mb_substr;

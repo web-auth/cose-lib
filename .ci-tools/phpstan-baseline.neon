@@ -61,6 +61,12 @@ parameters:
 			path: ../src/Algorithm/Signature/ECDSA/ECDSA.php
 
 		-
+			rawMessage: "Strict comparison using === between '30' and '81' will always evaluate to false."
+			identifier: identical.alwaysFalse
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
+
+		-
 			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECSignature::fromAsn1() should return string but returns string|false.'
 			identifier: return.type
 			count: 1
@@ -248,12 +254,6 @@ parameters:
 
 		-
 			rawMessage: 'Parameter #1 $array of function current expects array|object, array|false given.'
-			identifier: argument.type
-			count: 1
-			path: ../src/BigInteger.php
-
-		-
-			rawMessage: 'Parameter #1 $number of static method Brick\Math\BigInteger::fromBase() expects string, mixed given.'
 			identifier: argument.type
 			count: 1
 			path: ../src/BigInteger.php
@@ -534,11 +534,6 @@ parameters:
 			count: 1
 			path: ../src/Key/RsaKey.php
 
-		-
-			rawMessage: 'Parameter #1 $number of static method Brick\Math\BigInteger::fromBase() expects string, mixed given.'
-			identifier: argument.type
-			count: 1
-			path: ../src/Key/RsaKey.php
 
 		-
 			rawMessage: Cannot cast mixed to int.

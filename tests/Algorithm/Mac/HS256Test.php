@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cose\Tests\Algorithm\Mac;
 
+use function base64_decode;
 use Cose\Algorithm\Mac\HS256;
 use Cose\Key\OkpKey;
 use Cose\Key\SymmetricKey;
@@ -11,7 +12,6 @@ use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use function base64_decode;
 
 final class HS256Test extends TestCase
 {
