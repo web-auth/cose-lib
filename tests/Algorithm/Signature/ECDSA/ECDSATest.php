@@ -23,7 +23,7 @@ final class ECDSATest extends TestCase
     {
         // Then
         static::assertSame(-7, ES256::identifier());
-        static::assertSame(-46, ES256K::identifier());
+        static::assertSame(-47, ES256K::identifier());
         static::assertSame(-35, ES384::identifier());
         static::assertSame(-36, ES512::identifier());
     }
