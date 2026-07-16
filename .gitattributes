@@ -1,5 +1,6 @@
 * text=auto
 
+/.agents export-ignore
 /.ci-tools export-ignore
 /.github export-ignore
 /doc export-ignore
