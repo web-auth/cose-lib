@@ -113,7 +113,7 @@ final class EdDSATest extends TestCase
             true
         );
         $invalidSignature = $signature;
-        $invalidSignature[0] = $invalidSignature[0] ^ "\x01"; // Corrupt the signature
+        $invalidSignature[0] = $signature[0] ^ "\x01"; // Corrupt the signature
         // When
         $isValid = $algorithm->verify($data, $key, $invalidSignature);
         // Then

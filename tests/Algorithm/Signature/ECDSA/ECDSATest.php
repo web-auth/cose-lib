@@ -278,7 +278,7 @@ final class ECDSATest extends TestCase
             'EFD48B2AACB6A8FD1140DD9CD45E81D69D2C877B56AAF991C34D0EA84EAF3716F7CB1C942D657C41D436C7A1B6E29F65F3E900DBB9AFF4064DC4AB2F843ACDA8'
         );
         $invalidSignature = $signature;
-        $invalidSignature[0] = $invalidSignature[0] ^ "\x01"; // Corrupt the signature
+        $invalidSignature[0] = $signature[0] ^ "\x01"; // Corrupt the signature
         // When
         $isValid = $algorithm->verify($data, $key, $invalidSignature);
         // Then

@@ -61,12 +61,6 @@ parameters:
 			path: ../src/Algorithm/Signature/ECDSA/ECDSA.php
 
 		-
-			rawMessage: "Strict comparison using === between '30' and '81' will always evaluate to false."
-			identifier: identical.alwaysFalse
-			count: 1
-			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
-
-		-
 			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECSignature::fromAsn1() should return string but returns string|false.'
 			identifier: return.type
 			count: 1
@@ -87,6 +81,12 @@ parameters:
 		-
 			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECSignature::toAsn1() should return string but returns string|false.'
 			identifier: return.type
+			count: 1
+			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
+
+		-
+			rawMessage: 'Strict comparison using === between ''30'' and ''81'' will always evaluate to false.'
+			identifier: identical.alwaysFalse
 			count: 1
 			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
 
@@ -201,6 +201,12 @@ parameters:
 		-
 			rawMessage: Class "Cose\Algorithm\Signature\RSA\RS1" is not allowed to extend "Cose\Algorithm\Signature\RSA\RSA".
 			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/RSA/RS1.php
+
+		-
+			rawMessage: Constructor in Cose\Algorithm\Signature\RSA\RS1 has parameter $acknowledgeInsecureAlgorithm with default value.
+			identifier: ergebnis.noConstructorParameterWithDefaultValue
 			count: 1
 			path: ../src/Algorithm/Signature/RSA/RS1.php
 
@@ -533,7 +539,6 @@ parameters:
 			identifier: argument.type
 			count: 1
 			path: ../src/Key/RsaKey.php
-
 
 		-
 			rawMessage: Cannot cast mixed to int.
