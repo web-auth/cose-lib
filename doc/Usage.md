@@ -275,6 +275,19 @@ $coseMac = CoseMacTag::create(
   - PS256 (-37): RSASSA-PSS with SHA-256
   - PS384 (-38): RSASSA-PSS with SHA-384
   - PS512 (-39): RSASSA-PSS with SHA-512
+  - RS1 (-65535): RSASSA-PKCS1-v1_5 with SHA-1 — **not secure**, kept only for legacy authenticators
+
+RS1 relies on SHA-1, which is no longer acceptable for digital signatures (see
+[RFC 6194](https://datatracker.ietf.org/doc/html/rfc6194) and NIST SP 800-131A). Creating the algorithm emits an
+`E_USER_WARNING` unless the risk is explicitly acknowledged:
+
+```php
+use Cose\Algorithm\Signature\RSA\RS1;
+
+$algorithm = RS1::create(acknowledgeInsecureAlgorithm: true);
+```
+
+As of the next major version, omitting that acknowledgement will throw an exception instead of warning.
 
 ### MAC Algorithms
 

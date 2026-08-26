@@ -153,6 +153,19 @@ This library is perfect for:
 | PS256 | -37 | RSASSA-PSS with SHA-256 |
 | PS384 | -38 | RSASSA-PSS with SHA-384 |
 | PS512 | -39 | RSASSA-PSS with SHA-512 |
+| RS1 | -65535 | RSASSA-PKCS1-v1_5 with SHA-1 — legacy only, see below |
+
+> [!WARNING]
+> **RS1 (SHA-1) is not secure.** It is kept only for the legacy authenticators that still rely on it.
+> Creating it emits an `E_USER_WARNING` unless you explicitly acknowledge the risk:
+>
+> ```php
+> use Cose\Algorithm\Signature\RSA\RS1;
+>
+> $algorithm = RS1::create(acknowledgeInsecureAlgorithm: true);
+> ```
+>
+> As of the next major version, omitting that acknowledgement will throw an exception instead of warning.
 
 ### MAC Algorithms
 
