@@ -157,6 +157,60 @@ parameters:
 			path: ../src/Algorithm/Signature/EdDSA/EdDSA.php
 
 		-
+			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESB256" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/FullySpecified/ESB256.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESB320" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/FullySpecified/ESB320.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESB384" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/FullySpecified/ESB384.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESB512" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/FullySpecified/ESB512.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESP256" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/FullySpecified/ESP256.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESP384" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/FullySpecified/ESP384.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESP512" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/FullySpecified/ESP512.php
+
+		-
+			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\Ed25519" is not allowed to extend "Cose\Algorithm\Signature\EdDSA\EdDSA".
+			identifier: ergebnis.noExtends
+			count: 1
+			path: ../src/Algorithm/Signature/FullySpecified/Ed25519.php
+
+		-
+			rawMessage: 'Method Cose\Algorithm\Signature\FullySpecified\Ed448::sign() should return string but returns mixed.'
+			identifier: return.type
+			count: 1
+			path: ../src/Algorithm/Signature/FullySpecified/Ed448.php
+
+		-
 			rawMessage: Class "Cose\Algorithm\Signature\RSA\PS256" is not allowed to extend "Cose\Algorithm\Signature\RSA\PSSRSA".
 			identifier: ergebnis.noExtends
 			count: 1

@@ -16,6 +16,7 @@ This library provides full support for COSE (CBOR Object Signing and Encryption)
   - [COSE_Mac0 (Without Recipients)](#cose_mac0-without-recipients)
   - [COSE_Mac (With Recipients)](#cose_mac-with-recipients)
 - [Supported Algorithms](#supported-algorithms)
+  - [Fully-Specified Algorithms](#fully-specified-algorithms)
 
 ## Installation
 
@@ -288,6 +289,46 @@ $algorithm = RS1::create(acknowledgeInsecureAlgorithm: true);
 ```
 
 As of the next major version, omitting that acknowledgement will throw an exception instead of warning.
+
+### Fully-Specified Algorithms
+
+[RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) registers identifiers that determine the curve and the hash on
+their own, instead of leaving them to the other parameters of the key. WebAuthn Level 3 has adopted them, so a relying
+party may receive a credential whose `alg` carries one of these values. They live in the
+`Cose\Algorithm\Signature\FullySpecified` namespace.
+
+- **ECDSA**
+  - ESP256 (-9): ECDSA with the P-256 curve and SHA-256
+  - ESP384 (-51): ECDSA with the P-384 curve and SHA-384
+  - ESP512 (-52): ECDSA with the P-521 curve and SHA-512
+  - ESB256 (-265): ECDSA with the brainpoolP256r1 curve and SHA-256
+  - ESB320 (-266): ECDSA with the brainpoolP320r1 curve and SHA-384
+  - ESB384 (-267): ECDSA with the brainpoolP384r1 curve and SHA-384
+  - ESB512 (-268): ECDSA with the brainpoolP512r1 curve and SHA-512
+
+- **EdDSA**
+  - Ed25519 (-19): EdDSA with the Ed25519 parameter set
+  - Ed448 (-53): EdDSA with the Ed448 parameter set
+
+```php
+use Cose\Algorithm\Manager;
+use Cose\Algorithm\Signature\FullySpecified\ESP256;
+use Cose\Algorithm\Signature\FullySpecified\Ed25519;
+
+$manager = Manager::create()
+    ->add(ESP256::create())
+    ->add(Ed25519::create());
+```
+
+`Cose\Algorithm\Signature\FullySpecified\Ed25519` (-19) and `Cose\Algorithm\Signature\EdDSA\Ed25519` (-8)
+compute the same signatures; only the algorithm identifier differs.
+
+Ed448 is not covered by the sodium extension and goes through OpenSSL, which PHP only wires up for Edwards curves as of
+PHP 8.4. Call `Ed448::isSupported()` when the platform is not known in advance; the algorithm throws a
+`RuntimeException` on older versions.
+
+The brainpool curves are also available on `Cose\Key\Ec2Key` as `CURVE_BP256`, `CURVE_BP320`, `CURVE_BP384` and
+`CURVE_BP512` (values 256 to 259 of the COSE Elliptic Curves registry).
 
 ### MAC Algorithms
 
