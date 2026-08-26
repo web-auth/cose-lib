@@ -21,16 +21,16 @@ final class CoseSign1Test extends TestCase
     #[Test]
     public function theCovidVaccinationPassCanBeLoaded(): CoseSign1Tag
     {
-        //Given
+        // Given
         $data = '0oRDoQEmoQRIf1sfUVIx8CBZAQ2kAWJERQQaYqh/zQYaYMdMTTkBA6EBpGF2gapiY2l4L1VSTjpVVkNJOjAxREUvSVoxMjM0NUEvMjFFMEpYRDdVUVk2RUNMTTNXVDdZRiM4YmNvYkRFYmRuAmJkdGoyMDIxLTA0LTAxYmlzdFJvYmVydCBLb2NoLUluc3RpdHV0Ym1hbU9SRy0xMDAwMzExODRibXBsRVUvMS8yMC8xNTA3YnNkAmJ0Z2k4NDA1MzkwMDZidnBqMTExOTM0OTAwN2Nkb2JqMTk2NC0wOC0xMmNuYW2kYmZuak11c3Rlcm1hbm5iZ25lRXJpa2FjZm50ak1VU1RFUk1BTk5jZ250ZUVSSUtBY3ZlcmUxLjAuMFhASoTSiWEI6NFgZVdxvtjgF9walgd6rmesxFMtVFxtseYIXm2N/YBp53na69PZcT/+xmpjtQNFOYWtmaCWxjiUYw==';
 
         $stream = new StringStream(base64_decode($data, true));
         $decoder = $this->getDecoder();
 
-        //When
-        $cbor = $decoder->decode($stream); //We decode the data
+        // When
+        $cbor = $decoder->decode($stream); // We decode the data
 
-        //Then
+        // Then
         static::assertInstanceOf(CoseSign1Tag::class, $cbor, 'Invalid object');
 
         return $cbor;
@@ -40,14 +40,14 @@ final class CoseSign1Test extends TestCase
     #[Depends('theCovidVaccinationPassCanBeLoaded')]
     public function theCovidVaccinationPassCanBeVerified(CoseSign1Tag $cbor): void
     {
-        //Given
+        // Given
         $structure = Signature1::create($cbor->getProtectedHeader(), $cbor->getPayload());
         $derSignature = ECSignature::toAsn1($cbor->getSignature()->normalize(), 64);
 
-        //When
+        // When
         $isValid = openssl_verify((string) $structure, $derSignature, $this->getCertificate(), 'sha256');
 
-        //Then
+        // Then
         static::assertSame(1, $isValid, 'Invalid signature');
     }
 
