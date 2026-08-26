@@ -17,6 +17,7 @@ This library provides full support for COSE (CBOR Object Signing and Encryption)
   - [COSE_Mac (With Recipients)](#cose_mac-with-recipients)
 - [Supported Algorithms](#supported-algorithms)
   - [Fully-Specified Algorithms](#fully-specified-algorithms)
+  - [Validating RSA Keys](#validating-rsa-keys)
 
 ## Installation
 
@@ -329,6 +330,36 @@ PHP 8.4. Call `Ed448::isSupported()` when the platform is not known in advance; 
 
 The brainpool curves are also available on `Cose\Key\Ec2Key` as `CURVE_BP256`, `CURVE_BP320`, `CURVE_BP384` and
 `CURVE_BP512` (values 256 to 259 of the COSE Elliptic Curves registry).
+
+### Validating RSA Keys
+
+[RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) defers to
+[RFC 8230, section 6.1](https://www.rfc-editor.org/rfc/rfc8230#section-6.1), which requires a modulus of 2048 bits or
+larger and expects implementations to handle up to 16K bits. Nothing applies those bounds automatically, so run them
+explicitly before handing a key to an algorithm:
+
+```php
+use Cose\Key\RsaKey;
+use Cose\Key\RsaKeyValidator;
+
+$key = RsaKey::create($data);
+
+// Throws an InvalidArgumentException when the key does not comply
+RsaKeyValidator::create()->check($key);
+
+// …or ask without the exception
+$isAcceptable = RsaKeyValidator::create()->isValid($key);
+
+// The bounds can be tightened
+RsaKeyValidator::create(minimumModulusLength: 3072, maximumModulusLength: 8192)->check($key);
+
+// The modulus length, in bits, is available on its own
+$length = RsaKeyValidator::modulusLength($key);
+```
+
+The validator also enforces the public exponent constraints of
+[RFC 8017, section 3.1](https://datatracker.ietf.org/doc/html/rfc8017#section-3.1): an odd integer between 3 and
+`n - 1`.
 
 ### MAC Algorithms
 

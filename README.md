@@ -202,6 +202,35 @@ the key. They live in the `Cose\Algorithm\Signature\FullySpecified` namespace.
 | HS512 | 7 | HMAC with SHA-512 |
 | HS256/64 | 4 | HMAC with SHA-256 truncated to 64 bits |
 
+## Validating RSA Keys
+
+[RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) defers to
+[RFC 8230, section 6.1](https://www.rfc-editor.org/rfc/rfc8230#section-6.1), which requires a modulus of 2048 bits or
+larger and expects implementations to handle up to 16K bits. The library never applies those bounds on its own; run
+them explicitly on a key before handing it to an algorithm:
+
+```php
+use Cose\Key\RsaKey;
+use Cose\Key\RsaKeyValidator;
+
+$key = RsaKey::create($data);
+
+// Throws an InvalidArgumentException when the key does not comply
+RsaKeyValidator::create()->check($key);
+
+// …or ask without the exception
+if (! RsaKeyValidator::create()->isValid($key)) {
+    // reject the key
+}
+
+// The bounds can be tightened
+RsaKeyValidator::create(minimumModulusLength: 3072, maximumModulusLength: 8192)->check($key);
+```
+
+The validator also enforces the public exponent constraints of
+[RFC 8017, section 3.1](https://datatracker.ietf.org/doc/html/rfc8017#section-3.1): an odd integer between 3 and
+`n - 1`.
+
 ## Testing
 
 Run the test suite with:
