@@ -50,8 +50,8 @@ $message = CoseMac0Tag::create(ListObject::create([
 ]));
 
 $encoded = (string) $message;
-example_line('MAC_structure', bin2hex((string) $toBeMaced));
-example_line('COSE_Mac0', bin2hex($encoded));
+example_hex('MAC_structure', (string) $toBeMaced);
+example_hex('COSE_Mac0', $encoded);
 echo PHP_EOL;
 
 // --- verifying ---------------------------------------------------------------
@@ -86,5 +86,5 @@ example_assert(
     ! $algorithm->verify((string) $asMac, $key, $decoded->getTag()->getValue()),
     'the tag is not valid under the "MAC" context'
 );
-example_line('MAC0 context', substr(bin2hex((string) $toBeVerified), 0, 12));
-example_line('MAC context', substr(bin2hex((string) $asMac), 0, 12));
+example_hex('MAC0 structure', (string) $toBeVerified);
+example_hex('MAC structure', (string) $asMac);

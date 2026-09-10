@@ -71,7 +71,7 @@ $message = CoseSignTag::create(ListObject::create([
 ]));
 
 $encoded = (string) $message;
-example_line('COSE_Sign', bin2hex($encoded));
+example_hex('COSE_Sign', $encoded);
 echo PHP_EOL;
 
 // --- verifying -------------------------------------------------------------

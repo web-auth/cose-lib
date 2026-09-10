@@ -42,7 +42,7 @@ $signature = ByteStringObject::create('signature');
 
 // The deprecated four-argument factory. The notice is silenced here only so the example reads cleanly.
 $before = @DeprecatedCoseSign1Tag::create($protectedHeader, $unprotectedHeader, $payload, $signature);
-example_line('before', bin2hex((string) $before));
+example_hex('before', (string) $before);
 
 // --- after ---------------------------------------------------------------------
 
@@ -50,7 +50,7 @@ example_line('before', bin2hex((string) $before));
 // where renaming the class is not enough -- a leftover create($a, $b, $c, $d) raises an ArgumentCountError rather
 // than misbehaving quietly.
 $after = CoseSign1Tag::createFromComponents($protectedHeader, $unprotectedHeader, $payload, $signature);
-example_line('after', bin2hex((string) $after));
+example_hex('after', (string) $after);
 
 example_assert((string) $before === (string) $after, 'both produce the same bytes');
 echo PHP_EOL;

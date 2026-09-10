@@ -63,6 +63,17 @@ function example_line(string $label, string $value): void
 }
 
 /**
+ * A CBOR item, printed as hex in full.
+ *
+ * Never truncated: the whole point of printing it is that it can be pasted into a decoder such as
+ * https://cbor.me to see the structure the example just built.
+ */
+function example_hex(string $label, string $binary): void
+{
+    example_line($label, bin2hex($binary));
+}
+
+/**
  * Fails the example loudly rather than printing a wrong result quietly.
  */
 function example_assert(bool $condition, string $message): void

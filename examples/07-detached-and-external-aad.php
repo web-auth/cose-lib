@@ -51,7 +51,7 @@ $detached = CoseSign1Tag::create(ListObject::create([
 ]));
 
 $encoded = (string) $detached;
-example_line('COSE_Sign1', bin2hex($encoded));
+example_hex('COSE_Sign1', $encoded);
 example_line('size', sprintf('%d bytes, payload not included', strlen($encoded)));
 
 $decoded = Decoder::create()->decode(StringStream::create($encoded));
@@ -83,8 +83,8 @@ $payload = ByteStringObject::create('Bound to a session');
 $toBeSigned = Signature1::create($protectedHeader, $payload, $sessionContext);
 $signature = ByteStringObject::create($algorithm->sign((string) $toBeSigned, $privateKey));
 
-example_line('with external_aad', bin2hex((string) $toBeSigned));
-example_line('without', bin2hex((string) Signature1::create($protectedHeader, $payload)));
+example_hex('with external_aad', (string) $toBeSigned);
+example_hex('without', (string) Signature1::create($protectedHeader, $payload));
 
 $message = CoseSign1Tag::create(ListObject::create([
     $protectedHeader,

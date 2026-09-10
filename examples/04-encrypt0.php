@@ -46,7 +46,7 @@ $unprotectedHeader = MapObject::create([
 
 // The additional authenticated data: ["Encrypt0", protected, external_aad]
 $aad = (string) Encrypt0Structure::create($protectedHeader);
-example_line('Enc_structure', bin2hex($aad));
+example_hex('Enc_structure', $aad);
 
 $ciphertext = openssl_encrypt(
     $plaintext,
@@ -68,7 +68,7 @@ $message = CoseEncrypt0Tag::create(ListObject::create([
 ]));
 
 $encoded = (string) $message;
-example_line('COSE_Encrypt0', bin2hex($encoded));
+example_hex('COSE_Encrypt0', $encoded);
 echo PHP_EOL;
 
 // --- decrypting -------------------------------------------------------------

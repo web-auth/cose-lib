@@ -70,7 +70,7 @@ $message = CoseSign1Tag::create(ListObject::create([
 
 // Tag 61 is optional; it says "what follows is a CWT".
 $encoded = (string) CwtTag::create($message);
-example_line('CWT', bin2hex($encoded));
+example_hex('CWT', $encoded);
 example_assert(str_starts_with(bin2hex($encoded), 'd83d'), 'the outer head is tag 61');
 echo PHP_EOL;
 

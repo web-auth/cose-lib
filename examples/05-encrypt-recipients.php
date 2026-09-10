@@ -56,7 +56,7 @@ $ciphertext = openssl_encrypt(
     16
 );
 example_assert($ciphertext !== false, 'the content was encrypted');
-example_line('Enc_structure', bin2hex($aad));
+example_hex('Enc_structure', $aad);
 
 // --- wrapping the key for each recipient ---------------------------------------
 
@@ -102,7 +102,7 @@ $message = CoseEncryptTag::create(ListObject::create([
 ]));
 
 $encoded = (string) $message;
-example_line('COSE_Encrypt', substr(bin2hex($encoded), 0, 96) . '...');
+example_hex('COSE_Encrypt', $encoded);
 echo PHP_EOL;
 
 // --- a recipient opens the message ---------------------------------------------

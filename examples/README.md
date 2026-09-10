@@ -10,6 +10,10 @@ php examples/01-sign1.php
 
 `tests/ExamplesTest.php` runs every one of them on each build.
 
+Every CBOR item is printed as hex in full, never truncated, so it can be pasted straight into a decoder such as
+[cbor.me](https://cbor.me) to see the structure the example just built — the message, and the `Sig_structure`,
+`MAC_structure` or `Enc_structure` it was computed over.
+
 | File | Topic |
 |---|---|
 | [`01-sign1.php`](01-sign1.php) | COSE_Sign1: sign, encode, decode, verify — and what a swapped payload does |
