@@ -20,6 +20,7 @@ This library provides full support for COSE (CBOR Object Signing and Encryption)
   - [Signature Verification Contract](#signature-verification-contract)
   - [Ed25519 Private Keys](#ed25519-private-keys)
   - [Validating RSA Keys](#validating-rsa-keys)
+  - [Validating Symmetric Keys](#validating-symmetric-keys)
 
 ## Installation
 
@@ -459,6 +460,57 @@ Every check is performed on the octet strings of the key, so rejecting an oversi
   - HS384 (6): HMAC with SHA-384
   - HS512 (7): HMAC with SHA-512
   - HS256/64 (4): HMAC with SHA-256 truncated to 64 bits
+
+### Validating Symmetric Keys
+
+[RFC 9053, section 3.1](https://www.rfc-editor.org/rfc/rfc9053#section-3.1) requires implementations "creating and
+validating MAC values" to validate the key type, the key length and the algorithm. The first two constraints admit no
+exception and are applied by the MAC algorithms themselves: `hash()` and `verify()` throw an
+`InvalidArgumentException` when the key is not symmetric, or when its `k` is missing, is not a PHP string or is empty.
+`SymmetricKey` applies the same contract at construction time, where the mistake is easiest to attribute. A value
+decoded from CBOR has to be normalized first — a `CBOR\ByteStringObject` is not a byte string.
+
+```php
+use Cose\Key\SymmetricKey;
+
+// Throws an InvalidArgumentException: "k" is typed as a bstr by RFC 9053, section 7.3
+SymmetricKey::create([
+    SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
+    SymmetricKey::DATA_K => ByteStringObject::create($secret), // use ->getValue() instead
+]);
+```
+
+The **minimum** key length is a policy decision and stays opt-in, as it does for RSA moduli: a key shorter than the
+output of the hash function (32 bytes for HS256 and HS256/64, 48 for HS384, 64 for HS512) is only "strongly
+discouraged" by [RFC 2104, section 3](https://www.rfc-editor.org/rfc/rfc2104#section-3), and deployments do key HS384
+and HS512 with 32 bytes. Such a key emits an `E_USER_WARNING` at every `hash()`/`verify()` call unless the algorithm
+is created with `acknowledgeShortKey: true`; the next major version will throw instead.
+
+```php
+use Cose\Algorithm\Mac\HS512;
+use Cose\Key\SymmetricKeyValidator;
+
+// No warning: the risk is acknowledged
+$algorithm = HS512::create(acknowledgeShortKey: true);
+
+// The length RFC 2104 does not discourage for this algorithm, in bytes (32, 48 or 64)
+$minimumKeyLength = $algorithm->minimumKeyLength();
+
+// Throws an InvalidArgumentException when the key is shorter
+SymmetricKeyValidator::create($minimumKeyLength)->check($key);
+
+// …or ask without the exception
+$isAcceptable = SymmetricKeyValidator::create()->isValid($key);
+
+// The key length, in bytes, on its own
+$keyLength = SymmetricKeyValidator::keyLength($key);
+
+// The checks the algorithms apply on their own, should you want to run them earlier
+SymmetricKeyValidator::checkKeyValue($key);
+```
+
+`SymmetricKeyValidator` accepts any `Key`, not only a `SymmetricKey`: `Key::create()` and `Key::createFromData()` with
+an integer `kty` build a generic `Key` that never goes through the `SymmetricKey` constructor.
 
 ## Common Header Parameters
 

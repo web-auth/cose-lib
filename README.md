@@ -202,6 +202,46 @@ the key. They live in the `Cose\Algorithm\Signature\FullySpecified` namespace.
 | HS512 | 7 | HMAC with SHA-512 |
 | HS256/64 | 4 | HMAC with SHA-256 truncated to 64 bits |
 
+#### The HMAC Key
+
+[RFC 9053, section 3.1](https://www.rfc-editor.org/rfc/rfc9053#section-3.1) requires implementations "creating and
+validating MAC values" to validate the key type, the key length and the algorithm. The key value `k` is a `bstr`
+(section 7.3), so `hash()` and `verify()` reject — with an `InvalidArgumentException` — a key that is not symmetric,
+or whose `k` is missing, is not a PHP string, or is empty. A decoded CBOR object has to be normalized to its value
+first: a `CBOR\ByteStringObject` is not a byte string.
+
+A key shorter than the output of the underlying hash function (32 bytes for HS256 and HS256/64, 48 for HS384, 64 for
+HS512) is "strongly discouraged" by [RFC 2104, section 3](https://www.rfc-editor.org/rfc/rfc2104#section-3) but stays
+accepted, because deployments do key HS384 and HS512 with 32 bytes. It emits an `E_USER_WARNING` unless you
+acknowledge it:
+
+```php
+use Cose\Algorithm\Mac\HS512;
+
+$algorithm = HS512::create(acknowledgeShortKey: true);
+```
+
+As of the next major version, omitting that acknowledgement will throw an exception instead of warning.
+
+To fail hard on a short key today, validate it before handing it to the algorithm:
+
+```php
+use Cose\Algorithm\Mac\HS256;
+use Cose\Key\SymmetricKey;
+use Cose\Key\SymmetricKeyValidator;
+
+$algorithm = HS256::create();
+$key = SymmetricKey::create($data);
+
+// Throws an InvalidArgumentException when the key is shorter than 32 bytes
+SymmetricKeyValidator::create($algorithm->minimumKeyLength())->check($key);
+
+// …or ask without the exception
+if (! SymmetricKeyValidator::create()->isValid($key)) {
+    // reject the key
+}
+```
+
 ## Signature Verification Contract
 
 `Cose\Algorithm\Signature\Signature::verify()` is total for every condition the governing specifications define as an

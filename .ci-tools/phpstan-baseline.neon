@@ -1,12 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			rawMessage: Cannot cast mixed to string.
-			identifier: cast.string
-			count: 1
-			path: ../src/Algorithm/Mac/Hmac.php
-
-		-
 			rawMessage: 'Parameter #1 $signature of static method Cose\Algorithm\Signature\ECDSA\ECSignature::fromAsn1() expects string, mixed given.'
 			identifier: argument.type
 			count: 1
