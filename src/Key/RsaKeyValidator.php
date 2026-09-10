@@ -70,7 +70,7 @@ final class RsaKeyValidator
      *
      * @see \Cose\Algorithm\Signature\RSA\RsaKeyPolicy
      */
-    public const WEAK_KEY_MESSAGE = 'The RSA key does not satisfy RFC 8230 section 6.1: %s. If you must accept such keys, for instance those of legacy authenticators, create the algorithm with an explicit validator such as "RsaKeyValidator::create(minimumModulusLength: 1024)"; as of v5.0.0, this key will be rejected with an exception.';
+    public const WEAK_KEY_MESSAGE = 'The RSA key does not satisfy RFC 8230 section 6.1: %s. Accept it explicitly with "RsaKeyValidator::create(minimumModulusLength: 1024)"; as of v5.0.0, it will be rejected with an exception.';
 
     private function __construct(
         private readonly int $minimumModulusLength,
