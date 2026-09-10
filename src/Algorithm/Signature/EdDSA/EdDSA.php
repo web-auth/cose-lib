@@ -19,6 +19,7 @@ use function sodium_crypto_sign_seed_keypair;
 use function sodium_crypto_sign_verify_detached;
 use function sodium_memzero;
 use SodiumException;
+use Throwable;
 
 /**
  * @see \Cose\Tests\Algorithm\Signature\EdDSA\EdDSATest
