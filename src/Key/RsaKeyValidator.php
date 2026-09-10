@@ -26,8 +26,11 @@ use Throwable;
  * (checkLengthBounds()). Neither depends on a policy - an RSA operation costs an amount of CPU proportional to the
  * size of the key it is given, and that key is attacker supplied whenever it comes from the wire.
  *
- * The *minimum* modulus length is the policy choice, and it remains opt-in: run check() or isValid() explicitly on a
- * key before handing it to an algorithm to apply it.
+ * The *minimum* modulus length is the policy choice, and the algorithms apply it too: each of them runs check() on
+ * every key it is handed, with the validator it was created with or, by default, with create(). Legacy
+ * authenticators holding 1024 bit keys exist, so the default bound only emits an E_USER_WARNING in 4.x and will
+ * throw as of v5.0.0; a validator passed explicitly to the algorithm - RS256::create(RsaKeyValidator::create(
+ * minimumModulusLength: 1024)) - is enforced with an exception right away, because the caller chose the bound.
  *
  * Every check below reads the parameters as the octet strings they are. Turning one into a number is a base
  * conversion, and brick/math falls back to a pure PHP calculator - whose generic base conversion is superlinear -
@@ -60,6 +63,14 @@ final class RsaKeyValidator
      * bound allows.
      */
     public const MAXIMUM_EXPONENT_LENGTH = 256;
+
+    /**
+     * The warning an RSA algorithm emits when the key it is given is rejected by the validator it defaulted to. Its
+     * only placeholder receives the message of the underlying InvalidArgumentException.
+     *
+     * @see \Cose\Algorithm\Signature\RSA\RsaKeyPolicy
+     */
+    public const WEAK_KEY_MESSAGE = 'The RSA key does not satisfy RFC 8230 section 6.1: %s. If you must accept such keys, for instance those of legacy authenticators, create the algorithm with an explicit validator such as "RsaKeyValidator::create(minimumModulusLength: 1024)"; as of v5.0.0, this key will be rejected with an exception.';
 
     private function __construct(
         private readonly int $minimumModulusLength,

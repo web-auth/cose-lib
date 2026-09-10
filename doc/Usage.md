@@ -420,8 +420,34 @@ The upper bounds are applied automatically: every RSA algorithm rejects a key wh
 for such a key and `sign()` throws an `InvalidArgumentException`. The cost of an RSA operation grows with the size of
 the key it is given, and a verifier takes that key from whoever produced the message.
 
-The **minimum** modulus length is a policy decision and stays opt-in, so run it explicitly before handing a key to an
-algorithm:
+The **minimum** modulus length is applied automatically too, with `RsaKeyValidator::create()`. Because legacy
+authenticators holding 1024 bit keys still exist, a key below `RsaKeyValidator::MINIMUM_MODULUS_LENGTH` (2048) bits
+only emits an `E_USER_WARNING` — `RsaKeyValidator::WEAK_KEY_MESSAGE`, filled in with the reason — and the operation
+goes through. As of the next major version, that warning becomes an `InvalidArgumentException` on `sign()` and a
+`false` on `verify()`.
+
+A caller that has to accept weaker keys passes the algorithm a validator carrying the bound it accepts. That bound is
+enforced at once, with an exception, since the caller chose it; only the implicit default is on the warn-then-throw
+schedule.
+
+```php
+use Cose\Algorithm\Signature\RSA\PS256;
+use Cose\Algorithm\Signature\RSA\RS1;
+use Cose\Algorithm\Signature\RSA\RS256;
+use Cose\Key\RsaKeyValidator;
+
+// Legacy authenticators: 1024 bit keys accepted silently, anything below still rejected
+$algorithm = RS256::create(RsaKeyValidator::create(minimumModulusLength: 1024));
+$algorithm = PS256::create(RsaKeyValidator::create(minimumModulusLength: 1024));
+
+// RS1 keeps its acknowledgement flag first
+$algorithm = RS1::create(true, RsaKeyValidator::create(minimumModulusLength: 1024));
+
+// A policy stricter than the RFC, enforced now rather than in the next major version
+$algorithm = RS256::create(RsaKeyValidator::create(minimumModulusLength: 3072, maximumModulusLength: 8192));
+```
+
+The validator can also be run on its own, on a key you are about to store:
 
 ```php
 use Cose\Key\RsaKey;
@@ -434,9 +460,6 @@ RsaKeyValidator::create()->check($key);
 
 // …or ask without the exception
 $isAcceptable = RsaKeyValidator::create()->isValid($key);
-
-// The bounds can be tightened
-RsaKeyValidator::create(minimumModulusLength: 3072, maximumModulusLength: 8192)->check($key);
 
 // The modulus and exponent lengths, in bits, are available on their own
 $modulusLength = RsaKeyValidator::modulusLength($key);

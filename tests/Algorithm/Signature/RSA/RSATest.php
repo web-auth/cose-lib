@@ -15,6 +15,7 @@ use Cose\Algorithm\Signature\RSA\RS384;
 use Cose\Algorithm\Signature\RSA\RS512;
 use Cose\Algorithm\Signature\RSA\RSA;
 use Cose\Key\RsaKey;
+use Cose\Key\RsaKeyValidator;
 use InvalidArgumentException;
 use const OPENSSL_KEYTYPE_RSA;
 use function openssl_pkey_get_details;
@@ -117,7 +118,9 @@ final class RSATest extends TestCase
     public function signingWithAModulusTooShortForTheDigestIsRejected(): void
     {
         // Given
-        $algorithm = RS512::create();
+        // The bound of RFC 8230 section 6.1 is declared away so that the failure under test is the one openssl_sign()
+        // reports, not the policy check that now precedes it.
+        $algorithm = RS512::create(RsaKeyValidator::create(minimumModulusLength: 512));
         $key = self::generatedKey(512);
 
         // Then
