@@ -280,6 +280,14 @@ $coseMac = CoseMacTag::create(
   - PS512 (-39): RSASSA-PSS with SHA-512
   - RS1 (-65535): RSASSA-PKCS1-v1_5 with SHA-1 — **not secure**, kept only for legacy authenticators
 
+PS256, PS384 and PS512 sign with a private key, so the exponentiation is a side-channel target. A two-prime key
+carrying the full CRT quintuple — the shape almost every key store produces — is exponentiated by OpenSSL, which
+blinds the base and runs `BN_mod_exp_mont_consttime`. Its CRT parameters are checked against the modulus first, so an
+inconsistent key is reported rather than silently repaired. Multi-prime keys ([RFC 8230 section 4](https://www.rfc-editor.org/rfc/rfc8230#section-4))
+and keys reduced to `(n, e, d)` have no PEM representation and keep the in-process exponentiation; their base is
+blinded, which hides it from an observer, but `gmp_powm()`, `bcpowmod()` and the native brick/math loop are not
+constant-time, so prefer a full two-prime key when signing with a long-lived key on a shared host.
+
 RS1 relies on SHA-1, which is no longer acceptable for digital signatures (see
 [RFC 6194](https://datatracker.ietf.org/doc/html/rfc6194) and NIST SP 800-131A). Creating the algorithm emits an
 `E_USER_WARNING` unless the risk is explicitly acknowledged:
