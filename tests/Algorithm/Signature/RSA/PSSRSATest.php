@@ -19,6 +19,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\WithoutErrorHandler;
 use PHPUnit\Framework\TestCase;
 use function restore_error_handler;
+use RuntimeException;
 use function set_error_handler;
 use function str_repeat;
 use function strlen;
@@ -88,7 +89,8 @@ final class PSSRSATest extends TestCase
     }
 
     /**
-     * RFC 8017 section 5.2.2, step 1: the signature representative shall be between 0 and n - 1.
+     * RFC 8017 section 8.1.2, step 2.b: "If RSAVP1 output \'signature representative out of range\', output
+     * \'invalid signature\' and stop." The representative is out of range here because it is the modulus itself.
      */
     #[Test]
     public function aSignatureRepresentativeOutOfRangeIsRejected(): void
@@ -97,29 +99,52 @@ final class PSSRSATest extends TestCase
         $key = RsaKeys::publicKey();
         $modulus = $key->n();
 
+        // When
+        $isValid = PS256::create()
+            ->verify(self::MESSAGE, $key, $modulus)
+        ;
+
         // Then
+        static::assertFalse($isValid);
+    }
+
+    /**
+     * The primitive itself keeps refusing an out of range representative: it is also reachable through the public
+     * exponentiate(), where there is no "invalid signature" outcome to fall back on.
+     */
+    #[Test]
+    public function theExponentiationPrimitiveRefusesARepresentativeOutOfRange(): void
+    {
+        // Given
+        $key = RsaKeys::publicKey();
+
+        // Then
+        $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Signature representative out of range');
 
         // When
         PS256::create()
-            ->verify(self::MESSAGE, $key, $modulus)
+            ->exponentiate($key, BigInteger::createFromBinaryString($key->n()))
         ;
     }
 
+    /**
+     * RFC 8017 section 8.1.2, step 1: "If the length of the signature S is not k octets, output \'invalid
+     * signature\' and stop."
+     */
     #[Test]
     public function aSignatureOfTheWrongLengthIsRejected(): void
     {
         // Given
         $key = RsaKeys::publicKey();
 
-        // Then
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Invalid signature length');
-
         // When
-        PS256::create()
+        $isValid = PS256::create()
             ->verify(self::MESSAGE, $key, str_repeat("\x01", 255))
         ;
+
+        // Then
+        static::assertFalse($isValid);
     }
 
     #[Test]

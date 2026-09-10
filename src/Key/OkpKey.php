@@ -7,11 +7,13 @@ namespace Cose\Key;
 use function array_key_exists;
 use function in_array;
 use InvalidArgumentException;
+use function is_string;
 use SpomkyLabs\Pki\ASN1\Type\Constructed\Sequence;
 use SpomkyLabs\Pki\ASN1\Type\Primitive\BitString;
 use SpomkyLabs\Pki\ASN1\Type\Primitive\Integer;
 use SpomkyLabs\Pki\ASN1\Type\Primitive\ObjectIdentifier;
 use SpomkyLabs\Pki\ASN1\Type\Primitive\OctetString;
+use function strlen;
 
 /**
  * @final
@@ -55,6 +57,21 @@ class OkpKey extends Key
         self::CURVE_NAME_ED448,
     ];
 
+    /**
+     * RFC 8032 section 5.1.5 / 5.2.5 for the Edwards curves and RFC 7748 section 5 for the Montgomery ones: the
+     * public key and the private scalar are byte strings of exactly this length.
+     */
+    private const CURVE_KEY_LENGTH = [
+        self::CURVE_X25519 => 32,
+        self::CURVE_X448 => 56,
+        self::CURVE_ED25519 => 32,
+        self::CURVE_ED448 => 57,
+        self::CURVE_NAME_X25519 => 32,
+        self::CURVE_NAME_X448 => 56,
+        self::CURVE_NAME_ED25519 => 32,
+        self::CURVE_NAME_ED448 => 57,
+    ];
+
     private const CURVE_OID = [
         self::CURVE_X25519 => '1.3.101.110',
         self::CURVE_X448 => '1.3.101.111',
@@ -89,6 +106,14 @@ class OkpKey extends Key
             }
         } elseif (! in_array($data[self::DATA_CURVE], self::SUPPORTED_CURVES_NAME, true)) {
             throw new InvalidArgumentException('The curve is not supported');
+        }
+        $length = self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]];
+        if (! is_string($data[self::DATA_X]) || strlen($data[self::DATA_X]) !== $length) {
+            throw new InvalidArgumentException('Invalid length for x coordinate');
+        }
+        if (array_key_exists(self::DATA_D, $data)
+            && (! is_string($data[self::DATA_D]) || strlen($data[self::DATA_D]) !== $length)) {
+            throw new InvalidArgumentException('Invalid length for d');
         }
     }
 

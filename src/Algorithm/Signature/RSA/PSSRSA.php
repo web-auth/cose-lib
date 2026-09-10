@@ -57,12 +57,23 @@ abstract class PSSRSA implements Signature
             ->toPublic();
         $modBits = RsaKeyValidator::modulusLength($key);
         $k = intdiv($modBits + 7, 8);
+        // RFC 8017, section 8.1.2, step 1: "If the length of the signature S is not k octets, output 'invalid
+        // signature' and stop."
         if (strlen($signature) !== $k) {
-            throw new InvalidArgumentException('Invalid signature length');
+            return false;
         }
-        $m = $this->rsavp1($key, BigInteger::createFromBinaryString($signature));
-        // RFC 8017, section 8.1.2, step 2.c: emLen = ceil((modBits - 1) / 8).
+        $s = BigInteger::createFromBinaryString($signature);
+        // Step 2.b: "If RSAVP1 output 'signature representative out of range', output 'invalid signature' and stop."
+        if ($s->compare(BigInteger::createFromBinaryString($key->n())) >= 0) {
+            return false;
+        }
+        $m = $this->rsavp1($key, $s);
+        // RFC 8017, section 8.1.2, step 2.c: emLen = ceil((modBits - 1) / 8). "If I2OSP outputs 'integer too large',
+        // output 'invalid signature' and stop."
         $emLen = intdiv($modBits - 1 + 7, 8);
+        if (strlen($m->toBytes()) > $emLen) {
+            return false;
+        }
         $em = $this->convertIntegerToOctetString($m, $emLen);
 
         return $this->verifyEMSAPSS($data, $em, $modBits - 1, $this->getHashAlgorithm());
@@ -234,31 +245,33 @@ abstract class PSSRSA implements Signature
         $hLen = $hash->getLength();
         $sLen = $hLen;
         $mHash = $hash->hash($m);
+        // Every check below is a step whose failure RFC 8017, section 9.1.2 defines as "output 'inconsistent' and
+        // stop", i.e. an invalid signature rather than an error.
+        // Step 3: the modulus is too short for this hash and salt length.
         if ($emLen < $hLen + $sLen + 2) {
-            throw new InvalidArgumentException(
-                'Inconsistent signature: the modulus is too short for this hash and salt length'
-            );
+            return false;
         }
+        // Step 4: the trailer field is not 0xBC.
         if ($em[strlen($em) - 1] !== chr(0xBC)) {
-            throw new InvalidArgumentException('Inconsistent signature: the trailer field is not 0xBC');
+            return false;
         }
         $maskedDB = substr($em, 0, -$hLen - 1);
         $h = substr($em, -$hLen - 1, $hLen);
         $mask = $this->leftmostBitsMask($emBits);
+        // Step 6: the leftmost bits of maskedDB are not zero.
         if (($maskedDB[0] & $mask) !== chr(0)) {
-            throw new InvalidArgumentException(
-                'Inconsistent signature: the leftmost bits of maskedDB are not zero'
-            );
+            return false;
         }
         $dbMask = $this->getMGF1($h, $emLen - $hLen - 1, $hash/* MGF */);
         $db = $maskedDB ^ $dbMask;
         $db[0] = ~$mask & $db[0];
         $temp = $emLen - $hLen - $sLen - 2;
+        // Step 10: the padding string is not zero, or the separator octet is not 0x01.
         if (! str_starts_with($db, str_repeat(chr(0), $temp))) {
-            throw new InvalidArgumentException('Inconsistent signature: the padding string is not zero');
+            return false;
         }
         if (ord($db[$temp]) !== 1) {
-            throw new InvalidArgumentException('Inconsistent signature: the separator octet is not 0x01');
+            return false;
         }
         $salt = substr($db, $temp + 1); // should be $sLen long
         $m2 = "\0\0\0\0\0\0\0\0" . $mHash . $salt;

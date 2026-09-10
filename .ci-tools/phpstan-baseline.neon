@@ -91,12 +91,6 @@ parameters:
 			path: ../src/Key/Ec2Key.php
 
 		-
-			rawMessage: Possibly invalid array key type mixed.
-			identifier: offsetAccess.invalidOffset
-			count: 2
-			path: ../src/Key/Ec2Key.php
-
-		-
 			rawMessage: Cannot cast mixed to int.
 			identifier: cast.int
 			count: 1

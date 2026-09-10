@@ -14,6 +14,8 @@ use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use function random_bytes;
+use function str_repeat;
 
 /**
  * @see https://www.rfc-editor.org/rfc/rfc9864.html#section-2.2
@@ -199,6 +201,32 @@ final class FullySpecifiedEdDsaTest extends TestCase
 
         // When
         $algorithm->verify('Live long and Prosper.', $key, 'whatever');
+    }
+
+    /**
+     * RFC 8032 section 5.2.7: "Decode the public key A as point A\'. If any of the decodings fail (including S being
+     * out of range), the signature is invalid." A public key OpenSSL refuses to load used to throw instead.
+     */
+    #[Test]
+    public function anEd448PublicKeyThatIsNotAPointIsRejected(): void
+    {
+        if (! Ed448::isSupported()) {
+            static::markTestSkipped('Ed448 requires PHP 8.4 or later.');
+        }
+
+        // Given
+        $algorithm = Ed448::create();
+        $key = OkpKey::create([
+            OkpKey::TYPE => OkpKey::TYPE_OKP,
+            OkpKey::DATA_CURVE => OkpKey::CURVE_ED448,
+            OkpKey::DATA_X => str_repeat("\xff", 57),
+        ]);
+
+        // When
+        $isValid = $algorithm->verify('Live long and Prosper.', $key, random_bytes(114));
+
+        // Then
+        static::assertFalse($isValid);
     }
 
     /**

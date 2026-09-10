@@ -15,6 +15,10 @@ use Cose\Algorithm\Signature\RSA\RS384;
 use Cose\Algorithm\Signature\RSA\RS512;
 use Cose\Algorithm\Signature\RSA\RSA;
 use Cose\Key\RsaKey;
+use InvalidArgumentException;
+use const OPENSSL_KEYTYPE_RSA;
+use function openssl_pkey_get_details;
+use function openssl_pkey_new;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -101,6 +105,62 @@ final class RSATest extends TestCase
 
         // Then
         static::assertFalse($isValid);
+    }
+
+    /**
+     * openssl_sign() reports a modulus too short for the digest with a boolean; the return value used to be ignored,
+     * so $signature stayed null and the string return type raised a TypeError instead of the intended exception.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc8017#section-8.2.1
+     */
+    #[Test]
+    public function signingWithAModulusTooShortForTheDigestIsRejected(): void
+    {
+        // Given
+        $algorithm = RS512::create();
+        $key = self::generatedKey(512);
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unable to sign the data');
+
+        // When
+        $algorithm->sign('Live long and Prosper.', $key);
+    }
+
+    #[Test]
+    public function signingWithAPublicKeyIsRejected(): void
+    {
+        // Given
+        $algorithm = RS256::create();
+        $key = RsaKeys::publicKey();
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The key is not private.');
+
+        // When
+        $algorithm->sign('Live long and Prosper.', $key);
+    }
+
+    private static function generatedKey(int $bits): RsaKey
+    {
+        $details = openssl_pkey_get_details(openssl_pkey_new([
+            'private_key_type' => OPENSSL_KEYTYPE_RSA,
+            'private_key_bits' => $bits,
+        ]))['rsa'];
+
+        return RsaKey::create([
+            RsaKey::TYPE => RsaKey::TYPE_RSA,
+            RsaKey::DATA_N => $details['n'],
+            RsaKey::DATA_E => $details['e'],
+            RsaKey::DATA_D => $details['d'],
+            RsaKey::DATA_P => $details['p'],
+            RsaKey::DATA_Q => $details['q'],
+            RsaKey::DATA_DP => $details['dmp1'],
+            RsaKey::DATA_DQ => $details['dmq1'],
+            RsaKey::DATA_QI => $details['iqmp'],
+        ]);
     }
 
     /**

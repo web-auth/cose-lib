@@ -6,8 +6,11 @@ namespace Cose\Tests\Key;
 
 use Cose\Algorithm\Signature\RSA\RS256;
 use Cose\Key\RsaKey;
+use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use function str_repeat;
 
 final class RSAKeyTest extends TestCase
 {
@@ -32,5 +35,60 @@ final class RSAKeyTest extends TestCase
 
         // Then
         static::assertSame($expected, $pem);
+    }
+
+    /**
+     * A structurally invalid modulus or exponent used to survive the constructor and surface much later as a
+     * Brick\Math exception or a TypeError, from inside verify().
+     */
+    #[Test]
+    #[DataProvider('getInvalidKeys')]
+    public function aStructurallyInvalidKeyIsRejected(mixed $modulus, mixed $exponent, string $expectedMessage): void
+    {
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($expectedMessage);
+
+        // When
+        RsaKey::create([
+            RsaKey::TYPE => RsaKey::TYPE_RSA,
+            RsaKey::DATA_N => $modulus,
+            RsaKey::DATA_E => $exponent,
+        ]);
+    }
+
+    #[Test]
+    public function aNonStringPrivateParameterIsRejected(): void
+    {
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid RSA key. The private parameters shall be byte strings');
+
+        // When
+        RsaKey::create([
+            RsaKey::TYPE => RsaKey::TYPE_RSA,
+            RsaKey::DATA_N => str_repeat("\xff", 256),
+            RsaKey::DATA_E => "\x01\x00\x01",
+            RsaKey::DATA_D => 12345,
+        ]);
+    }
+
+    /**
+     * @return iterable<string, array{mixed, mixed, string}>
+     */
+    public static function getInvalidKeys(): iterable
+    {
+        $message = 'Invalid RSA key. The modulus and the exponent shall be non-empty byte strings';
+
+        yield 'an empty modulus' => ['', "\x01\x00\x01", $message];
+        yield 'an empty exponent' => [str_repeat("\xff", 256), '', $message];
+        yield 'an integer modulus' => [12345, "\x01\x00\x01", $message];
+        yield 'an integer exponent' => [str_repeat("\xff", 256), 65537, $message];
+        yield 'a zero modulus' => ["\x00", "\x01\x00\x01", 'Invalid RSA key. The modulus shall not be zero'];
+        yield 'an all-zero modulus' => [
+            str_repeat("\x00", 256),
+            "\x01\x00\x01",
+            'Invalid RSA key. The modulus shall not be zero',
+        ];
     }
 }

@@ -160,18 +160,35 @@ final class ECSignatureTest extends TestCase
     }
 
     /**
-     * The wrong-length signature has always been reported with an exception; the behaviour is kept.
+     * The encoder keeps reporting a wrong-length input with an exception: it is reached from sign() and from
+     * callers that already know the shape of what they pass.
      */
     #[Test]
-    public function aSignatureOfTheWrongLengthIsRejected(): void
+    public function encodingASignatureOfTheWrongLengthIsRejected(): void
     {
         // Then
         static::expectException(InvalidArgumentException::class);
         static::expectExceptionMessage('Invalid signature length.');
 
         // When
-        ES256::create()
+        ECSignature::toAsn1(str_repeat("\0", 63), 64);
+    }
+
+    /**
+     * verify(), on the other hand, is handed attacker-controlled bytes: webauthn-lib passes the signature of an
+     * assertion straight through. A wrong length is an invalid signature, not an error.
+     *
+     * @see https://github.com/web-auth/cose-lib/issues/175
+     */
+    #[Test]
+    public function verifyingASignatureOfTheWrongLengthReturnsFalse(): void
+    {
+        // When
+        $isValid = ES256::create()
             ->verify('sample', self::p256Key(), str_repeat("\0", 63));
+
+        // Then
+        static::assertFalse($isValid);
     }
 
     #[Test]

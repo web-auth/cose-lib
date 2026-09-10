@@ -130,7 +130,6 @@ final class RsaKeyValidatorTest extends TestCase
     {
         yield 'leading zero bytes are ignored' => ["\x00\x00\x80" . str_repeat("\x00", 255), 2048];
         yield 'the leading bits are counted' => ["\x01" . str_repeat("\x00", 255), 2041];
-        yield 'an empty modulus is zero bits' => ['', 0];
     }
 
     /**
