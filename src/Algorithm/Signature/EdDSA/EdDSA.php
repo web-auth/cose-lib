@@ -18,7 +18,7 @@ use function sodium_crypto_sign_secretkey;
 use function sodium_crypto_sign_seed_keypair;
 use function sodium_crypto_sign_verify_detached;
 use function sodium_memzero;
-use Throwable;
+use SodiumException;
 
 /**
  * @see \Cose\Tests\Algorithm\Signature\EdDSA\EdDSATest
@@ -87,9 +87,12 @@ class EdDSA implements Signature
         if ($key->curve() !== OkpKey::CURVE_ED25519 && $key->curve() !== OkpKey::CURVE_NAME_ED25519) {
             throw new InvalidArgumentException('Unsupported curve');
         }
+        // Sodium reports a signature or a public key whose size is not the one Ed25519 defines with a
+        // SodiumException; that is an invalid signature, not an error. Anything else — a missing extension above
+        // all — is a platform fault and must not be reported as a verification outcome.
         try {
             return sodium_crypto_sign_verify_detached($signature, $data, $key->x());
-        } catch (Throwable) {
+        } catch (SodiumException) {
             return false;
         }
     }

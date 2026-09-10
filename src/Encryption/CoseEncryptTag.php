@@ -17,6 +17,13 @@ use InvalidArgumentException;
 
 final class CoseEncryptTag extends Tag
 {
+    /**
+     * A COSE header is a flat map of a handful of parameters whose values nest a couple of levels at most, so the
+     * decoder built when none is given is bounded far below the cbor-php default of 1000: a protected header crafted
+     * to nest thousands of levels is rejected instead of being walked.
+     */
+    public const DEFAULT_PROTECTED_HEADER_MAX_DEPTH = 32;
+
     private const TAG_ID = 96;
 
     private readonly ByteStringObject $protectedHeader;
@@ -99,10 +106,16 @@ final class CoseEncryptTag extends Tag
         return $this->protectedHeader;
     }
 
-    public function getProtectedHeaderAsMap(?Decoder $decoder = null): MapObject
-    {
+    /**
+     * The nesting bound only applies to the decoder created here: a caller passing its own $decoder sets its own
+     * bound, and $maxDepth is then ignored.
+     */
+    public function getProtectedHeaderAsMap(
+        ?Decoder $decoder = null,
+        int $maxDepth = self::DEFAULT_PROTECTED_HEADER_MAX_DEPTH
+    ): MapObject {
         $stream = new StringStream($this->protectedHeader->getValue());
-        $decoder ??= Decoder::create(TagManager::create(), OtherObjectManager::create());
+        $decoder ??= Decoder::create(TagManager::create(), OtherObjectManager::create(), $maxDepth);
         $decoded = $decoder->decode($stream);
 
         if (! $decoded instanceof MapObject) {
