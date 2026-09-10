@@ -199,12 +199,6 @@ parameters:
 			path: ../src/Key/RsaKey.php
 
 		-
-			rawMessage: 'Parameter #1 $array of function current expects array|object, array|false given.'
-			identifier: argument.type
-			count: 1
-			path: ../src/Key/RsaKey.php
-
-		-
 			rawMessage: Cannot cast mixed to int.
 			identifier: cast.int
 			count: 1

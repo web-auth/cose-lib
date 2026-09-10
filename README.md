@@ -236,8 +236,12 @@ signature operation itself fails, for instance for an RSA modulus too short for 
 
 [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) defers to
 [RFC 8230, section 6.1](https://www.rfc-editor.org/rfc/rfc8230#section-6.1), which requires a modulus of 2048 bits or
-larger and expects implementations to handle up to 16K bits. The library never applies those bounds on its own; run
-them explicitly on a key before handing it to an algorithm:
+larger and expects implementations to handle up to 16K bits.
+
+The upper bounds are applied automatically: every RSA algorithm rejects a key whose modulus is longer than 16384 bits
+or whose public exponent is longer than 256 bits, before it computes anything with it. `verify()` returns `false` for
+such a key and `sign()` throws. The **minimum** modulus length is a policy decision and stays opt-in; run it
+explicitly on a key before handing it to an algorithm:
 
 ```php
 use Cose\Key\RsaKey;
@@ -260,6 +264,13 @@ RsaKeyValidator::create(minimumModulusLength: 3072, maximumModulusLength: 8192)-
 The validator also enforces the public exponent constraints of
 [RFC 8017, section 3.1](https://datatracker.ietf.org/doc/html/rfc8017#section-3.1): an odd integer between 3 and
 `n - 1`.
+
+## Performance
+
+Install **ext-gmp** (recommended) or **ext-bcmath**. Without either of them `brick/math` falls back to a pure PHP
+calculator, and the RSASSA-PSS algorithms (`PS256`, `PS384`, `PS512`) then compute their modular exponentiation in
+PHP: seconds of CPU per operation, even for a 2048 bit key. The `RS*` algorithms and `RsaKey::asPem()` do not depend
+on it. The stock `php` and `php-fpm` Docker images ship with neither extension.
 
 ## Testing
 

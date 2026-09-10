@@ -32,7 +32,13 @@ use Throwable;
 /**
  * RSASSA-PSS as defined by RFC 8017, section 8.1.
  *
+ * The length of the key is bounded before it is used. RFC 8017, section 3.1 places no upper bound on the modulus nor
+ * on the public exponent, and the primitives of section 5.2 are modular exponentiations whose cost is proportional to
+ * the size of both - which a verifier takes from whoever produced the message. RFC 8230, section 6.1 asks for the
+ * bound: "It is highly recommended that checks on the key length be done before starting a cryptographic operation."
+ *
  * @see https://www.rfc-editor.org/rfc/rfc8017#section-8.1
+ * @see https://www.rfc-editor.org/rfc/rfc8230#section-6.1
  *
  * @internal
  */
@@ -41,6 +47,7 @@ abstract class PSSRSA implements Signature
     public function sign(string $data, Key $key): string
     {
         $key = $this->handleKey($key);
+        RsaKeyValidator::checkLengthBounds($key);
         if (! $key->isPrivate()) {
             throw new InvalidArgumentException('The key is not private.');
         }
@@ -61,6 +68,13 @@ abstract class PSSRSA implements Signature
         // RFC 8017, section 8.1.2: the verification operation uses the public key (n, e) only.
         $key = $this->handleKey($key)
             ->toPublic();
+        try {
+            RsaKeyValidator::checkLengthBounds($key);
+        } catch (InvalidArgumentException) {
+            // A key too large to compute with is key material no verification can be performed against: the contract
+            // of Signature::verify() reports it as an invalid signature rather than as an error.
+            return false;
+        }
         $modBits = RsaKeyValidator::modulusLength($key);
         $k = intdiv($modBits + 7, 8);
         // RFC 8017, section 8.1.2, step 1: "If the length of the signature S is not k octets, output 'invalid
@@ -93,6 +107,8 @@ abstract class PSSRSA implements Signature
      */
     public function exponentiate(RsaKey $key, BigInteger $c): BigInteger
     {
+        RsaKeyValidator::checkLengthBounds($key);
+
         return $key->isPrivate() ? $this->rsasp1($key, $c) : $this->rsavp1($key, $c);
     }
 
