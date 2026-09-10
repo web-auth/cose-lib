@@ -11,7 +11,6 @@ use InvalidArgumentException;
 use function ltrim;
 use function ord;
 use SpomkyLabs\Pki\CryptoEncoding\PEM;
-use SpomkyLabs\Pki\CryptoTypes\AlgorithmIdentifier\AlgorithmIdentifier;
 use SpomkyLabs\Pki\CryptoTypes\AlgorithmIdentifier\Asymmetric\ECPublicKeyAlgorithmIdentifier;
 use SpomkyLabs\Pki\CryptoTypes\Asymmetric\PublicKeyInfo;
 use SpomkyLabs\Pki\X509\Certificate\Certificate;
@@ -57,21 +56,23 @@ final class PublicKeyLoader
      * The RFC 8410, section 3 algorithm identifiers, whose subjectPublicKey is the public key itself.
      */
     private const RFC8410_OID_TO_COSE_CURVE = [
-        AlgorithmIdentifier::OID_X25519 => OkpKey::CURVE_X25519,
-        AlgorithmIdentifier::OID_X448 => OkpKey::CURVE_X448,
-        AlgorithmIdentifier::OID_ED25519 => OkpKey::CURVE_ED25519,
-        AlgorithmIdentifier::OID_ED448 => OkpKey::CURVE_ED448,
+        '1.3.101.110' => OkpKey::CURVE_X25519,
+        '1.3.101.111' => OkpKey::CURVE_X448,
+        '1.3.101.112' => OkpKey::CURVE_ED25519,
+        '1.3.101.113' => OkpKey::CURVE_ED448,
     ];
 
     /**
-     * RSASSA-PSS keys (RFC 4055, section 1.2) carry the same RSAPublicKey structure as rsaEncryption ones, behind
-     * their own object identifier. The COSE key knows nothing of the padding, which the algorithm identifier of the
-     * signature decides, so both are read the same way.
+     * rsaEncryption (RFC 8017, appendix A.1) and RSASSA-PSS (RFC 4055, section 1.2). The latter carries the same
+     * RSAPublicKey structure behind its own object identifier; the COSE key knows nothing of the padding, which the
+     * algorithm identifier of the signature decides, so both are read the same way.
      */
-    private const RSA_OIDS = [
-        AlgorithmIdentifier::OID_RSA_ENCRYPTION,
-        AlgorithmIdentifier::OID_RSASSA_PSS_ENCRYPTION,
-    ];
+    private const RSA_OIDS = ['1.2.840.113549.1.1.1', '1.2.840.113549.1.1.10'];
+
+    /**
+     * id-ecPublicKey, RFC 5480, section 2.1.1.
+     */
+    private const OID_EC_PUBLIC_KEY = '1.2.840.10045.2.1';
 
     private const DER_TAG_SEQUENCE = 0x30;
 
@@ -128,7 +129,7 @@ final class PublicKeyLoader
                 OkpKey::DATA_X => $publicKey,
             ]);
         }
-        if ($oid === AlgorithmIdentifier::OID_EC_PUBLIC_KEY && $algorithm instanceof ECPublicKeyAlgorithmIdentifier) {
+        if ($oid === self::OID_EC_PUBLIC_KEY && $algorithm instanceof ECPublicKeyAlgorithmIdentifier) {
             return self::ec2Key($algorithm->namedCurve(), $publicKey);
         }
 
