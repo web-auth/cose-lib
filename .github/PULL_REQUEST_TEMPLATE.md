@@ -13,5 +13,6 @@ Replace this comment by a description of what your PR is solving.
 
 Please consider the following requirement:
 * Modification of existing tests should be avoided unless deemed necessary.
-* You MUST never open a PR related to a security issue. Contact Spomky in private at https://gitter.im/Spomky/
+* You MUST never open a PR or an issue related to a security issue. Report it privately to security@spomky-labs.com
+  or through GitHub private vulnerability reporting (see SECURITY.md).
 -->
