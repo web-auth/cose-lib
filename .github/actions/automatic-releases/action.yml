@@ -1,0 +1,40 @@
+name: 'automatic-releases (version-pinned)'
+description: >
+  laminas/automatic-releases with its container image pinned to an exact version instead of the
+  floating `ghcr.io/laminas/automatic-releases:1` major tag used by the upstream action.yml.
+
+# Why this wrapper exists
+# ----------------------
+# `uses: laminas/automatic-releases@<version>` pins the *metadata* of the action, not the code that
+# runs: upstream `action.yml` selects the executed code with `image: docker://ghcr.io/laminas/
+# automatic-releases:1`, a floating major tag that was observed to resolve to two different images
+# (1.27.0, then 1.28.0) on two consecutive days with no change in this repository — and the version
+# named in `uses:` has no image of its own on the registry at all. That code is handed
+# ORGANIZATION_ADMIN_TOKEN and SIGNING_SECRET_KEY, so it is pinned here to an exact version.
+#
+# The input and the environment contract are copied from upstream `action.yml` verbatim, so the
+# calling workflow is unchanged apart from the `uses:` line.
+#
+# Available versions:
+#
+#   TOKEN=$(curl -s 'https://ghcr.io/token?scope=repository:laminas/automatic-releases:pull' | jq -r .token)
+#   curl -s -H "Authorization: Bearer $TOKEN" https://ghcr.io/v2/laminas/automatic-releases/tags/list
+#
+# Dependabot does not update `runs.image` of a local action, so this bump is deliberate and manual.
+
+inputs:
+  command-name:
+    description: |
+      Command to execute: one of
+       * `laminas:automatic-releases:release`
+       * `laminas:automatic-releases:create-merge-up-pull-request`
+       * `laminas:automatic-releases:switch-default-branch-to-next-minor`
+       * `laminas:automatic-releases:bump-changelog`
+       * `laminas:automatic-releases:create-milestones`
+    required: true
+
+runs:
+  using: 'docker'
+  image: 'docker://ghcr.io/laminas/automatic-releases:1.28.0'
+  args:
+    - ${{ inputs.command-name }}
