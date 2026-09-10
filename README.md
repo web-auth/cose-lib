@@ -239,6 +239,46 @@ the key. They live in the `Cose\Algorithm\Signature\FullySpecified` namespace.
 | HS512 | 7 | HMAC with SHA-512 |
 | HS256/64 | 4 | HMAC with SHA-256 truncated to 64 bits |
 
+#### The HMAC Key
+
+[RFC 9053, section 3.1](https://www.rfc-editor.org/rfc/rfc9053#section-3.1) requires implementations "creating and
+validating MAC values" to validate the key type, the key length and the algorithm. The key value `k` is a `bstr`
+(section 7.3), so `hash()` and `verify()` reject — with an `InvalidArgumentException` — a key that is not symmetric,
+or whose `k` is missing, is not a PHP string, or is empty. A decoded CBOR object has to be normalized to its value
+first: a `CBOR\ByteStringObject` is not a byte string.
+
+A key shorter than the output of the underlying hash function (32 bytes for HS256 and HS256/64, 48 for HS384, 64 for
+HS512) is "strongly discouraged" by [RFC 2104, section 3](https://www.rfc-editor.org/rfc/rfc2104#section-3) but stays
+accepted, because deployments do key HS384 and HS512 with 32 bytes. It emits an `E_USER_WARNING` unless you
+acknowledge it:
+
+```php
+use Cose\Algorithm\Mac\HS512;
+
+$algorithm = HS512::create(acknowledgeShortKey: true);
+```
+
+As of the next major version, omitting that acknowledgement will throw an exception instead of warning.
+
+To fail hard on a short key today, validate it before handing it to the algorithm:
+
+```php
+use Cose\Algorithm\Mac\HS256;
+use Cose\Key\SymmetricKey;
+use Cose\Key\SymmetricKeyValidator;
+
+$algorithm = HS256::create();
+$key = SymmetricKey::create($data);
+
+// Throws an InvalidArgumentException when the key is shorter than 32 bytes
+SymmetricKeyValidator::create($algorithm->minimumKeyLength())->check($key);
+
+// …or ask without the exception
+if (! SymmetricKeyValidator::create()->isValid($key)) {
+    // reject the key
+}
+```
+
 ## Signature Verification Contract
 
 `Cose\Algorithm\Signature\Signature::verify()` is total for every condition the governing specifications define as an
@@ -280,10 +320,45 @@ The modulus length is a different matter. [RFC 8812](https://datatracker.ietf.or
 [RFC 8230, section 6.1](https://www.rfc-editor.org/rfc/rfc8230#section-6.1), which requires a modulus of 2048 bits or
 larger and expects implementations to handle up to 16K bits.
 
-The upper bounds are applied automatically: every RSA algorithm rejects a key whose modulus is longer than 16384 bits
-or whose public exponent is longer than 256 bits, before it computes anything with it. `verify()` returns `false` for
-such a key and `sign()` throws. The **minimum** modulus length is a policy decision and stays opt-in, because some
-deployments have to accept legacy sizes; run it explicitly on a key before handing it to an algorithm:
+Both bounds are applied automatically, before the algorithm computes anything with the key.
+
+The **upper** bounds are not negotiable: every RSA algorithm rejects a key whose modulus is longer than 16384 bits or
+whose public exponent is longer than 256 bits. `verify()` returns `false` for such a key and `sign()` throws.
+
+The **minimum** modulus length is applied too, with `RsaKeyValidator::create()`, so that nothing has to be done to
+get the bound RFC 8230 requires. Because legacy authenticators holding 1024 bit keys still exist, a key below it only
+emits an `E_USER_WARNING` for now:
+
+```php
+use Cose\Algorithm\Signature\RSA\RS256;
+
+// Warns: "The RSA key does not satisfy RFC 8230 section 6.1: The modulus of the key is 1024 bits long; …"
+// The signature is still verified, so no deployment breaks on upgrade.
+$isValid = RS256::create()->verify($data, $weakKey, $signature);
+```
+
+As of the next major version, that warning becomes an `InvalidArgumentException` on `sign()` and a `false` on
+`verify()`.
+
+To keep accepting weaker keys, hand the algorithm a validator carrying the bound you actually accept. Writing the
+bound down is the acknowledgement: a key below *it* is still refused, right away and with an exception, because you
+chose that bound.
+
+```php
+use Cose\Algorithm\Signature\RSA\RS256;
+use Cose\Key\RsaKeyValidator;
+
+// 1024 bit keys accepted silently; 512 bit ones still rejected
+$algorithm = RS256::create(RsaKeyValidator::create(minimumModulusLength: 1024));
+
+// The other way round: a stricter policy than the RFC, enforced now rather than in the next major version
+$algorithm = RS256::create(RsaKeyValidator::create(minimumModulusLength: 3072, maximumModulusLength: 8192));
+```
+
+Every RSA algorithm takes it: `RS256`, `RS384`, `RS512`, `PS256`, `PS384` and `PS512` as their only argument, `RS1`
+after its `acknowledgeInsecureAlgorithm` flag — `RS1::create(true, RsaKeyValidator::create(minimumModulusLength: 1024))`.
+
+The validator can also be run on its own, on a key you are about to store:
 
 ```php
 use Cose\Key\RsaKey;
@@ -298,9 +373,6 @@ RsaKeyValidator::create()->check($key);
 if (! RsaKeyValidator::create()->isValid($key)) {
     // reject the key
 }
-
-// The bounds can be tightened
-RsaKeyValidator::create(minimumModulusLength: 3072, maximumModulusLength: 8192)->check($key);
 ```
 
 `check()` and `isValid()` also cover the public parameter constraints described above. They are available on their
@@ -327,20 +399,21 @@ use Cose\Algorithm\Manager;
 use Cose\Algorithm\Signature\CertificateSignatureVerifier;
 use Cose\Algorithm\Signature\ECDSA\ES256;
 use Cose\Algorithm\Signature\RSA\PS256;
-use Cose\Key\RsaKeyValidator;
 
 $manager = Manager::create()->add(ES256::create(), PS256::create());
-
-// The RsaKeyValidator is optional: it applies a minimum modulus length to RSA certificates.
-$verifier = CertificateSignatureVerifier::create($manager, RsaKeyValidator::create());
+$verifier = CertificateSignatureVerifier::create($manager);
 
 $isValid = $verifier->verify($alg, $certificatePem, $data, $signature);
 ```
 
 The set of acceptable algorithms is the `Manager` the operator built, not a constant of this library: an `alg` that
-comes from the wire cannot select a verifier that was never registered. `verify()` returns `false` for every signature
-the algorithm rejects, and throws an `InvalidArgumentException` when the certificate cannot be read, when no signature
-algorithm is registered for the identifier, or when the key of the certificate cannot be used with that algorithm.
+comes from the wire cannot select a verifier that was never registered. Nothing is configured twice either — it is the
+registered instance that verifies, so the minimum modulus length an RSA algorithm was created with applies unchanged to
+the key of the certificate.
+
+`verify()` returns `false` for every signature the algorithm rejects, and throws an `InvalidArgumentException` when the
+certificate cannot be read, when no signature algorithm is registered for the identifier, or when the key of the
+certificate cannot be used with that algorithm.
 
 The key alone is enough when the certificate is not at hand — `verifySubjectPublicKeyInfo()` takes a
 SubjectPublicKeyInfo, and `Cose\Key\PublicKeyLoader` exposes the conversion on its own. Both accept PEM or DER.

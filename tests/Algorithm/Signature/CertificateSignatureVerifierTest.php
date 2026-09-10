@@ -213,25 +213,23 @@ final class CertificateSignatureVerifierTest extends TestCase
     }
 
     /**
-     * The minimum modulus length is the policy choice RsaKeyValidator leaves to the caller, so the verifier applies it
-     * only when it is given one.
+     * The verifier configures nothing of its own: it is the registered instance that verifies, so the minimum modulus
+     * length that instance was created with (RsaKeyPolicy) is the one applied to the key of the certificate. A key
+     * below a bound the caller wrote down is a key they declared they do not verify with, which
+     * Cose\Algorithm\Signature\RSA\RSA::verify() reports as an invalid signature.
      */
     #[Test]
-    public function anRsaKeyValidatorIsAppliedWhenOneIsGiven(): void
+    public function theKeyPolicyOfTheRegisteredAlgorithmIsApplied(): void
     {
-        // Given
-        $algorithm = RS256::create();
-        $signature = $algorithm->sign(self::DATA, Certificates::rsaPrivateKey());
-        $manager = Manager::create()->add($algorithm);
-        $lenient = CertificateSignatureVerifier::create($manager, RsaKeyValidator::create());
-        $strict = CertificateSignatureVerifier::create($manager, RsaKeyValidator::create(4096));
+        // Given, a 2048 bit certificate and two RS256 instances differing only by the bound they carry.
+        $signature = RS256::create()->sign(self::DATA, Certificates::rsaPrivateKey());
+        $default = CertificateSignatureVerifier::create(Manager::create()->add(RS256::create()));
+        $demanding = CertificateSignatureVerifier::create(
+            Manager::create()->add(RS256::create(RsaKeyValidator::create(minimumModulusLength: 4096)))
+        );
 
         // Then
-        static::assertTrue($lenient->verify(RS256::ID, Certificates::RSA_CERTIFICATE, self::DATA, $signature));
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('at least 4096 bits are required');
-
-        // When
-        $strict->verify(RS256::ID, Certificates::RSA_CERTIFICATE, self::DATA, $signature);
+        static::assertTrue($default->verify(RS256::ID, Certificates::RSA_CERTIFICATE, self::DATA, $signature));
+        static::assertFalse($demanding->verify(RS256::ID, Certificates::RSA_CERTIFICATE, self::DATA, $signature));
     }
 }

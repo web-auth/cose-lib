@@ -7,8 +7,6 @@ namespace Cose\Algorithm\Signature;
 use Cose\Algorithm\Manager;
 use Cose\Key\Key;
 use Cose\Key\PublicKeyLoader;
-use Cose\Key\RsaKey;
-use Cose\Key\RsaKeyValidator;
 use InvalidArgumentException;
 use function sprintf;
 
@@ -29,9 +27,9 @@ use function sprintf;
  * operator did not choose. RS1 in particular is only reachable when the operator registered an RS1 instance, which
  * they can only build by acknowledging what SHA-1 is.
  *
- * Second, an RsaKeyValidator may be handed over to apply a minimum modulus length to RSA certificates. The upper
- * bounds and the public parameter constraints of RFC 8017, section 3.1 are applied by the RSA algorithms themselves
- * and need no opt-in; the minimum is the policy choice.
+ * Second, every policy a registered algorithm carries applies unchanged, because it is that very instance which
+ * verifies: the minimum modulus length an RSA algorithm was created with (RsaKeyPolicy, RFC 8230 section 6.1) is the
+ * one enforced against the key of the certificate. Nothing here overrides it, and nothing has to be configured twice.
  *
  * Third, verify() is as total as the Signature contract is: it returns false for every signature the algorithm
  * rejects, and throws an InvalidArgumentException when the certificate, the identifier or the key type make the
@@ -43,14 +41,13 @@ use function sprintf;
 final class CertificateSignatureVerifier
 {
     private function __construct(
-        private readonly Manager $manager,
-        private readonly ?RsaKeyValidator $rsaKeyValidator
+        private readonly Manager $manager
     ) {
     }
 
-    public static function create(Manager $manager, ?RsaKeyValidator $rsaKeyValidator = null): self
+    public static function create(Manager $manager): self
     {
-        return new self($manager, $rsaKeyValidator);
+        return new self($manager);
     }
 
     /**
@@ -98,10 +95,6 @@ final class CertificateSignatureVerifier
                 $algorithmIdentifier
             ));
         }
-        if ($key instanceof RsaKey && $this->rsaKeyValidator !== null) {
-            $this->rsaKeyValidator->check($key);
-        }
-
         return $algorithm->verify($data, $key, $signature);
     }
 }
