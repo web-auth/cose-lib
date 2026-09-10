@@ -10,14 +10,15 @@ use CBOR\ListObject;
 use CBOR\MapItem;
 use CBOR\MapObject;
 use CBOR\NegativeIntegerObject;
-use CBOR\OtherObject\OtherObjectManager;
+use CBOR\OtherObject\NullObject;
 use CBOR\StringStream;
-use CBOR\Tag\TagManager;
+use CBOR\Tag\CoseSign1Tag;
+use CBOR\TextStringObject;
 use CBOR\UnsignedIntegerObject;
 use Cose\Algorithm\Signature\ECDSA\ES256;
 use Cose\Key\Ec2Key;
-use Cose\Signature\CoseSign1Tag;
 use Cose\Signature\Signature1;
+use Cose\Structure\CoseHeaders;
 use function hex2bin;
 use function in_array;
 use InvalidArgumentException;
@@ -29,6 +30,10 @@ use const STR_PAD_LEFT;
 
 /**
  * The COSE_Sign1 verifier documented in README.md and doc/Usage.md, run as it is written there.
+ *
+ * It drives CBOR\Tag\CoseSign1Tag, the class that replaces the deprecated Cose\Signature\CoseSign1Tag in 4.8.0, so
+ * it doubles as the migration example: the message class comes from cbor-php, the header rules and the Sig_structure
+ * come from here.
  *
  * The library verifies signatures; RFC 9052 section 3.1 leaves the binding of "alg" and the processing of "crit" to
  * the application. Every message below is genuinely signed with ES256, so what is exercised is what the documented
@@ -144,6 +149,28 @@ final class DocumentedVerifierTest extends TestCase
     }
 
     /**
+     * RFC 9052 section 1.5: "label = int / tstr", so the text string "1" is not the algorithm parameter. cbor-php
+     * normalizes both keys to the same map offset, which is why the documented verifier reads the parameter through
+     * the typed accessor instead of MapObject::get(): a message whose only "alg" is a text-string label declares no
+     * algorithm at all and has to be turned down.
+     */
+    #[Test]
+    public function aMessageWhoseAlgorithmLabelIsATextStringIsRejected(): void
+    {
+        // Given: protected header {"1": -7} instead of {1: -7}
+        $key = self::signingKey();
+        $header = MapObject::create([
+            MapItem::create(TextStringObject::create('1'), NegativeIntegerObject::create(ES256::identifier())),
+        ]);
+        $message = self::signHeader($key, $header, self::PAYLOAD);
+
+        // Then
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Unexpected or missing "alg" in the protected header');
+        self::documentedVerifier($message, $key->toPublic());
+    }
+
+    /**
      * RFC 9052 sections 3 and 9: a label used twice in a header map makes the message malformed. The rule is enforced
      * by the CBOR decoder, which is why this package declares a floor on spomky-labs/cbor-php.
      */
@@ -168,21 +195,27 @@ final class DocumentedVerifierTest extends TestCase
         $algorithm = ES256::create();
         $understoodLabels = self::UNDERSTOOD_LABELS;
 
-        $tagManager = TagManager::create()
-            ->add(CoseSign1Tag::class);
-        $decoder = Decoder::create($tagManager, OtherObjectManager::create());
+        // cbor-php 3.4.0 registers the six COSE tags in the default decoder, so tag 18 resolves on its own.
+        $coseSign1 = Decoder::create()
+            ->decode(new StringStream($encodedData));
+        if (! $coseSign1 instanceof CoseSign1Tag) {
+            throw new RuntimeException('Not a COSE_Sign1 message');
+        }
 
-        $coseSign1 = $decoder->decode(new StringStream($encodedData));
-        $header = $coseSign1->getProtectedHeaderAsMap();
+        // RFC 9052 reads the header buckets; the CBOR layer only carries them.
+        $headers = CoseHeaders::fromMessage($coseSign1);
 
         // RFC 9052 §3.1: bind the signature to the algorithm the protected header declares.
-        if (! $header->has(1) || (int) $header->get(1)->normalize() !== $algorithm::identifier()) {
+        // getProtectedHeaderParameter() matches the label by type as well as by value, so the text string "1" -- a
+        // different label for RFC 9052 §1.5 -- never answers a lookup for the integer label 1.
+        $alg = $headers->getProtectedHeaderParameter(1);
+        if ($alg === null || (int) $alg->normalize() !== $algorithm::identifier()) {
             throw new RuntimeException('Unexpected or missing "alg" in the protected header');
         }
 
         // RFC 9052 §3.1: every parameter listed in "crit" must be processed, or the message must be rejected.
-        if ($header->has(2)) {
-            $crit = $header->get(2);
+        $crit = $headers->getProtectedHeaderParameter(2);
+        if ($crit !== null) {
             if (! $crit instanceof ListObject) {
                 throw new RuntimeException('"crit" is not an array');
             }
@@ -193,7 +226,13 @@ final class DocumentedVerifierTest extends TestCase
             }
         }
 
-        $sigStructure = Signature1::create($coseSign1->getProtectedHeader(), $coseSign1->getPayload());
+        // RFC 9052 §4.2: a nil payload is detached, and the application supplies the content itself.
+        $payload = $coseSign1->getPayload();
+        if ($payload instanceof NullObject) {
+            throw new RuntimeException('The payload is detached; supply it from the application');
+        }
+
+        $sigStructure = Signature1::create($coseSign1->getProtectedHeader(), $payload);
 
         return $algorithm->verify((string) $sigStructure, $key, $coseSign1->getSignature()->getValue());
     }
@@ -226,7 +265,7 @@ final class DocumentedVerifierTest extends TestCase
         $signature = ES256::create()
             ->sign((string) $toBeSigned, $key);
 
-        return (string) CoseSign1Tag::create(
+        return (string) CoseSign1Tag::createFromComponents(
             $protectedHeader,
             MapObject::create(),
             $payloadObject,
@@ -236,17 +275,17 @@ final class DocumentedVerifierTest extends TestCase
 
     private static function replacePayload(string $message, string $payload): string
     {
-        $tagManager = TagManager::create()
-            ->add(CoseSign1Tag::class);
-        $decoder = Decoder::create($tagManager, OtherObjectManager::create());
-        $coseSign1 = $decoder->decode(new StringStream($message));
+        $coseSign1 = Decoder::create()
+            ->decode(new StringStream($message));
+        static::assertInstanceOf(CoseSign1Tag::class, $coseSign1);
 
-        return (string) CoseSign1Tag::create(
-            $coseSign1->getProtectedHeaderAsMap(),
+        // The protected bucket travels as it is: only the payload changes, which is the point of the case.
+        return (string) CoseSign1Tag::create(ListObject::create([
+            $coseSign1->getProtectedHeader(),
             $coseSign1->getUnprotectedHeader(),
             ByteStringObject::create($payload),
-            $coseSign1->getSignature()
-        );
+            $coseSign1->getSignature(),
+        ]));
     }
 
     private static function signingKey(): Ec2Key

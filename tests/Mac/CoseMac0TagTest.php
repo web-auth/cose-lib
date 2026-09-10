@@ -11,9 +11,16 @@ use CBOR\OtherObject\OtherObjectManager;
 use CBOR\StringStream;
 use CBOR\Tag\TagManager;
 use Cose\Mac\CoseMac0Tag;
+use PHPUnit\Framework\Attributes\IgnoreDeprecations;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * The class under test is deprecated since 4.8.0 in favour of its cbor-php 3.4.0 counterpart (issue #176). Its
+ * behaviour is frozen for the 4.8.x line, so these tests keep running against it with the deprecation silenced;
+ * {@see \Cose\Tests\Structure\DeprecatedTagClassesTest} is what asserts the notice is raised.
+ */
+#[IgnoreDeprecations]
 final class CoseMac0TagTest extends TestCase
 {
     #[Test]

@@ -2,34 +2,34 @@
 
 declare(strict_types=1);
 
-namespace Cose\Signature;
+namespace Cose\Encryption;
 
 use CBOR\ByteStringObject;
 use CBOR\IndefiniteLengthByteStringObject;
 use Cose\Structure\CoseStructure;
 
 /**
- * The Sig_structure of a COSE_Sign1 (RFC 9052 section 4.4).
+ * The Enc_structure of a COSE_Encrypt (RFC 9052 section 5.3).
  *
- * Sig_structure = [ "Signature1", body_protected : empty_or_serialized_map, external_aad : bstr, payload : bstr ]
+ * Enc_structure = [ "Encrypt", protected : empty_or_serialized_map, external_aad : bstr ]
  *
- * The payload is a parameter rather than something read back from the message so that a detached payload -- the nil
- * form of RFC 9052 section 4.2 -- is supplied by the application, which is what the RFC requires of it.
+ * This is the additional authenticated data of the content encryption. Unlike the signature and MAC structures it
+ * carries no payload: the content itself is what the AEAD encrypts, and this structure is what it authenticates
+ * alongside it.
  *
  *
  * The fields a decoded message supplies are typed to accept the indefinite-length byte strings the cbor-php
  * accessors can hand back, and are kept exactly as they were given: a cryptographic structure has to embed the
  * protected bucket byte for byte, or the signature the sender computed over it no longer verifies.
- * @see https://www.rfc-editor.org/rfc/rfc9052#section-4.4
- * @see \Cose\Tests\Signature\CoseSign1CreateAndVerifyTest
+ * @see https://www.rfc-editor.org/rfc/rfc9052#section-5.3
+ * @see \Cose\Tests\Structure\CoseStructureTest
  */
-final class Signature1 extends CoseStructure
+final class EncryptStructure extends CoseStructure
 {
     private readonly ByteStringObject $externalAad;
 
     public function __construct(
         private readonly ByteStringObject|IndefiniteLengthByteStringObject $protectedHeader,
-        private readonly ByteStringObject|IndefiniteLengthByteStringObject $payload,
         ?ByteStringObject $externalAad = null
     ) {
         $this->externalAad = $externalAad ?? self::emptyExternalAad();
@@ -37,20 +37,14 @@ final class Signature1 extends CoseStructure
 
     public static function create(
         ByteStringObject|IndefiniteLengthByteStringObject $protectedHeader,
-        ByteStringObject|IndefiniteLengthByteStringObject $payload,
         ?ByteStringObject $externalAad = null
     ): self {
-        return new self($protectedHeader, $payload, $externalAad);
+        return new self($protectedHeader, $externalAad);
     }
 
     public function getProtectedHeader(): ByteStringObject|IndefiniteLengthByteStringObject
     {
         return $this->protectedHeader;
-    }
-
-    public function getPayload(): ByteStringObject|IndefiniteLengthByteStringObject
-    {
-        return $this->payload;
     }
 
     public function getExternalAad(): ByteStringObject
@@ -60,11 +54,11 @@ final class Signature1 extends CoseStructure
 
     protected function context(): string
     {
-        return 'Signature1';
+        return 'Encrypt';
     }
 
     protected function items(): array
     {
-        return [$this->protectedHeader, $this->externalAad, $this->payload];
+        return [$this->protectedHeader, $this->externalAad];
     }
 }

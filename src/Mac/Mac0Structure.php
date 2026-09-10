@@ -2,28 +2,29 @@
 
 declare(strict_types=1);
 
-namespace Cose\Signature;
+namespace Cose\Mac;
 
 use CBOR\ByteStringObject;
 use CBOR\IndefiniteLengthByteStringObject;
 use Cose\Structure\CoseStructure;
 
 /**
- * The Sig_structure of a COSE_Sign1 (RFC 9052 section 4.4).
+ * The MAC_structure of a COSE_Mac0 (RFC 9052 section 6.3).
  *
- * Sig_structure = [ "Signature1", body_protected : empty_or_serialized_map, external_aad : bstr, payload : bstr ]
+ * MAC_structure = [ "MAC0", protected : empty_or_serialized_map, external_aad : bstr, payload : bstr ]
  *
- * The payload is a parameter rather than something read back from the message so that a detached payload -- the nil
- * form of RFC 9052 section 4.2 -- is supplied by the application, which is what the RFC requires of it.
+ * This is what the MAC algorithm authenticates. MACing the payload on its own instead binds the tag neither to the
+ * protected header -- the algorithm and the key identifier the sender chose -- nor to the message type, so a tag
+ * computed for a COSE_Mac0 would be accepted for a COSE_Mac and the reverse.
  *
  *
  * The fields a decoded message supplies are typed to accept the indefinite-length byte strings the cbor-php
  * accessors can hand back, and are kept exactly as they were given: a cryptographic structure has to embed the
  * protected bucket byte for byte, or the signature the sender computed over it no longer verifies.
- * @see https://www.rfc-editor.org/rfc/rfc9052#section-4.4
- * @see \Cose\Tests\Signature\CoseSign1CreateAndVerifyTest
+ * @see https://www.rfc-editor.org/rfc/rfc9052#section-6.3
+ * @see \Cose\Tests\Structure\CoseStructureTest
  */
-final class Signature1 extends CoseStructure
+final class Mac0Structure extends CoseStructure
 {
     private readonly ByteStringObject $externalAad;
 
@@ -60,7 +61,7 @@ final class Signature1 extends CoseStructure
 
     protected function context(): string
     {
-        return 'Signature1';
+        return 'MAC0';
     }
 
     protected function items(): array
