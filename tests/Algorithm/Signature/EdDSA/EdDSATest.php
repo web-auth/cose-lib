@@ -302,8 +302,8 @@ final class EdDSATest extends TestCase
         yield 'EdDSA (-8)' => [new EdDSA()];
         yield 'Ed25519 (-8)' => [Ed25519::create()];
         yield 'Ed25519 (-19)' => [FullySpecifiedEd25519::create()];
-        yield 'Ed256 (-260)' => [Ed256::create()];
-        yield 'Ed512 (-261)' => [Ed512::create()];
+        yield 'Ed256 (-260)' => [Ed256::create(acknowledgeNonStandardAlgorithm: true)];
+        yield 'Ed512 (-261)' => [Ed512::create(acknowledgeNonStandardAlgorithm: true)];
     }
 
     private static function key(string $d, string $x): OkpKey
