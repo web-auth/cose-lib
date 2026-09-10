@@ -174,13 +174,18 @@ final class OversizedRsaKeyTest extends TestCase
     }
 
     /**
-     * The exponentiation of the largest acceptable key stays bounded because the exponent is: e = n - 2 used to cost
-     * sixty four times what the bound allows.
+     * The public operation of RSASSA-PSS is applied by OpenSSL, so its cost does not depend on ext-gmp or ext-bcmath
+     * being installed. Left to brick/math and its pure PHP calculator it cost seconds of CPU for a 2048 bit key and
+     * minutes at the largest modulus RFC 8230 asks implementations to accept, which no bound on the key can fix.
+     *
+     * The exponent is the longest the bounds allow, and the signature representative is full width, so nothing about
+     * this key makes the exponentiation cheaper than the worst case.
      */
     #[Test]
-    public function theExponentiationOfTheLargestAcceptableKeyIsBounded(): void
+    public function thePublicOperationDoesNotDependOnABigIntegerExtension(): void
     {
         // Given
+        $restore = self::forceTheNativeCalculator();
         $key = self::key(
             "\xff" . str_repeat("\xaa", self::MAXIMUM_MODULUS_OCTETS - 2) . "\xff",
             str_repeat("\xff", intdiv(RsaKeyValidator::MAXIMUM_EXPONENT_LENGTH, 8))
@@ -189,13 +194,60 @@ final class OversizedRsaKeyTest extends TestCase
 
         // When
         $startedAt = microtime(true);
-        $isVerified = PS256::create()
-            ->verify(self::MESSAGE, $key, $signature);
+
+        try {
+            $isVerified = PS256::create()
+                ->verify(self::MESSAGE, $key, $signature);
+        } finally {
+            $restore();
+        }
         $elapsed = microtime(true) - $startedAt;
 
         // Then
         static::assertFalse($isVerified);
-        static::assertLessThan(5.0, $elapsed, 'The public exponent bounds the cost of the public operation');
+        static::assertLessThan(5.0, $elapsed, 'RSAVP1 must not be computed in PHP');
+    }
+
+    /**
+     * Cost is only half of it: the octets OpenSSL returns have to be the ones the in-process exponentiation returned.
+     * The 2050 bit key is the interesting one, its emLen being one octet shorter than the modulus.
+     *
+     * @param callable(): RsaKey $keyFactory
+     */
+    #[Test]
+    #[DataProvider('getRoundTripKeys')]
+    public function aSignatureStillRoundTripsWithoutABigIntegerExtension(callable $keyFactory): void
+    {
+        // Given
+        $key = $keyFactory();
+        $algorithm = PS256::create();
+        $signature = $algorithm->sign(self::MESSAGE, $key);
+        $restore = self::forceTheNativeCalculator();
+
+        // When
+        try {
+            $isVerified = $algorithm->verify(self::MESSAGE, $key->toPublic(), $signature);
+            $isRejected = $algorithm->verify('Live long and prosper.', $key->toPublic(), $signature);
+        } finally {
+            $restore();
+        }
+
+        // Then
+        static::assertTrue($isVerified);
+        static::assertFalse($isRejected);
+    }
+
+    /**
+     * @return iterable<string, array{callable(): RsaKey}>
+     */
+    public static function getRoundTripKeys(): iterable
+    {
+        yield 'a 2048 bit modulus' => [
+            static fn (): RsaKey => RsaKeys::privateKey(),
+        ];
+        yield 'a 2050 bit modulus' => [
+            static fn (): RsaKey => RsaKeys::nonByteAlignedPrivateKey(),
+        ];
     }
 
     private static function key(string $modulus, string $exponent): RsaKey

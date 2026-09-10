@@ -32,8 +32,8 @@
         "symfony/polyfill-php81": "*"
     },
     "suggest": {
-        "ext-bcmath": "Strongly recommended: without GMP or BCMath, the RSASSA-PSS algorithms (PS256/PS384/PS512) exponentiate in pure PHP and cost seconds of CPU per operation",
-        "ext-gmp": "Strongly recommended: without GMP or BCMath, the RSASSA-PSS algorithms (PS256/PS384/PS512) exponentiate in pure PHP and cost seconds of CPU per operation",
+        "ext-bcmath": "Recommended: without GMP or BCMath, signing with RSASSA-PSS (PS256/PS384/PS512) blinds its private exponentiation in pure PHP",
+        "ext-gmp": "Recommended: without GMP or BCMath, signing with RSASSA-PSS (PS256/PS384/PS512) blinds its private exponentiation in pure PHP",
         "spomky-labs/cbor-php": "For COSE Signature support"
     },
     "autoload": {

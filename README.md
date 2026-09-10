@@ -267,10 +267,11 @@ The validator also enforces the public exponent constraints of
 
 ## Performance
 
-Install **ext-gmp** (recommended) or **ext-bcmath**. Without either of them `brick/math` falls back to a pure PHP
-calculator, and the RSASSA-PSS algorithms (`PS256`, `PS384`, `PS512`) then compute their modular exponentiation in
-PHP: seconds of CPU per operation, even for a 2048 bit key. The `RS*` algorithms and `RsaKey::asPem()` do not depend
-on it. The stock `php` and `php-fpm` Docker images ship with neither extension.
+**ext-gmp** (recommended) or **ext-bcmath** is worth installing, but no longer required for RSA verification to be
+cheap: `RsaKey::asPem()`, `RsaKeyValidator` and the public operation of every RSA algorithm are computed without
+`brick/math`. Signing with RSASSA-PSS (`PS256`, `PS384`, `PS512`) still uses it for the blinding of the private
+exponentiation, and falls back to a pure PHP calculator when neither extension is loaded — which is the configuration
+of the stock `php` and `php-fpm` Docker images.
 
 ## Testing
 
