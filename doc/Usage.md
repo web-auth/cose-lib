@@ -33,8 +33,17 @@ composer require web-auth/cose-lib
 For COSE tag support, you also need:
 
 ```bash
-composer require spomky-labs/cbor-php
+composer require "spomky-labs/cbor-php:^3.3.4"
 ```
+
+3.3.4 is the floor this library declares (`conflict: <3.3.4`). The CBOR decoder is what enforces the header-map rules
+of RFC 9052: [§3](https://datatracker.ietf.org/doc/html/rfc9052#section-3) and
+[§9](https://datatracker.ietf.org/doc/html/rfc9052#section-9) make a message malformed when a label appears twice in a
+map, and the decoder bounds the nesting depth so that a crafted header cannot exhaust the memory of the process.
+Nothing in this library re-checks either rule.
+
+Every Ed25519 algorithm needs `ext-sodium`, which ships with PHP and is enabled by default; see
+[Signature Algorithms](#signature-algorithms) for what happens on a build without it.
 
 ## COSE Tags
 
@@ -102,10 +111,12 @@ $encoded = (string) $coseSign1;
 
 ```php
 use CBOR\Decoder;
+use CBOR\ListObject;
 use CBOR\OtherObject\OtherObjectManager;
 use CBOR\StringStream;
 use CBOR\Tag\TagManager;
-use Cose\Algorithm\Signature\ECDSA\ECSignature;
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Key\Ec2Key;
 use Cose\Signature\CoseSign1Tag;
 use Cose\Signature\Signature1;
 
@@ -124,27 +135,65 @@ $unprotectedHeader = $coseSign1->getUnprotectedHeader(); // MapObject
 $payload = $coseSign1->getPayload(); // ByteStringObject
 $signature = $coseSign1->getSignature(); // ByteStringObject
 
-// Use a custom decoder for protected header (e.g., with custom CBOR tags)
+// The key of the signer you trust, and the algorithm you expect it to be used with
+$key = Ec2Key::create($theCoseKeyYouPinned);
+$algorithm = ES256::create();
+// The protected header labels this application knows how to process (1 = alg, 2 = crit)
+$understoodLabels = [1, 2];
+
+// RFC 9052 §3.1: bind the signature to the algorithm the protected header declares
+if (! $protectedHeaderMap->has(1)
+    || (int) $protectedHeaderMap->get(1)->normalize() !== $algorithm::identifier()) {
+    throw new RuntimeException('Unexpected or missing "alg" in the protected header');
+}
+
+// RFC 9052 §3.1: every parameter listed in "crit" must be processed, or the message must be rejected
+if ($protectedHeaderMap->has(2)) {
+    $crit = $protectedHeaderMap->get(2);
+    if (! $crit instanceof ListObject) {
+        throw new RuntimeException('"crit" is not an array');
+    }
+    foreach ($crit as $label) {
+        if (! in_array((int) $label->normalize(), $understoodLabels, true)) {
+            throw new RuntimeException('Unsupported critical header parameter');
+        }
+    }
+}
+
+// Create Sig_structure and verify the signature it covers
+$sigStructure = Signature1::create($coseSign1->getProtectedHeader(), $coseSign1->getPayload());
+$isValid = $algorithm->verify((string) $sigStructure, $key, $coseSign1->getSignature()->getValue());
+```
+
+`tests/Signature/DocumentedVerifierTest.php` runs exactly this code, against a genuine ES256 message and against
+messages crafted to exercise each check.
+
+##### What the application must check
+
+The library verifies signatures; it does not decide what a message is allowed to say. Two checks
+[RFC 9052 §3.1](https://datatracker.ietf.org/doc/html/rfc9052#section-3.1) requires are therefore the caller's, and
+both are in the snippet above:
+
+- **`alg` (label 1)** — "This header parameter MUST be authenticated where the ability to do so exists". Read it from
+  the *protected* header, which the signature covers, and compare it with the algorithm you decided to accept for
+  that key. A verifier that hard-codes its algorithm and ignores the header still accepts a message that announces a
+  different one.
+- **`crit` (label 2)** — it lists the protected header parameters a recipient is *required* to understand. Any label
+  in that list your application does not process makes the message unusable: reject it instead of verifying it.
+
+The protected header itself is decoded with a decoder bounded to
+`CoseSign1Tag::DEFAULT_PROTECTED_HEADER_MAX_DEPTH` (32) levels of nesting. Pass your own `Decoder` to
+`getProtectedHeaderAsMap()` when a header carries custom CBOR tags, or a different `$maxDepth` when 32 is not the
+right bound:
+
+```php
+// Use a custom decoder for the protected header (e.g. with custom CBOR tags)
 $customDecoder = Decoder::create(
     TagManager::create()->add(MyCustomTag::class),
-    OtherObjectManager::create()
+    OtherObjectManager::create(),
+    32
 );
 $protectedHeaderMap = $coseSign1->getProtectedHeaderAsMap($customDecoder);
-
-// Create Sig_structure for verification
-$sigStructure = Signature1::create(
-    $coseSign1->getProtectedHeader(),
-    $coseSign1->getPayload()
-);
-
-// Verify signature (example with OpenSSL and ECDSA)
-$derSignature = ECSignature::toAsn1($signature->getValue(), 64);
-$isValid = openssl_verify(
-    (string) $sigStructure,
-    $derSignature,
-    $publicKey,
-    'sha256'
-);
 ```
 
 ### COSE_Sign (Multiple Signers)
@@ -271,11 +320,14 @@ $coseMac = CoseMacTag::create(
   - ES512 (-36): ECDSA with SHA-512
   - ES256K (-47): ECDSA with secp256k1 curve
 
-- **EdDSA**
-  - EdDSA (-8): Edwards-curve Digital Signature Algorithm
-  - Ed25519 (-8 and -19): EdDSA with the Ed25519 parameter set
-  - Ed448 (-53): EdDSA with the Ed448 parameter set, in the `FullySpecified` namespace
-  - Ed256 (-260) and Ed512 (-261): **non-standard**, see below
+- **EdDSA** (`Cose\Algorithm\Signature\EdDSA`) — Ed25519 keys only, whatever the class
+  - EdDSA (-8): Edwards-curve Digital Signature Algorithm. The IANA COSE Algorithms registry marks -8 deprecated in
+    favour of the fully-specified Ed25519 (-19) and Ed448 (-53) below
+  - Ed25519 (-8): the same algorithm under its own class name; identical signatures, identical identifier
+  - Ed256 (-260) and Ed512 (-261): **non-standard**. They sign a SHA-256 or SHA-512 digest of the message with
+    Ed25519. They are not EdDSA identifiers and are registered nowhere — IANA assigns -260 to WalnutDSA and -261 to
+    TurboSHAKE128 — and neither of them supports Curve448. Kept for the authenticators that already produce them, and
+    only against an explicit acknowledgement (see below); EdDSA with Curve448 is `FullySpecified\Ed448` (-53)
 
 - **RSA**
   - RS256 (-257): RSASSA-PKCS1-v1_5 with SHA-256

@@ -76,6 +76,12 @@ abstract class Algorithms
 
     final public const COSE_ALGORITHM_EDDSA = -8;
 
+    /**
+     * Ed25519 over a SHA-256 (-260) or SHA-512 (-261) digest of the message. These pre-hash variants are not
+     * registered anywhere and are not EdDSA identifiers: the IANA COSE Algorithms registry assigns -260 to WalnutDSA
+     * and -261 to TurboSHAKE128. They are kept for the authenticators that already produce them; new code should use
+     * COSE_ALGORITHM_ED25519 (-19) or COSE_ALGORITHM_ED448 (-53).
+     */
     final public const COSE_ALGORITHM_ED256 = -260;
 
     final public const COSE_ALGORITHM_ED512 = -261;

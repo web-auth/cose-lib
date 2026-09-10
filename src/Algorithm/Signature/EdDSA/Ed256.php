@@ -21,7 +21,9 @@ use function trigger_error;
  * Worse, the identifier it carries is not free: IANA has since assigned -260 to WalnutDSA (RFC 9021, section 6.1), so
  * a COSE object signed here is read as WalnutDSA by every conforming implementation, and a genuine WalnutDSA object
  * is routed to this class. No WebAuthn authenticator emits -260, so the only deployments this construction can serve
- * are those that use it on both ends.
+ * are those that use it on both ends. The fully-specified EdDSA identifiers are
+ * {@see \Cose\Algorithm\Signature\FullySpecified\Ed25519} (-19) and
+ * {@see \Cose\Algorithm\Signature\FullySpecified\Ed448} (-53).
  *
  * Because of that, creating this algorithm emits an E_USER_WARNING unless the caller explicitly acknowledges what it
  * is by passing `acknowledgeNonStandardAlgorithm: true`. From v5.0.0 the same call without that acknowledgement will

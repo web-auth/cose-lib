@@ -12,8 +12,9 @@ use function trigger_error;
 /**
  * Pure Ed25519 over the SHA-512 digest of the payload.
  *
- * Despite its name this is not Ed448, and it rejects an Ed448 key: the curve check it inherits from EdDSA accepts
- * Ed25519 only. RFC 8032, section 5.2 is covered by Cose\Algorithm\Signature\FullySpecified\Ed448 (-53) instead.
+ * Despite its name this is not EdDSA with Curve448, and it rejects an Ed448 key: the signature is computed by
+ * {@see EdDSA}, whose curve check accepts Ed25519 only. EdDSA with Curve448, RFC 8032 section 5.2, is
+ * {@see \Cose\Algorithm\Signature\FullySpecified\Ed448} (-53).
  *
  * The construction is defined by no specification. It is neither the EdDSA of RFC 8032, section 5.1 - which signs the
  * message itself - nor Ed25519ph of the same section, whose challenge covers a "dom2" prefix this class does not add.
