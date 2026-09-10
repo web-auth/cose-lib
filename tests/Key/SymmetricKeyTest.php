@@ -136,4 +136,68 @@ final class SymmetricKeyTest extends TestCase
         yield 'float' => [1.5];
         yield 'CBOR object' => [ByteStringObject::create(str_repeat("\x2a", 32))];
     }
+
+    /**
+     * The key type used to be compared through a lenient (int) cast, which let "4abc" through and turned a float
+     * into a TypeError raised later by Key::type(). It is now normalised - only an integer-looking string becomes
+     * the integer it denotes - and compared strictly, like the three sibling key classes do.
+     */
+    #[Test]
+    #[DataProvider('getInvalidKeyTypes')]
+    public function theKeyTypeIsCheckedStrictly(mixed $type): void
+    {
+        // Then
+        static::expectException(InvalidArgumentException::class);
+        static::expectExceptionMessage('Invalid symmetric key. The key type does not correspond to a symmetric key');
+
+        // When
+        SymmetricKey::create([
+            SymmetricKey::TYPE => $type,
+            SymmetricKey::DATA_K => str_repeat("\x2a", 32),
+        ]);
+    }
+
+    /**
+     * A key decoded with spomky-labs/cbor-php carries the string "4"; the name form is what a JWK-shaped array
+     * carries. Both denote the same key type and are stored as supplied, with the numeric string normalised.
+     */
+    #[Test]
+    #[DataProvider('getValidKeyTypes')]
+    public function theKeyTypeIsAcceptedInEveryRegisteredForm(mixed $type, int|string $expected): void
+    {
+        // When
+        $key = SymmetricKey::create([
+            SymmetricKey::TYPE => $type,
+            SymmetricKey::DATA_K => str_repeat("\x2a", 32),
+        ]);
+
+        // Then
+        static::assertSame($expected, $key->type());
+    }
+
+    /**
+     * @return iterable<string, array{0: mixed}>
+     */
+    public static function getInvalidKeyTypes(): iterable
+    {
+        yield 'a trailing suffix' => ['4abc'];
+        yield 'a float' => [4.0];
+        yield 'a truncatable float' => [4.9];
+        yield 'a non-integral string' => ['4.0'];
+        yield 'a padded numeric string' => [' 4'];
+        yield 'an array' => [[]];
+        yield 'a boolean' => [true];
+        yield 'the EC2 key type' => [SymmetricKey::TYPE_EC2];
+        yield 'the EC2 key type name' => [SymmetricKey::TYPE_NAME_EC2];
+    }
+
+    /**
+     * @return iterable<string, array{0: mixed, 1: int|string}>
+     */
+    public static function getValidKeyTypes(): iterable
+    {
+        yield 'the registry value' => [SymmetricKey::TYPE_OCT, SymmetricKey::TYPE_OCT];
+        yield 'the numeric string of a decoded key' => ['4', SymmetricKey::TYPE_OCT];
+        yield 'the key type name' => [SymmetricKey::TYPE_NAME_OCT, SymmetricKey::TYPE_NAME_OCT];
+    }
 }

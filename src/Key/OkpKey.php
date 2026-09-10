@@ -8,6 +8,7 @@ use function array_key_exists;
 use function extension_loaded;
 use function in_array;
 use InvalidArgumentException;
+use function is_int;
 use function is_string;
 use RuntimeException;
 use function sodium_crypto_scalarmult_base;
@@ -55,11 +56,17 @@ class OkpKey extends Key
         self::CURVE_ED448,
     ];
 
-    private const SUPPORTED_CURVES_NAME = [
-        self::CURVE_NAME_X25519,
-        self::CURVE_NAME_X448,
-        self::CURVE_NAME_ED25519,
-        self::CURVE_NAME_ED448,
+    /**
+     * RFC 9053, section 7.2, table 20 types "crv" as "int / tstr": a curve may be named instead of numbered. Each of
+     * these names maps to the identifier of the "COSE Elliptic Curves" registry that curveId() exposes.
+     *
+     * @var array<string, int>
+     */
+    private const CURVE_NAME_TO_ID = [
+        self::CURVE_NAME_X25519 => self::CURVE_X25519,
+        self::CURVE_NAME_X448 => self::CURVE_X448,
+        self::CURVE_NAME_ED25519 => self::CURVE_ED25519,
+        self::CURVE_NAME_ED448 => self::CURVE_ED448,
     ];
 
     /**
@@ -71,10 +78,6 @@ class OkpKey extends Key
         self::CURVE_X448 => 56,
         self::CURVE_ED25519 => 32,
         self::CURVE_ED448 => 57,
-        self::CURVE_NAME_X25519 => 32,
-        self::CURVE_NAME_X448 => 56,
-        self::CURVE_NAME_ED25519 => 32,
-        self::CURVE_NAME_ED448 => 57,
     ];
 
     /**
@@ -84,8 +87,6 @@ class OkpKey extends Key
     private const DERIVABLE_CURVES = [
         self::CURVE_X25519,
         self::CURVE_ED25519,
-        self::CURVE_NAME_X25519,
-        self::CURVE_NAME_ED25519,
     ];
 
     private const CURVE_OID = [
@@ -93,10 +94,6 @@ class OkpKey extends Key
         self::CURVE_X448 => '1.3.101.111',
         self::CURVE_ED25519 => '1.3.101.112',
         self::CURVE_ED448 => '1.3.101.113',
-        self::CURVE_NAME_X25519 => '1.3.101.110',
-        self::CURVE_NAME_X448 => '1.3.101.111',
-        self::CURVE_NAME_ED25519 => '1.3.101.112',
-        self::CURVE_NAME_ED448 => '1.3.101.113',
     ];
 
     /**
@@ -104,11 +101,10 @@ class OkpKey extends Key
      */
     public function __construct(array $data)
     {
-        foreach ([self::DATA_CURVE, self::TYPE] as $key) {
-            if (is_numeric($data[$key])) {
-                $data[$key] = (int) $data[$key];
-            }
-        }
+        // Everything below is read from attacker-supplied CBOR: each entry is checked to be present and of the
+        // expected PHP type before it is used, so that a malformed key always leaves through the
+        // InvalidArgumentException this library documents rather than through a warning, a TypeError or an Error.
+        $data = self::normalizeIntegerEntries($data, self::DATA_CURVE, self::TYPE);
         parent::__construct($data);
         if ($data[self::TYPE] !== self::TYPE_OKP && $data[self::TYPE] !== self::TYPE_NAME_OKP) {
             throw new InvalidArgumentException('Invalid OKP key. The key type does not correspond to an OKP key');
@@ -118,16 +114,15 @@ class OkpKey extends Key
         // alone is therefore valid, and is the safest way to build a signing key: nothing can hand over an "x"
         // inconsistent with the seed.
         if (! isset($data[self::DATA_CURVE]) || (! isset($data[self::DATA_X]) && ! isset($data[self::DATA_D]))) {
-            throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x" coordinate is missing');
+            throw new InvalidArgumentException('Invalid OKP key. The curve or the "x" coordinate is missing');
         }
-        if (is_numeric($data[self::DATA_CURVE])) {
-            if (! in_array((int) $data[self::DATA_CURVE], self::SUPPORTED_CURVES_INT, true)) {
-                throw new InvalidArgumentException('The curve is not supported');
-            }
-        } elseif (! in_array($data[self::DATA_CURVE], self::SUPPORTED_CURVES_NAME, true)) {
+        // The curve is checked first: the key lengths below are read from a table indexed by the curve.
+        $curveId = self::toCurveId($data[self::DATA_CURVE]);
+        if ($curveId === null) {
             throw new InvalidArgumentException('The curve is not supported');
         }
-        $length = self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]];
+        // RFC 8032 section 5.1.5 / 5.2.5 and RFC 7748 section 5: both halves are byte strings of this exact length.
+        $length = self::CURVE_KEY_LENGTH[$curveId];
         if (array_key_exists(self::DATA_X, $data)
             && (! is_string($data[self::DATA_X]) || strlen($data[self::DATA_X]) !== $length)) {
             throw new InvalidArgumentException('Invalid length for x coordinate');
@@ -169,9 +164,23 @@ class OkpKey extends Key
         return $this->get(self::DATA_D);
     }
 
+    /**
+     * The curve as the key carries it, which RFC 9053 section 7.2 allows to be either the identifier of the "COSE
+     * Elliptic Curves" registry or a name. Use curveId() to get the identifier whatever form was supplied.
+     */
     public function curve(): int|string
     {
         return $this->get(self::DATA_CURVE);
+    }
+
+    /**
+     * The value of the curve in the IANA "COSE Elliptic Curves" registry, whichever of the two forms the key uses.
+     */
+    public function curveId(): int
+    {
+        $curve = $this->curve();
+
+        return is_int($curve) ? $curve : self::CURVE_NAME_TO_ID[$curve];
     }
 
     public function toPublic(): self
@@ -188,7 +197,7 @@ class OkpKey extends Key
      */
     private function derivePublicKey(): string
     {
-        $curve = $this->curve();
+        $curve = $this->curveId();
         if (! in_array($curve, self::DERIVABLE_CURVES, true)) {
             throw new InvalidArgumentException(
                 'The "x" coordinate is missing and cannot be computed from "d" for this curve'
@@ -201,9 +210,21 @@ class OkpKey extends Key
         }
         $d = $this->d();
 
-        return $curve === self::CURVE_X25519 || $curve === self::CURVE_NAME_X25519
+        return $curve === self::CURVE_X25519
             ? sodium_crypto_scalarmult_base($d)
             : sodium_crypto_sign_publickey(sodium_crypto_sign_seed_keypair($d));
+    }
+
+    /**
+     * The registry value of a supported curve, or null when the value denotes no curve this class supports.
+     */
+    private static function toCurveId(mixed $curve): ?int
+    {
+        if (is_int($curve)) {
+            return in_array($curve, self::SUPPORTED_CURVES_INT, true) ? $curve : null;
+        }
+
+        return is_string($curve) ? (self::CURVE_NAME_TO_ID[$curve] ?? null) : null;
     }
 
     /**
@@ -211,7 +232,7 @@ class OkpKey extends Key
      */
     public function asPEM(): string
     {
-        $oid = ObjectIdentifier::create(self::CURVE_OID[$this->curve()]);
+        $oid = ObjectIdentifier::create(self::CURVE_OID[$this->curveId()]);
 
         if ($this->isPrivate()) {
             $der = Sequence::create(

@@ -8,6 +8,7 @@ use function base64_decode;
 use Cose\Algorithm\Signature\FullySpecified\Ed25519;
 use Cose\Algorithm\Signature\FullySpecified\Ed448;
 use Cose\Algorithms;
+use Cose\Key\Key;
 use Cose\Key\OkpKey;
 use function hex2bin;
 use InvalidArgumentException;
@@ -178,6 +179,94 @@ final class FullySpecifiedEdDsaTest extends TestCase
 
         // When
         $algorithm->sign('Live long and Prosper.', $key);
+    }
+
+    /**
+     * RFC 8032, section 5.2.7: "Decode the public key A as point A\'. If any of the decodings fail [...] the
+     * signature is invalid." A public key that is not 57 octets long used to reach OpenSSL and come back as an
+     * exception thrown out of verify(), which Signature::verify() declares as returning a boolean; the key is now
+     * refused where it is first seen, as Ed25519 has always done through sodium.
+     */
+    #[Test]
+    #[DataProvider('getInvalidEd448PublicKeyLengths')]
+    public function anEd448PublicKeyOfTheWrongLengthIsNotAVerificationError(int $length): void
+    {
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid length for x coordinate');
+
+        // When
+        OkpKey::create([
+            OkpKey::TYPE => OkpKey::TYPE_OKP,
+            OkpKey::DATA_CURVE => OkpKey::CURVE_ED448,
+            OkpKey::DATA_X => $length === 0 ? '' : random_bytes($length),
+        ]);
+    }
+
+    /**
+     * The same key handed to Ed448 through the generic Key class, the shape webauthn-lib builds from a stored
+     * credential: the failure is still the documented exception, and never the "Unable to load" error that used to
+     * escape verify().
+     */
+    #[Test]
+    #[DataProvider('getInvalidEd448PublicKeyLengths')]
+    public function anEd448VerificationNeverReportsAnUnloadablePublicKey(int $length): void
+    {
+        if (! Ed448::isSupported()) {
+            static::markTestSkipped('Ed448 requires PHP 8.4 or later.');
+        }
+
+        // Given
+        $algorithm = Ed448::create();
+        $key = Key::create([
+            OkpKey::TYPE => OkpKey::TYPE_OKP,
+            OkpKey::DATA_CURVE => OkpKey::CURVE_ED448,
+            OkpKey::DATA_X => $length === 0 ? '' : random_bytes($length),
+        ]);
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid length for x coordinate');
+
+        // When
+        $algorithm->verify('Live long and Prosper.', $key, random_bytes(114));
+    }
+
+    /**
+     * A 57 byte public key that decodes to no point at all is a verification failure, not an error.
+     */
+    #[Test]
+    public function anEd448PublicKeyThatIsNotAPointFailsTheVerification(): void
+    {
+        if (! Ed448::isSupported()) {
+            static::markTestSkipped('Ed448 requires PHP 8.4 or later.');
+        }
+
+        // Given
+        $algorithm = Ed448::create();
+        $key = OkpKey::create([
+            OkpKey::TYPE => OkpKey::TYPE_OKP,
+            OkpKey::DATA_CURVE => OkpKey::CURVE_ED448,
+            OkpKey::DATA_X => str_repeat("\xff", 57),
+        ]);
+
+        // When
+        $isValid = $algorithm->verify('Live long and Prosper.', $key, random_bytes(114));
+
+        // Then
+        static::assertFalse($isValid);
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function getInvalidEd448PublicKeyLengths(): iterable
+    {
+        yield 'empty' => [0];
+        yield 'a single byte' => [1];
+        yield 'the length of an Ed25519 key' => [32];
+        yield 'one byte too short' => [56];
+        yield 'one byte too long' => [58];
     }
 
     #[Test]

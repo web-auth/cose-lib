@@ -255,6 +255,133 @@ final class ECDSATest extends TestCase
     }
 
     /**
+     * RFC 9053, section 7.1 lets a key name its curve instead of numbering it, and Ec2Key has always accepted the
+     * name form - but every ECDSA class compared it against an integer, so such a key could neither sign nor verify
+     * although the very same key with the numeric form produced a byte-identical PEM.
+     */
+    #[Test]
+    #[DataProvider('getNamedCurveVectors')]
+    public function aKeyThatNamesItsCurveCanSignAndVerify(
+        ECDSA $algorithm,
+        string $curve,
+        string $d,
+        string $x,
+        string $y,
+        string $data,
+        string $signature
+    ): void {
+        // Given
+        $key = Ec2Key::create([
+            Ec2Key::DATA_X => $x,
+            Ec2Key::DATA_Y => $y,
+            Ec2Key::DATA_D => $d,
+            Ec2Key::DATA_CURVE => $curve,
+            Ec2Key::TYPE => Ec2Key::TYPE_EC2,
+        ]);
+
+        // When
+        $computedSignature = $algorithm->sign($data, $key);
+
+        // Then
+        static::assertSame($curve, $key->curve());
+        static::assertTrue($algorithm->verify($data, $key, $computedSignature));
+        static::assertTrue($algorithm->verify($data, $key, $signature));
+    }
+
+    /**
+     * The draft-era spelling of curve 8 keeps working alongside the name RFC 8812 registered.
+     */
+    #[Test]
+    #[DataProvider('getCurve8Names')]
+    public function bothNamesOfCurve8AreAcceptedByEs256K(string $curve): void
+    {
+        // Given
+        $algorithm = ES256K::create();
+        $key = Ec2Key::create([
+            Ec2Key::TYPE => Ec2Key::TYPE_EC2,
+            Ec2Key::DATA_CURVE => $curve,
+            Ec2Key::DATA_X => hex2bin('779dd197a5df977ed2cf6cb31d82d43328b790dc6b3b7d4437a427bd5847dfcd'),
+            Ec2Key::DATA_Y => hex2bin('e94b724a555b6d017bb7607c3e3281daf5b1699d6ef4124975c9237b917d426f'),
+        ]);
+        $data = 'Maarten Bodewes generated this test vector on 2016-11-08';
+        $signature = hex2bin(
+            '241097efbf8b63bf145c8961dbdf10c310efbb3b2676bbc0f8b08505c9e2f795021006b7838609339e8b415a7f9acb1b661828131aef1ecbc7955dfb01f3ca0e'
+        );
+
+        // When
+        $isValid = $algorithm->verify($data, $key, $signature);
+
+        // Then
+        static::assertTrue($isValid);
+    }
+
+    /**
+     * Naming the curve does not make a key usable with an algorithm of another curve: the two are compared through
+     * the registry value, not through the form the key happens to carry.
+     */
+    #[Test]
+    #[DataProvider('getMismatchedNamedCurves')]
+    public function aKeyThatNamesAnotherCurveIsStillRejected(ECDSA $algorithm, string $curve, int $length): void
+    {
+        // Given
+        $key = Ec2Key::create([
+            Ec2Key::TYPE => Ec2Key::TYPE_EC2,
+            Ec2Key::DATA_CURVE => $curve,
+            Ec2Key::DATA_X => random_bytes($length),
+            Ec2Key::DATA_Y => random_bytes($length),
+        ]);
+
+        // Then
+        static::expectException(InvalidArgumentException::class);
+        static::expectExceptionMessage('This key cannot be used with this algorithm');
+
+        // When
+        $algorithm->verify('sample', $key, random_bytes(64));
+    }
+
+    /**
+     * @return iterable<string, array{ECDSA, string, int}>
+     */
+    public static function getMismatchedNamedCurves(): iterable
+    {
+        yield 'ES256 with a P-384 key' => [ES256::create(), Ec2Key::CURVE_NAME_P384, 48];
+        yield 'ES256 with a secp256k1 key' => [ES256::create(), Ec2Key::CURVE_NAME_SECP256K1, 32];
+        yield 'ES256K with a P-256 key' => [ES256K::create(), Ec2Key::CURVE_NAME_P256, 32];
+        yield 'ES384 with a P-521 key' => [ES384::create(), Ec2Key::CURVE_NAME_P521, 66];
+        yield 'ES512 with a P-256 key' => [ES512::create(), Ec2Key::CURVE_NAME_P256, 32];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function getCurve8Names(): iterable
+    {
+        yield 'the name registered by RFC 8812' => [Ec2Key::CURVE_NAME_SECP256K1];
+        yield 'the draft-era name' => [Ec2Key::CURVE_NAME_P256K];
+    }
+
+    /**
+     * The vectors of getVectors(), with the curve expressed by its name instead of its registry value.
+     *
+     * @return array<string>[]
+     */
+    public static function getNamedCurveVectors(): iterable
+    {
+        $names = [
+            Ec2Key::CURVE_P256 => Ec2Key::CURVE_NAME_P256,
+            Ec2Key::CURVE_P256K => Ec2Key::CURVE_NAME_SECP256K1,
+            Ec2Key::CURVE_P384 => Ec2Key::CURVE_NAME_P384,
+            Ec2Key::CURVE_P521 => Ec2Key::CURVE_NAME_P521,
+        ];
+
+        foreach (self::getVectors() as $vector) {
+            [$algorithm, $curve, $d, $x, $y, $data, $signature] = $vector;
+
+            yield [$algorithm, $names[$curve], $d, $x, $y, $data, $signature];
+        }
+    }
+
+    /**
      * @return array<string>[]
      */
     public static function getVectors(): iterable

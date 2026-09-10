@@ -14,6 +14,7 @@ use InvalidArgumentException;
 use function is_array;
 use function is_int;
 use function is_string;
+use function preg_match;
 use function sprintf;
 
 class Key
@@ -99,7 +100,11 @@ class Key
         if (! array_key_exists(self::TYPE, $data)) {
             throw new InvalidArgumentException('Invalid key: the type is not defined');
         }
-        $this->data = $data;
+        // The key type is normalised for every key, the generic one included, so that type() answers with the
+        // registry value whether the key was decoded from CBOR - where spomky-labs/cbor-php renders an integer as a
+        // numeric string - or built by hand. Everything that checks a key type, from the subclasses below to the
+        // MAC algorithms, then compares against Key::TYPE_* and sees the same value on both paths.
+        $this->data = self::normalizeIntegerEntries($data, self::TYPE);
     }
 
     /**
@@ -111,7 +116,13 @@ class Key
     }
 
     /**
-     * @param array<int, mixed> $data
+     * Builds the key class the "kty" of the data designates.
+     *
+     * The data is expected to be the output of spomky-labs/cbor-php's normalize(), which renders a CBOR integer as a
+     * numeric string, or an equivalent PHP array: both the string and the native integer form of a registered key
+     * type are dispatched, as is its name (RFC 9052, section 7.1, table 4 types "kty" as "tstr / int").
+     *
+     * @param array<int|string, mixed> $data
      */
     public static function createFromData(array $data): self
     {
@@ -120,10 +131,10 @@ class Key
         }
 
         return match ($data[self::TYPE]) {
-            '1' => new OkpKey($data),
-            '2' => new Ec2Key($data),
-            '3' => new RsaKey($data),
-            '4' => new SymmetricKey($data),
+            self::TYPE_OKP, '1', self::TYPE_NAME_OKP => new OkpKey($data),
+            self::TYPE_EC2, '2', self::TYPE_NAME_EC2 => new Ec2Key($data),
+            self::TYPE_RSA, '3', self::TYPE_NAME_RSA => new RsaKey($data),
+            self::TYPE_OCT, '4', self::TYPE_NAME_OCT => new SymmetricKey($data),
             default => self::create($data),
         };
     }
@@ -262,6 +273,30 @@ class Key
         }
 
         return $this->data[$key];
+    }
+
+    /**
+     * spomky-labs/cbor-php normalises a CBOR integer to a numeric string (UnsignedIntegerObject::normalize()), so a
+     * key decoded from CBOR carries its "kty" and its "crv" as such a string. Each listed entry that holds one is
+     * replaced by the integer it denotes, before anything compares it against a registry value.
+     *
+     * Only an integer-looking string is converted. A float, or a string such as "1.5", " 1" or "4abc", is left as it
+     * is so that the checks that follow reject it, instead of a lenient cast silently turning it into a valid
+     * identifier.
+     *
+     * @param array<int|string, mixed> $data
+     * @return array<int|string, mixed>
+     */
+    protected static function normalizeIntegerEntries(array $data, int|string ...$keys): array
+    {
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $data) && is_string($data[$key])
+                && preg_match('/^-?\\d+$/', $data[$key]) === 1) {
+                $data[$key] = (int) $data[$key];
+            }
+        }
+
+        return $data;
     }
 
     protected function pem(string $type, string $der): string

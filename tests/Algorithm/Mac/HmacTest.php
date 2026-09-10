@@ -6,6 +6,11 @@ namespace Cose\Tests\Algorithm\Mac;
 
 use function base64_decode;
 use CBOR\ByteStringObject;
+use CBOR\Decoder;
+use CBOR\OtherObject\OtherObjectManager;
+use CBOR\StringStream;
+use CBOR\Tag\TagManager;
+use function chr;
 use Cose\Algorithm\Mac\Hmac;
 use Cose\Algorithm\Mac\HS256;
 use Cose\Algorithm\Mac\HS256Truncated64;
@@ -24,6 +29,7 @@ use function restore_error_handler;
 use function set_error_handler;
 use function sprintf;
 use function str_repeat;
+use function strlen;
 
 final class HmacTest extends TestCase
 {
@@ -292,6 +298,69 @@ final class HmacTest extends TestCase
         static::assertTrue($isValid);
         static::assertCount(2, $this->capturedErrors);
         static::assertSame(sprintf(Hmac::SHORT_KEY_MESSAGE, 1, 32), $this->capturedErrors[0]['message']);
+    }
+
+    /**
+     * spomky-labs/cbor-php renders a CBOR integer as a numeric string, so a symmetric COSE_Key decoded from CBOR
+     * carries the string "4" as its key type, which used to be compared against the integer 4 and rejected. The key
+     * type is now normalised for every key class, the generic one included.
+     */
+    #[Test]
+    #[DataProvider('getDecodedKeys')]
+    public function aKeyDecodedFromCborCanComputeAndVerifyAMac(Key $key): void
+    {
+        // Given
+        $algorithm = HS256::create();
+
+        // When
+        $mac = $algorithm->hash(self::DATA, $key);
+
+        // Then
+        static::assertSame(SymmetricKey::TYPE_OCT, $key->type());
+        static::assertTrue($algorithm->verify(self::DATA, $key, $mac));
+    }
+
+    /**
+     * The three sibling key classes accept the name of their key type, and Hmac has always accepted "oct" through a
+     * generic Key; SymmetricKey used to reject it, so the two disagreed on the same input.
+     */
+    #[Test]
+    public function theNameOfTheSymmetricKeyTypeIsAccepted(): void
+    {
+        // Given
+        $algorithm = HS256::create();
+        $k = base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true);
+
+        // When
+        $key = SymmetricKey::create([
+            SymmetricKey::TYPE => SymmetricKey::TYPE_NAME_OCT,
+            SymmetricKey::DATA_K => $k,
+        ]);
+
+        // Then
+        static::assertSame(SymmetricKey::TYPE_NAME_OCT, $key->type());
+        static::assertSame($algorithm->hash(self::DATA, $key), $algorithm->hash(self::DATA, SymmetricKey::create([
+            SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
+            SymmetricKey::DATA_K => $k,
+        ])));
+    }
+
+    /**
+     * The CBOR map {1: 4, -1: k}, as spomky-labs/cbor-php normalises it, reaching the algorithm through each of the
+     * three entry points a caller has.
+     *
+     * @return iterable<string, array{0: Key}>
+     */
+    public static function getDecodedKeys(): iterable
+    {
+        $k = base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true);
+        $decoded = (new Decoder(new TagManager(), new OtherObjectManager()))
+            ->decode(new StringStream("\xa2\x01\x04\x20\x58" . chr(strlen($k)) . $k))
+            ->normalize();
+
+        yield 'through Key::createFromData()' => [Key::createFromData($decoded)];
+        yield 'through SymmetricKey::create()' => [SymmetricKey::create($decoded)];
+        yield 'through the generic Key::create()' => [Key::create($decoded)];
     }
 
     /**

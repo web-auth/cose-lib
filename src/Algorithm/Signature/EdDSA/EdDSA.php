@@ -21,6 +21,7 @@ use function sodium_crypto_sign_seed_keypair;
 use function sodium_crypto_sign_verify_detached;
 use function sodium_memzero;
 use SodiumException;
+use Throwable;
 
 /**
  * @see \Cose\Tests\Algorithm\Signature\EdDSA\EdDSATest
@@ -55,7 +56,7 @@ class EdDSA implements Signature, KeyRestrictionAware
         if (! $key->isPrivate()) {
             throw new InvalidArgumentException('The key is not private.');
         }
-        if ($key->curve() !== OkpKey::CURVE_ED25519 && $key->curve() !== OkpKey::CURVE_NAME_ED25519) {
+        if ($key->curveId() !== OkpKey::CURVE_ED25519) {
             throw new InvalidArgumentException('Unsupported curve');
         }
 
@@ -88,7 +89,7 @@ class EdDSA implements Signature, KeyRestrictionAware
     public function verify(string $data, Key $key, string $signature): bool
     {
         $key = $this->handleKey($key, Key::OP_VERIFY);
-        if ($key->curve() !== OkpKey::CURVE_ED25519 && $key->curve() !== OkpKey::CURVE_NAME_ED25519) {
+        if ($key->curveId() !== OkpKey::CURVE_ED25519) {
             throw new InvalidArgumentException('Unsupported curve');
         }
         // Sodium reports a signature or a public key whose size is not the one Ed25519 defines with a
@@ -110,6 +111,14 @@ class EdDSA implements Signature, KeyRestrictionAware
     {
         $this->checkKeyRestrictions($key, $operation);
 
-        return OkpKey::create($key->getData());
+        try {
+            return OkpKey::create($key->getData());
+        } catch (InvalidArgumentException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            // A last resort: key material comes from the wire, and every rejection of it has to reach the caller as
+            // the exception type this library documents, never as a TypeError or an Error.
+            throw new InvalidArgumentException('Invalid OKP key', 0, $e);
+        }
     }
 }

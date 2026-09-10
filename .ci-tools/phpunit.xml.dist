@@ -7,6 +7,9 @@
     cacheDirectory=".phpunit.cache"
     executionOrder="random"
     resolveDependencies="true"
+    failOnWarning="true"
+    failOnNotice="true"
+    failOnDeprecation="true"
 >
 <coverage/>
 <testsuites>
