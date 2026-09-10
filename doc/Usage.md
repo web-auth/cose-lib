@@ -10,6 +10,8 @@ Content encryption itself is not implemented: the encryption tags carry a cipher
 
 - [Installation](#installation)
 - [COSE Tags](#cose-tags)
+- [Cryptographic Structures](#cryptographic-structures)
+- [Reading Headers](#reading-headers)
 - [Signature Operations](#signature-operations)
   - [COSE_Sign1 (Single Signer)](#cose_sign1-single-signer)
   - [COSE_Sign (Multiple Signers)](#cose_sign-multiple-signers)
@@ -19,8 +21,9 @@ Content encryption itself is not implemented: the encryption tags carry a cipher
 - [MAC Operations](#mac-operations)
   - [COSE_Mac0 (Without Recipients)](#cose_mac0-without-recipients)
   - [COSE_Mac (With Recipients)](#cose_mac-with-recipients)
-  - [Detached Content](#detached-content)
-  - [External Additional Authenticated Data](#external-additional-authenticated-data)
+- [CBOR Web Tokens (CWT)](#cbor-web-tokens-cwt)
+- [Detached Content](#detached-content)
+- [External Additional Authenticated Data](#external-additional-authenticated-data)
 - [Upgrading from the Cose\...Tag classes](#upgrading-from-the-cosetag-classes)
 - [Supported Algorithms](#supported-algorithms)
   - [Fully-Specified Algorithms](#fully-specified-algorithms)
@@ -71,6 +74,97 @@ COSE defines six main tags for different cryptographic operations:
 All seven are registered in the default decoder, so `Decoder::create()` resolves them without any `TagManager`
 configuration.
 
+## Cryptographic Structures
+
+A COSE signature or MAC never covers the payload on its own. It covers a **structure** that also binds the protected
+header and the message type, so a tag computed for a `COSE_Mac0` cannot be replayed on a `COSE_Mac`, and a signature
+made for one signer of a `COSE_Sign` cannot be lifted into a `COSE_Sign1`. These structures are what this library
+builds; casting one to string yields the CBOR bytes to hand to the algorithm.
+
+| RFC 9052 | Class | Context | Fields after the context |
+|---|---|---|---|
+| §4.4 `Sig_structure` | `Cose\Signature\Signature1` | `"Signature1"` | body_protected, external_aad, payload |
+| §4.4 `Sig_structure` | `Cose\Signature\Signature` | `"Signature"` | body_protected, **sign_protected**, external_aad, payload |
+| §6.3 `MAC_structure` | `Cose\Mac\Mac0Structure` | `"MAC0"` | protected, external_aad, payload |
+| §6.3 `MAC_structure` | `Cose\Mac\MacStructure` | `"MAC"` | protected, external_aad, payload |
+| §5.3 `Enc_structure` | `Cose\Encryption\Encrypt0Structure` | `"Encrypt0"` | protected, external_aad |
+| §5.3 `Enc_structure` | `Cose\Encryption\EncryptStructure` | `"Encrypt"` | protected, external_aad |
+| §5.3 `Enc_structure` | `RecipientStructure::forEncryptRecipient()` | `"Enc_Recipient"` | protected, external_aad |
+| §5.3 `Enc_structure` | `RecipientStructure::forMacRecipient()` | `"Mac_Recipient"` | protected, external_aad |
+| §5.3 `Enc_structure` | `RecipientStructure::forNestedRecipient()` | `"Rec_Recipient"` | protected, external_aad |
+
+```php
+use Cose\Mac\Mac0Structure;
+use Cose\Signature\Signature1;
+
+// Signing and verifying a COSE_Sign1
+$toBeSigned = Signature1::create($protectedHeaderAsBytes, $payload);
+$signature = $algorithm->sign((string) $toBeSigned, $privateKey);
+$isValid = $algorithm->verify((string) $toBeSigned, $publicKey, $signature);
+
+// Authenticating a COSE_Mac0 — the same shape, a different context string
+$toBeMaced = Mac0Structure::create($protectedHeaderAsBytes, $payload);
+$macTag = $macAlgorithm->hash((string) $toBeMaced, $symmetricKey);
+```
+
+> [!WARNING]
+> `Cose\Algorithm\Mac\Mac::hash()` and `verify()` authenticate exactly the bytes they are given. Passing
+> `getPayload()->getValue()` straight to them produces a tag bound to no header, no algorithm and no message type,
+> which no other implementation will accept.
+
+The protected header is passed as the **byte string the message carries**, not as a map: the structure has to embed
+it verbatim, or the signature no longer verifies. `HeaderMapHelper::encodeProtected()` produces those bytes from a
+map, applying the RFC 9052 §3 rules on the way out.
+
+Every structure takes the optional `external_aad` of §4.4 as its last argument, defaulting to the zero-length byte
+string the RFC prescribes:
+
+```php
+$toBeSigned = Signature1::create(
+    $protectedHeaderAsBytes,
+    $payload,
+    ByteStringObject::create($applicationSuppliedData),
+);
+```
+
+## Reading Headers
+
+cbor-php carries the two header buckets; RFC 9052 decides what they mean. `Cose\Structure\CoseHeaders` applies the
+second part to any COSE message:
+
+```php
+use Cose\Structure\CoseHeaders;
+
+$headers = CoseHeaders::fromMessage($coseSign1);   // any CBOR\Tag\Cose*Tag
+
+$headers->getProtectedHeaderParameter(1);          // ?CBORObject — protected bucket only
+$headers->getUnprotectedHeaderParameter(4);        // ?CBORObject — unprotected bucket only
+$headers->getHeaderParameter(1);                   // ?CBORObject — protected first, then unprotected
+$headers->getProtectedHeaderAsMap();               // MapObject, decoded and checked
+```
+
+What it enforces, and why the raw `MapObject` accessors are not enough:
+
+- **A label is an integer *or* a text string** ([§1.5](https://datatracker.ietf.org/doc/html/rfc9052#section-1.5)),
+  and the two are different labels. cbor-php normalizes the integer `1`, the text string `"1"` and the byte string
+  `h'31'` to the same map offset, so `$map->has(1)` answers `true` for all three. `getProtectedHeaderParameter(1)`
+  matches the type as well, and only the integer `1` is the algorithm parameter.
+- **A byte-string key is not a label at all** and makes the header malformed.
+- **The zero-length protected header is accepted** ([§3](https://datatracker.ietf.org/doc/html/rfc9052#section-3):
+  "Recipients MUST accept both a zero-length byte string and a zero-length map encoded in a byte string"), and
+  **trailing bytes inside the protected bucket are not** — the CDDL `bstr .cbor header_map` holds exactly one item.
+- **The protected bucket wins a combined lookup**, because that is the value the signature or the MAC commits to.
+
+For a per-signer or per-recipient bucket, `CoseSignature` and `CoseRecipient` expose the same lookups; for a header
+map you assembled yourself, use `CoseHeaders::of($protectedBytes, $unprotectedMap)`.
+
+The protected header is decoded with a decoder bounded to `CoseHeaders::DEFAULT_PROTECTED_HEADER_MAX_DEPTH` (32)
+levels of nesting. Pass your own `Decoder` when a header carries custom CBOR tags, or a different `$maxDepth`:
+
+```php
+$headers = CoseHeaders::fromMessage($coseSign1, $customDecoder);
+```
+
 ## Signature Operations
 
 ### COSE_Sign1 (Single Signer)
@@ -81,67 +175,60 @@ The `COSE_Sign1` structure is used when a message has a single signer.
 
 ```php
 use CBOR\ByteStringObject;
+use CBOR\ListObject;
 use CBOR\MapItem;
 use CBOR\MapObject;
 use CBOR\NegativeIntegerObject;
 use CBOR\Tag\CoseSign1Tag;
 use CBOR\UnsignedIntegerObject;
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Key\Ec2Key;
+use Cose\Signature\Signature1;
+use Cose\Structure\HeaderMapHelper;
 
-// Create headers
+$algorithm = ES256::create();
+$key = Ec2Key::create($yourPrivateCoseKey);
+
+// Define headers
 $protectedHeader = MapObject::create([
     MapItem::create(
-        UnsignedIntegerObject::create(1), // alg label
-        NegativeIntegerObject::create(-7) // ES256 algorithm
+        UnsignedIntegerObject::create(1),                  // alg
+        NegativeIntegerObject::create(ES256::identifier()) // ES256 (-7)
     ),
 ]);
-
 $unprotectedHeader = MapObject::create([
     MapItem::create(
-        UnsignedIntegerObject::create(4), // kid label
-        ByteStringObject::create('my-key-id') // key identifier
+        UnsignedIntegerObject::create(4),                  // kid
+        ByteStringObject::create('my-key-id')
     ),
 ]);
-
-// Payload
 $payload = ByteStringObject::create('Message to sign');
 
-// Create signature (you would typically use a cryptographic library here)
-$signature = ByteStringObject::create($yourSignatureBytes);
+// The signature covers the Sig_structure, never the payload on its own. Encode the protected bucket once, so the
+// bytes that are signed are the bytes the message carries. HeaderMapHelper applies RFC 9052 §3 on the way out: an
+// empty map becomes h'' rather than h'a0', and the labels are checked (§1.5, §9).
+$protectedHeaderAsBytes = HeaderMapHelper::encodeProtected($protectedHeader);
+$toBeSigned = Signature1::create($protectedHeaderAsBytes, $payload);
+$signature = ByteStringObject::create($algorithm->sign((string) $toBeSigned, $key));
 
-// Create the COSE_Sign1 tag
-$coseSign1 = CoseSign1Tag::createFromComponents(
-    $protectedHeader,
+// Assemble the message around those exact bytes
+$coseSign1 = CoseSign1Tag::create(ListObject::create([
+    $protectedHeaderAsBytes,
     $unprotectedHeader,
     $payload,
-    $signature
-);
+    $signature,
+]));
 
 // Encode to CBOR
 $encoded = (string) $coseSign1;
 ```
 
-> [!IMPORTANT]
-> `createFromComponents()` encodes the protected map itself. A signer computes its `Sig_structure` over the *bytes* of
-> that bucket, so build them once and pass them to both, using `create()` when the bytes have to travel verbatim:
->
-> ```php
-> use CBOR\ListObject;
-> use Cose\Structure\HeaderMapHelper;
->
-> // HeaderMapHelper applies RFC 9052 §3 on the way out: an empty map becomes h'' rather than h'a0', and the labels
-> // are checked (§1.5, §9).
-> $protectedHeaderAsBytes = HeaderMapHelper::encodeProtected($protectedHeader);
->
-> $toBeSigned = Signature1::create($protectedHeaderAsBytes, $payload);
-> $signature = ByteStringObject::create($algorithm->sign((string) $toBeSigned, $key));
->
-> $coseSign1 = CoseSign1Tag::create(ListObject::create([
->     $protectedHeaderAsBytes,
->     $unprotectedHeader,
->     $payload,
->     $signature,
-> ]));
-> ```
+> [!NOTE]
+> `CoseSign1Tag::createFromComponents($protectedHeader, $unprotectedHeader, $payload, $signature)` takes the protected
+> header as a **map** and encodes it itself, which is shorter but re-encodes what you already signed. Use it when the
+> signature is computed after the message, and `create()` — as above — when the bytes have to travel verbatim.
+> [`examples/01-sign1.php`](examples/01-sign1.php) is the whole round trip, key generation included, and runs as it
+> stands.
 
 #### Decoding and Verifying a COSE_Sign1 Message
 
@@ -424,7 +511,50 @@ $coseMac = CoseMacTag::createFromComponents(
 > `getPayload()->getValue()` straight to them produces a tag bound to nothing and interoperable with no other
 > implementation.
 
-### Detached Content
+## CBOR Web Tokens (CWT)
+
+A CWT ([RFC 8392](https://datatracker.ietf.org/doc/html/rfc8392)) is a claims map carried as the payload of a COSE
+message — most often a `COSE_Sign1`. cbor-php 3.4.0 also ships `CBOR\Tag\CwtTag` for the optional tag 61 that marks
+the whole thing as a CWT.
+
+Nothing about the verification changes: the payload is opaque bytes to COSE, and the claims are decoded once the
+signature checks out.
+
+```php
+use CBOR\Decoder;
+use CBOR\StringStream;
+use CBOR\Tag\CoseSign1Tag;
+use CBOR\Tag\CwtTag;
+use Cose\Signature\Signature1;
+use Cose\Structure\CoseHeaders;
+
+$decoded = Decoder::create()->decode(StringStream::create($encoded));
+
+// Tag 61 is optional; the message underneath is the COSE structure
+$message = $decoded instanceof CwtTag ? $decoded->getValue() : $decoded;
+assert($message instanceof CoseSign1Tag);
+
+// Verify first
+$toBeVerified = Signature1::create($message->getProtectedHeader(), $message->getPayload());
+if (! $algorithm->verify((string) $toBeVerified, $key, $message->getSignature()->getValue())) {
+    throw new RuntimeException('Invalid signature');
+}
+
+// Then read the claims (RFC 8392 §3.1: 1 = iss, 2 = sub, 3 = aud, 4 = exp, 5 = nbf, 6 = iat, 7 = cti)
+$claims = Decoder::create()
+    ->decode(StringStream::create($message->getPayload()->getValue()))
+    ->normalize();
+
+// ['1' => 'coap://as.example.com', '6' => '1443944944'] — cbor-php normalizes CBOR integers to numeric strings,
+// so cast the timestamps before comparing them.
+$expiresAt = isset($claims[4]) ? (int) $claims[4] : null;
+```
+
+> [!IMPORTANT]
+> Verify before you read. A claims map decoded from an unverified payload is attacker-controlled input, and `exp` or
+> `iss` read from it means nothing.
+
+## Detached Content
 
 [RFC 9052 §4.1](https://datatracker.ietf.org/doc/html/rfc9052#section-4.1) lets the payload — or the ciphertext of an
 encrypted message — travel outside the message, as a `nil` in its place:
@@ -449,7 +579,7 @@ if ($payload instanceof NullObject) {
 $toBeSigned = Signature1::create($coseSign1->getProtectedHeader(), $payload);
 ```
 
-### External Additional Authenticated Data
+## External Additional Authenticated Data
 
 Every structure takes the optional `external_aad` of
 [RFC 9052 §4.4](https://datatracker.ietf.org/doc/html/rfc9052#section-4.4) as its last argument. It defaults to the
@@ -1025,12 +1155,37 @@ The following header parameters are commonly used in COSE structures:
 
 ## Examples
 
-Complete examples can be found in the `tests/` directory:
+The [`examples/`](../examples) directory holds a runnable program per topic. Each prints what it does and fails
+loudly if a check does not hold, and `tests/ExamplesTest.php` runs all of them on each build:
 
-- `tests/Signature/CoseSign1CreateAndVerifyTest.php` - COVID certificate verification
-- `tests/Signature/CoseSignTagTest.php` - Multiple signatures
-- `tests/Encryption/CoseEncrypt0TagTest.php` - Single recipient encryption
-- `tests/Mac/CoseMac0TagTest.php` - MAC without recipients
+```bash
+composer install
+php examples/01-sign1.php
+```
+
+| File | Topic |
+|---|---|
+| `examples/01-sign1.php` | COSE_Sign1: sign, encode, decode, verify |
+| `examples/02-sign-multiple-signers.php` | COSE_Sign, and why `Signature` carries `sign_protected` |
+| `examples/03-mac0.php` | COSE_Mac0 over the MAC_structure |
+| `examples/04-encrypt0.php` | COSE_Encrypt0 with `Enc_structure` as the AEAD's AAD |
+| `examples/05-encrypt-recipients.php` | COSE_Encrypt: key wrapping, nested recipients, detached ciphertext |
+| `examples/06-headers.php` | The header rules, against what the raw CBOR map answers |
+| `examples/07-detached-and-external-aad.php` | Detached content and `external_aad` |
+| `examples/08-cwt.php` | CBOR Web Tokens |
+| `examples/09-migration.php` | Moving off the deprecated `Cose\...Tag` classes |
+
+The test suite is the rest of the examples, and every one of them is executed on each build:
+
+| File | Shows |
+|---|---|
+| `tests/Signature/DocumentedVerifierTest.php` | The verifier documented above, run exactly as written |
+| `tests/Structure/CoseStructureTest.php` | The structures against the RFC 9052 Appendix C vectors |
+| `tests/Structure/CoseHeadersTest.php` | The header rules, on all six message types |
+| `tests/Structure/CoseSignatureTest.php` | Per-signer views of a `COSE_Sign` |
+| `tests/Structure/CoseRecipientTest.php` | Per-recipient views, nested recipients and detached ciphertext |
+| `tests/Signature/CoseSign1CreateAndVerifyTest.php` | EU digital COVID certificate verification |
+| `tests/Structure/DeprecatedTagClassesTest.php` | The deprecation and the upstream replacements |
 
 ## References
 
