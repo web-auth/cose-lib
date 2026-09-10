@@ -227,7 +227,7 @@ $encoded = (string) $coseSign1;
 > `CoseSign1Tag::createFromComponents($protectedHeader, $unprotectedHeader, $payload, $signature)` takes the protected
 > header as a **map** and encodes it itself, which is shorter but re-encodes what you already signed. Use it when the
 > signature is computed after the message, and `create()` — as above — when the bytes have to travel verbatim.
-> `example.php` at the root of this repository is the whole round trip, key generation included, and runs as it
+> [`examples/01-sign1.php`](examples/01-sign1.php) is the whole round trip, key generation included, and runs as it
 > stands.
 
 #### Decoding and Verifying a COSE_Sign1 Message
@@ -1155,13 +1155,25 @@ The following header parameters are commonly used in COSE structures:
 
 ## Examples
 
-`example.php` at the root of this repository is a complete signing and verification round trip, key generation
-included, and runs as it stands:
+The [`examples/`](../examples) directory holds a runnable program per topic. Each prints what it does and fails
+loudly if a check does not hold, and `tests/ExamplesTest.php` runs all of them on each build:
 
 ```bash
 composer install
-php example.php
+php examples/01-sign1.php
 ```
+
+| File | Topic |
+|---|---|
+| `examples/01-sign1.php` | COSE_Sign1: sign, encode, decode, verify |
+| `examples/02-sign-multiple-signers.php` | COSE_Sign, and why `Signature` carries `sign_protected` |
+| `examples/03-mac0.php` | COSE_Mac0 over the MAC_structure |
+| `examples/04-encrypt0.php` | COSE_Encrypt0 with `Enc_structure` as the AEAD's AAD |
+| `examples/05-encrypt-recipients.php` | COSE_Encrypt: key wrapping, nested recipients, detached ciphertext |
+| `examples/06-headers.php` | The header rules, against what the raw CBOR map answers |
+| `examples/07-detached-and-external-aad.php` | Detached content and `external_aad` |
+| `examples/08-cwt.php` | CBOR Web Tokens |
+| `examples/09-migration.php` | Moving off the deprecated `Cose\...Tag` classes |
 
 The test suite is the rest of the examples, and every one of them is executed on each build:
 

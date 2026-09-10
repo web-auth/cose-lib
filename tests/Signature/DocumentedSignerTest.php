@@ -26,7 +26,7 @@ use function str_pad;
 use const STR_PAD_LEFT;
 
 /**
- * The COSE_Sign1 signer documented in README.md, doc/Usage.md and example.php, run as it is written there.
+ * The COSE_Sign1 signer documented in README.md and doc/Usage.md, run as it is written there.
  *
  * The documented creation snippet used to end at `ByteStringObject::create($yourSignatureBytes)` -- a placeholder
  * that made the example impossible to run, and left the one thing worth showing (that the signature covers the
@@ -41,7 +41,7 @@ final class DocumentedSignerTest extends TestCase
     private const KID = 'my-key-id';
 
     /**
-     * The round trip of example.php: sign, encode, decode, verify.
+     * The round trip of examples/01-sign1.php: sign, encode, decode, verify.
      */
     #[Test]
     public function theDocumentedRoundTripProducesAVerifiableMessage(): void
@@ -123,7 +123,7 @@ final class DocumentedSignerTest extends TestCase
     }
 
     /**
-     * The signing half of example.php, copied as it is documented.
+     * The signing half of the documented example, copied as it is documented.
      */
     private static function documentedSigner(Ec2Key $key): string
     {
@@ -155,7 +155,7 @@ final class DocumentedSignerTest extends TestCase
     }
 
     /**
-     * The verifying half of example.php.
+     * The verifying half.
      */
     private static function verify(string $encoded, Ec2Key $key): bool
     {

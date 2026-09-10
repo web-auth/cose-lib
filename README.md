@@ -192,11 +192,12 @@ $encoded = (string) $coseSign1;
 > `CoseSign1Tag::createFromComponents($protectedHeader, $unprotectedHeader, $payload, $signature)` takes the protected
 > header as a **map** and encodes it itself, which is shorter but re-encodes what you already signed. Use it when the
 > signature is computed after the message, and `create()` — as above — when the bytes have to travel verbatim.
-> `example.php` at the root of this repository is the whole round trip, key generation included, and runs as it
+> [`examples/01-sign1.php`](examples/01-sign1.php) is the whole round trip, key generation included, and runs as it
 > stands.
 
 ## Documentation
 
+- **[Examples](examples/)** - A runnable program per topic; `php examples/01-sign1.php` to start
 - **[Usage Guide](doc/Usage.md)** - Complete documentation with examples
 - **[RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052)** - COSE Structures
 - **[RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053)** - COSE Algorithms

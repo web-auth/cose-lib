@@ -9,4 +9,4 @@
 /.gitattributes export-ignore
 /.gitignore export-ignore
 /castor.php export-ignore
-/example.php export-ignore
+/examples export-ignore
