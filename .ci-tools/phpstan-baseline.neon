@@ -13,24 +13,6 @@ parameters:
 			path: ../src/Algorithm/Signature/ECDSA/ECDSA.php
 
 		-
-			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECSignature::fromAsn1() should return string but returns string|false.'
-			identifier: return.type
-			count: 1
-			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
-
-		-
-			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECSignature::toAsn1() should return string but returns string|false.'
-			identifier: return.type
-			count: 1
-			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
-
-		-
-			rawMessage: 'Strict comparison using === between ''30'' and ''81'' will always evaluate to false.'
-			identifier: identical.alwaysFalse
-			count: 1
-			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
-
-		-
 			rawMessage: 'Parameter #1 $signature of function sodium_crypto_sign_verify_detached expects non-empty-string, string given.'
 			identifier: argument.type
 			count: 1
@@ -53,12 +35,6 @@ parameters:
 			identifier: return.type
 			count: 1
 			path: ../src/Algorithm/Signature/FullySpecified/Ed448.php
-
-		-
-			rawMessage: 'Parameter #1 $codepoint of function chr expects int<0, 255>, int given.'
-			identifier: argument.type
-			count: 3
-			path: ../src/Algorithm/Signature/RSA/PSSRSA.php
 
 		-
 			rawMessage: 'Parameter #1 $length of function random_bytes expects int<1, max>, int given.'
