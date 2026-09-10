@@ -191,7 +191,44 @@ the key. They live in the `Cose\Algorithm\Signature\FullySpecified` namespace.
 > $algorithm = RS1::create(acknowledgeInsecureAlgorithm: true);
 > ```
 >
+> The same acknowledgement applies to `Algorithms::getOpensslAlgorithmFor()` and `Algorithms::getHashAlgorithmFor()`,
+> which hand out the very same primitive without any object being created:
+>
+> ```php
+> use Cose\Algorithms;
+>
+> $digest = Algorithms::getOpensslAlgorithmFor(Algorithms::COSE_ALGORITHM_RS1, acknowledgeInsecureAlgorithm: true);
+> ```
+>
 > As of the next major version, omitting that acknowledgement will throw an exception instead of warning.
+
+#### Non-standard Algorithms
+
+| Algorithm | Identifier | Description |
+|-----------|------------|-------------|
+| Ed256 | -260 | Pure Ed25519 over the SHA-256 digest of the payload — see below |
+| Ed512 | -261 | Pure Ed25519 over the SHA-512 digest of the payload — see below |
+
+> [!WARNING]
+> **`Ed256` and `Ed512` are not defined by any specification, and their identifiers are not theirs.** Both hash the
+> payload and sign the digest with pure Ed25519, without the `dom2` prefix that would make it the Ed25519ph of
+> [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032) §5.1 — whose §8.5 says prehashed variants "SHOULD NOT be used"
+> anyway. IANA has since assigned -260 to WalnutDSA ([RFC 9021](https://www.rfc-editor.org/rfc/rfc9021)) and -261 to
+> TurboSHAKE128 ([RFC 9861](https://www.rfc-editor.org/rfc/rfc9861)), so a conforming implementation reads objects
+> produced by these classes as those algorithms. Despite its name, `Ed512` is not Ed448 and rejects an Ed448 key; use
+> `Cose\Algorithm\Signature\FullySpecified\Ed448` (-53) for that.
+>
+> No authenticator emits these identifiers. Prefer `Ed25519` (-8 or -19). If a deployment already uses the
+> construction on both ends, acknowledge it explicitly:
+>
+> ```php
+> use Cose\Algorithm\Signature\EdDSA\Ed256;
+>
+> $algorithm = Ed256::create(acknowledgeNonStandardAlgorithm: true);
+> ```
+>
+> As of the next major version, omitting that acknowledgement will throw an exception, and the identifiers will move
+> out of the range IANA administers.
 
 ### MAC Algorithms
 
@@ -273,6 +310,62 @@ own, without any modulus length policy:
 // Throws an InvalidArgumentException unless the modulus is odd and 3 <= e < n
 RsaKeyValidator::checkPublicParameters($key);
 ```
+
+## Verifying a Signature Made by a Certificate
+
+WebAuthn Level 3 §8.2 to §8.4 ask a relying party to verify a packed (`x5c`), TPM or android-key attestation statement
+"with the algorithm specified in `alg`", against the key of the attestation certificate. Going through
+`Algorithms::getOpensslAlgorithmFor()` and `openssl_verify()` only reaches the algorithms an `OPENSSL_ALGO_*` digest
+can describe — ECDSA and RSASSA-PKCS1-v1_5 — because that digest implies PKCS #1 v1.5 padding; RSASSA-PSS, EdDSA,
+Ed25519 and Ed448 cannot be expressed that way at all.
+
+`Cose\Algorithm\Signature\CertificateSignatureVerifier` takes the other route: the key of the certificate becomes a
+`Cose\Key\Key`, and the `Signature` class registered for the identifier verifies with it.
+
+```php
+use Cose\Algorithm\Manager;
+use Cose\Algorithm\Signature\CertificateSignatureVerifier;
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Algorithm\Signature\RSA\PS256;
+use Cose\Key\RsaKeyValidator;
+
+$manager = Manager::create()->add(ES256::create(), PS256::create());
+
+// The RsaKeyValidator is optional: it applies a minimum modulus length to RSA certificates.
+$verifier = CertificateSignatureVerifier::create($manager, RsaKeyValidator::create());
+
+$isValid = $verifier->verify($alg, $certificatePem, $data, $signature);
+```
+
+The set of acceptable algorithms is the `Manager` the operator built, not a constant of this library: an `alg` that
+comes from the wire cannot select a verifier that was never registered. `verify()` returns `false` for every signature
+the algorithm rejects, and throws an `InvalidArgumentException` when the certificate cannot be read, when no signature
+algorithm is registered for the identifier, or when the key of the certificate cannot be used with that algorithm.
+
+The key alone is enough when the certificate is not at hand — `verifySubjectPublicKeyInfo()` takes a
+SubjectPublicKeyInfo, and `Cose\Key\PublicKeyLoader` exposes the conversion on its own. Both accept PEM or DER.
+
+```php
+use Cose\Key\PublicKeyLoader;
+
+$key = PublicKeyLoader::fromCertificate($certificatePem);
+$key = PublicKeyLoader::fromSubjectPublicKeyInfo($spkiPem);
+```
+
+## Registering Algorithms
+
+`Cose\Algorithm\Manager` registers each algorithm under the identifier it declares, and
+`Cose\Algorithm\ManagerFactory` registers algorithms under aliases so that a `Manager` can be generated from a
+subset of them.
+
+A later registration for an identifier (or an alias) that is already taken replaces the earlier one. When the
+replacement is an instance of **another** class, that is a misconfiguration rather than an intent — `list()` keeps
+reporting a single entry, and which verifier answers for the identifier is decided by registration order alone — so an
+`E_USER_WARNING` is emitted. Registering the same class twice stays silent, so a container that autoconfigures an
+algorithm more than once keeps working.
+
+As of the next major version, a duplicate bound to a different class will throw an `InvalidArgumentException`, and an
+explicit `replace()` will be the way to override a registration on purpose.
 
 ## Performance
 
