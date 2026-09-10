@@ -142,6 +142,55 @@ final class FullySpecifiedEcdsaTest extends TestCase
     }
 
     /**
+     * The fully specified algorithms compare the curve of the key through its registry value, so a key that names
+     * its curve - which RFC 9053, section 7.1 allows and Ec2Key accepts - is usable with them too.
+     */
+    #[Test]
+    #[DataProvider('getNamedCurveVectors')]
+    public function aKeyThatNamesItsCurveCanSignAndVerify(ECDSA $algorithm, Ec2Key $key, int $signatureLength): void
+    {
+        // Given
+        $data = 'Live long and Prosper.';
+
+        // When
+        $signature = $algorithm->sign($data, $key);
+
+        // Then
+        static::assertIsString($key->curve());
+        static::assertSame($signatureLength, strlen($signature));
+        static::assertTrue($algorithm->verify($data, $key, $signature));
+    }
+
+    #[Test]
+    public function aKeyThatNamesAnotherCurveIsRejected(): void
+    {
+        // Given
+        $algorithm = ESP256::create();
+        $key = self::key(Ec2Key::CURVE_NAME_BP256, self::BRAINPOOL_P256);
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('This key cannot be used with this algorithm');
+
+        // When
+        $algorithm->sign('Live long and Prosper.', $key);
+    }
+
+    /**
+     * @return iterable<string, array{ECDSA, Ec2Key, int}>
+     */
+    public static function getNamedCurveVectors(): iterable
+    {
+        yield 'ESP256' => [ESP256::create(), self::key(Ec2Key::CURVE_NAME_P256, self::NIST_P256), 64];
+        yield 'ESP384' => [ESP384::create(), self::key(Ec2Key::CURVE_NAME_P384, self::NIST_P384), 96];
+        yield 'ESP512' => [ESP512::create(), self::key(Ec2Key::CURVE_NAME_P521, self::NIST_P521), 132];
+        yield 'ESB256' => [ESB256::create(), self::key(Ec2Key::CURVE_NAME_BP256, self::BRAINPOOL_P256), 64];
+        yield 'ESB320' => [ESB320::create(), self::key(Ec2Key::CURVE_NAME_BP320, self::BRAINPOOL_P320), 80];
+        yield 'ESB384' => [ESB384::create(), self::key(Ec2Key::CURVE_NAME_BP384, self::BRAINPOOL_P384), 96];
+        yield 'ESB512' => [ESB512::create(), self::key(Ec2Key::CURVE_NAME_BP512, self::BRAINPOOL_P512), 128];
+    }
+
+    /**
      * @return iterable<string, array{ECDSA, Ec2Key, int}>
      */
     public static function getVectors(): iterable
@@ -158,7 +207,7 @@ final class FullySpecifiedEcdsaTest extends TestCase
     /**
      * @param array{string, string, string} $coordinates
      */
-    private static function key(int $curve, array $coordinates): Ec2Key
+    private static function key(int|string $curve, array $coordinates): Ec2Key
     {
         [$x, $y, $d] = $coordinates;
 

@@ -15,6 +15,7 @@ use function openssl_sign;
 use function openssl_verify;
 use const PHP_VERSION_ID;
 use RuntimeException;
+use Throwable;
 
 /**
  * EdDSA using the Ed448 parameter set of RFC 8032, section 5.2.
@@ -95,8 +96,16 @@ final class Ed448 implements Signature
             );
         }
 
-        $key = OkpKey::create($key->getData());
-        if ($key->curve() !== OkpKey::CURVE_ED448 && $key->curve() !== OkpKey::CURVE_NAME_ED448) {
+        try {
+            $key = OkpKey::create($key->getData());
+        } catch (InvalidArgumentException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            // A last resort: key material comes from the wire, and every rejection of it has to reach the caller as
+            // the exception type this library documents, never as a TypeError or an Error.
+            throw new InvalidArgumentException('Invalid OKP key', 0, $e);
+        }
+        if ($key->curveId() !== OkpKey::CURVE_ED448) {
             throw new InvalidArgumentException('This key cannot be used with this algorithm');
         }
 

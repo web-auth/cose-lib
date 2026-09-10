@@ -14,6 +14,7 @@ use function openssl_pkey_get_public;
 use function openssl_sign;
 use function openssl_verify;
 use function strlen;
+use Throwable;
 
 /**
  * @see \Cose\Tests\Algorithm\Signature\ECDSA\ECDSATest
@@ -74,8 +75,18 @@ abstract class ECDSA implements Signature
 
     private function handleKey(Key $key): Ec2Key
     {
-        $key = Ec2Key::create($key->getData());
-        if ($key->curve() !== $this->getCurve()) {
+        try {
+            $key = Ec2Key::create($key->getData());
+        } catch (InvalidArgumentException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            // A last resort: key material comes from the wire, and every rejection of it has to reach the caller as
+            // the exception type this library documents, never as a TypeError or an Error.
+            throw new InvalidArgumentException('Invalid EC2 key', 0, $e);
+        }
+        // RFC 9053 section 7.1 lets a key name its curve instead of numbering it, so the two are compared through
+        // the registry value rather than through whichever of the two forms the key happens to carry.
+        if ($key->curveId() !== $this->getCurve()) {
             throw new InvalidArgumentException('This key cannot be used with this algorithm');
         }
 

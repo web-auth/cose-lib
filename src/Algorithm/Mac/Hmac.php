@@ -6,7 +6,12 @@ namespace Cose\Algorithm\Mac;
 
 use Cose\Key\Key;
 use Cose\Key\SymmetricKey;
+use function hash_equals;
+use function hash_hmac;
+use function intdiv;
 use InvalidArgumentException;
+use function substr;
+use Throwable;
 
 /**
  * @see \Cose\Tests\Algorithm\Mac\HmacTest
@@ -15,8 +20,11 @@ abstract class Hmac implements Mac
 {
     public function hash(string $data, Key $key): string
     {
-        $this->checKey($key);
-        $signature = hash_hmac($this->getHashAlgorithm(), $data, (string) $key->get(SymmetricKey::DATA_K), true);
+        // The key is rebuilt as a SymmetricKey so that the sole definition of what a usable symmetric key is lives
+        // in that class, as it does for the ECDSA, EdDSA and RSA algorithms. RFC 9052 section 7.1: "Implementations
+        // MUST verify that the key type is appropriate for the algorithm being processed."
+        $key = $this->handleKey($key);
+        $signature = hash_hmac($this->getHashAlgorithm(), $data, $key->k(), true);
 
         return substr($signature, 0, intdiv($this->getSignatureLength(), 8));
     }
@@ -30,14 +38,14 @@ abstract class Hmac implements Mac
 
     abstract protected function getSignatureLength(): int;
 
-    private function checKey(Key $key): void
+    private function handleKey(Key $key): SymmetricKey
     {
-        if ($key->type() !== Key::TYPE_OCT && $key->type() !== Key::TYPE_NAME_OCT) {
-            throw new InvalidArgumentException('Invalid key. Must be of type symmetric');
-        }
-
-        if (! $key->has(SymmetricKey::DATA_K)) {
-            throw new InvalidArgumentException('Invalid key. The value of the key is missing');
+        try {
+            return SymmetricKey::create($key->getData());
+        } catch (InvalidArgumentException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new InvalidArgumentException('Invalid symmetric key', 0, $e);
         }
     }
 }

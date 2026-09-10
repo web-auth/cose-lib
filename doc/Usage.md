@@ -19,6 +19,7 @@ This library provides full support for COSE (CBOR Object Signing and Encryption)
   - [Fully-Specified Algorithms](#fully-specified-algorithms)
   - [Signature Verification Contract](#signature-verification-contract)
   - [Ed25519 Private Keys](#ed25519-private-keys)
+  - [Key Parameter Forms](#key-parameter-forms)
   - [Validating RSA Keys](#validating-rsa-keys)
 
 ## Installation
@@ -407,6 +408,42 @@ $publicCoseKey = $key->toPublic(); // carries the recomputed x, without d
 
 `x()` recomputes the public key for the curves sodium covers, Ed25519 and X25519. Ed448 and X448 have no derivation
 primitive in PHP, so a key on those curves still has to carry its `x`.
+
+### Key Parameter Forms
+
+RFC 9052 and RFC 9053 type `kty` and `crv` as `tstr / int`, so the same key reaches this library under several
+shapes. The `Key` classes settle them all at construction time:
+
+- a key type or a curve given as the numeric string spomky-labs/cbor-php produces when it decodes a CBOR integer
+  (`'2'`, `'-1'`) is stored as the integer it denotes, so `Key::type()` always compares equal to `Key::TYPE_EC2` and
+  friends, whether the key was decoded from CBOR or built by hand;
+- a key type may also be given by name: `EC`, `OKP`, `RSA` or `oct`;
+- a curve may be given by name — `P-256`, `P-384`, `P-521`, `secp256k1`, `brainpoolP256r1` and so on. `curve()`
+  returns the form the key carries, and `Ec2Key::curveId()` / `OkpKey::curveId()` return the value of the IANA
+  [COSE Elliptic Curves](https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves) registry whatever that
+  form is. The algorithm classes compare the latter, so a key that names its curve signs and verifies exactly like
+  the same key that numbers it.
+
+```php
+use Cose\Key\Ec2Key;
+
+$key = Ec2Key::create([
+    Ec2Key::TYPE => Ec2Key::TYPE_EC2,
+    Ec2Key::DATA_CURVE => Ec2Key::CURVE_NAME_SECP256K1, // or Ec2Key::CURVE_P256K
+    Ec2Key::DATA_X => $x,
+    Ec2Key::DATA_Y => $y,
+]);
+
+$key->curve();   // 'secp256k1', as supplied
+$key->curveId(); // 8, the registry value
+```
+
+Curve 8 is named `secp256k1` by [RFC 8812, section 4.2](https://datatracker.ietf.org/doc/html/rfc8812#section-4.2).
+`Ec2Key::CURVE_NAME_P256K` (`'P-256K'`), the spelling of a draft that was renamed before its first revision, is
+deprecated but still accepted.
+
+Anything else — a float, a numeric string that is not an integer, a name no registry defines, an `x` that is not a
+byte string — is refused by the constructor with an `InvalidArgumentException`, before any of it is used.
 
 ### Validating RSA Keys
 
