@@ -412,8 +412,16 @@ primitive in PHP, so a key on those curves still has to carry its `x`.
 
 [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) defers to
 [RFC 8230, section 6.1](https://www.rfc-editor.org/rfc/rfc8230#section-6.1), which requires a modulus of 2048 bits or
-larger and expects implementations to handle up to 16K bits. Nothing applies those bounds automatically, so run them
-explicitly before handing a key to an algorithm:
+larger and expects implementations to handle up to 16K bits.
+
+The upper bounds are applied automatically: every RSA algorithm rejects a key whose modulus is longer than
+`RsaKeyValidator::MAXIMUM_MODULUS_LENGTH` (16384) bits or whose public exponent is longer than
+`RsaKeyValidator::MAXIMUM_EXPONENT_LENGTH` (256) bits, before it computes anything with it. `verify()` returns `false`
+for such a key and `sign()` throws an `InvalidArgumentException`. The cost of an RSA operation grows with the size of
+the key it is given, and a verifier takes that key from whoever produced the message.
+
+The **minimum** modulus length is a policy decision and stays opt-in, so run it explicitly before handing a key to an
+algorithm:
 
 ```php
 use Cose\Key\RsaKey;
@@ -430,13 +438,19 @@ $isAcceptable = RsaKeyValidator::create()->isValid($key);
 // The bounds can be tightened
 RsaKeyValidator::create(minimumModulusLength: 3072, maximumModulusLength: 8192)->check($key);
 
-// The modulus length, in bits, is available on its own
-$length = RsaKeyValidator::modulusLength($key);
+// The modulus and exponent lengths, in bits, are available on their own
+$modulusLength = RsaKeyValidator::modulusLength($key);
+$exponentLength = RsaKeyValidator::exponentLength($key);
+
+// The bounds the algorithms apply on their own, should you want to run them earlier
+RsaKeyValidator::checkLengthBounds($key);
 ```
 
 The validator also enforces the public exponent constraints of
 [RFC 8017, section 3.1](https://datatracker.ietf.org/doc/html/rfc8017#section-3.1): an odd integer between 3 and
 `n - 1`.
+
+Every check is performed on the octet strings of the key, so rejecting an oversized key costs no more than reading it.
 
 ### MAC Algorithms
 

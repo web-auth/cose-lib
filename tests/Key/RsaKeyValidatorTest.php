@@ -24,6 +24,102 @@ final class RsaKeyValidatorTest extends TestCase
         // Then
         static::assertSame(2048, RsaKeyValidator::MINIMUM_MODULUS_LENGTH);
         static::assertSame(16384, RsaKeyValidator::MAXIMUM_MODULUS_LENGTH);
+        static::assertSame(256, RsaKeyValidator::MAXIMUM_EXPONENT_LENGTH);
+    }
+
+    #[Test]
+    #[DataProvider('getExponentLengths')]
+    public function theExponentLengthIsCountedInBits(string $exponent, int $expectedLength): void
+    {
+        // Given
+        $key = self::key(str_repeat("\xff", 256), $exponent);
+
+        // Then
+        static::assertSame($expectedLength, RsaKeyValidator::exponentLength($key));
+    }
+
+    /**
+     * The length bounds are the only part of this validator the RSA algorithms apply on their own, so they hold
+     * whether or not the caller ever builds a validator.
+     *
+     * @see https://github.com/web-auth/cose-lib/security/advisories/GHSA-9v8c-2mgr-qvx3
+     */
+    #[Test]
+    public function theLengthBoundsAcceptTheLargestKeyRfc8230AsksFor(): void
+    {
+        // Given
+        $key = self::key("\x80" . str_repeat("\x00", 2047), str_repeat("\xff", 32));
+
+        // Then
+        static::assertSame(16384, RsaKeyValidator::modulusLength($key));
+        static::assertSame(256, RsaKeyValidator::exponentLength($key));
+        RsaKeyValidator::checkLengthBounds($key);
+    }
+
+    /**
+     * No minimum is applied by the length bounds: a key an earlier release accepted must keep being accepted.
+     */
+    #[Test]
+    public function theLengthBoundsImposeNoMinimum(): void
+    {
+        // Given
+        $key = self::key(str_repeat("\xff", 64), "\x03");
+
+        // Then
+        static::assertSame(512, RsaKeyValidator::modulusLength($key));
+        RsaKeyValidator::checkLengthBounds($key);
+        static::assertFalse(RsaKeyValidator::create()->isValid($key));
+    }
+
+    #[Test]
+    #[DataProvider('getOversizedKeys')]
+    public function anOversizedKeyIsRejectedByTheLengthBounds(
+        string $modulus,
+        string $exponent,
+        string $expectedMessage
+    ): void {
+        // Given
+        $key = self::key($modulus, $exponent);
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($expectedMessage);
+
+        // When
+        RsaKeyValidator::checkLengthBounds($key);
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function getOversizedKeys(): iterable
+    {
+        yield 'one bit above the maximum modulus length' => [
+            "\x01" . str_repeat("\x00", 2048),
+            "\x01\x00\x01",
+            'The modulus of the key is 16385 bits long; at most 16384 bits are allowed',
+        ];
+        yield 'one bit above the maximum exponent length' => [
+            str_repeat("\xff", 2048),
+            "\x01" . str_repeat("\x00", 31) . "\x01",
+            'The public exponent of the key is 257 bits long; at most 256 bits are allowed',
+        ];
+        // The key of the advisory: e = n - 2 turns the public operation into a full width exponentiation.
+        yield 'an exponent as long as the modulus' => [
+            "\xff" . str_repeat("\xaa", 2046) . "\xff",
+            "\xff" . str_repeat("\xaa", 2046) . "\xfd",
+            'The public exponent of the key is 16384 bits long; at most 256 bits are allowed',
+        ];
+    }
+
+    /**
+     * @return iterable<string, array{string, int}>
+     */
+    public static function getExponentLengths(): iterable
+    {
+        yield 'the usual exponent' => ["\x01\x00\x01", 17];
+        yield 'leading zero bytes are ignored' => ["\x00\x00\x03", 2];
+        yield 'the maximum' => [str_repeat("\xff", 32), 256];
     }
 
     #[Test]

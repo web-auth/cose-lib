@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Cose\Key;
 
-use function bin2hex;
-use Brick\Math\BigInteger;
 use InvalidArgumentException;
 use function ltrim;
 use function ord;
 use function sprintf;
+use function strcmp;
 use function strlen;
 use Throwable;
 
@@ -21,10 +20,19 @@ use Throwable;
  * and decrypt with modulus between 2048 and 16K bits in length". The public exponent constraints come from RFC 8017,
  * section 3.1, which defines it as an odd integer between 3 and n - 1.
  *
- * The public parameter constraints of RFC 8017, section 3.1 are applied by the RSA algorithms of this library to
- * every key they are given: checkPublicParameters() is called by Cose\Algorithm\Signature\RSA\RSA and by
- * Cose\Algorithm\Signature\RSA\PSSRSA. The modulus length bounds are a policy choice and remain opt-in: run
- * check() or isValid() explicitly on a key before handing it to an algorithm to apply them.
+ * Two families of constraints are applied by the RSA algorithms of this library to every key they are given, both
+ * through Cose\Algorithm\Signature\RSA\RSA and Cose\Algorithm\Signature\RSA\PSSRSA: the public parameter constraints
+ * of RFC 8017, section 3.1 (checkPublicParameters()), and the upper bounds on the size of the key
+ * (checkLengthBounds()). Neither depends on a policy - an RSA operation costs an amount of CPU proportional to the
+ * size of the key it is given, and that key is attacker supplied whenever it comes from the wire.
+ *
+ * The *minimum* modulus length is the policy choice, and it remains opt-in: run check() or isValid() explicitly on a
+ * key before handing it to an algorithm to apply it.
+ *
+ * Every check below reads the parameters as the octet strings they are. Turning one into a number is a base
+ * conversion, and brick/math falls back to a pure PHP calculator - whose generic base conversion is superlinear -
+ * whenever neither ext-gmp nor ext-bcmath is loaded. A validator that runs before every operation must not grow
+ * expensive with the size of the key it is handed.
  *
  * @see https://datatracker.ietf.org/doc/html/rfc8812
  * @see https://www.rfc-editor.org/rfc/rfc8230#section-6.1
@@ -41,6 +49,17 @@ final class RsaKeyValidator
      * The largest modulus length RFC 8230 expects implementations to cope with, in bits.
      */
     public const MAXIMUM_MODULUS_LENGTH = 16384;
+
+    /**
+     * The largest public exponent length any RSA operation of this library accepts, in bits.
+     *
+     * FIPS 186-5, appendix A.1.1 requires 2^16 < e < 2^256 of a generated key; RFC 8017, section 3.1 places no upper
+     * bound at all, which is precisely why one has to be imposed here. The public operation is a modular
+     * exponentiation whose cost is proportional to the length of the exponent, so an unbounded e is an unbounded
+     * amount of work: at the largest modulus RFC 8230 asks for, e = n - 2 costs sixty four times as much as this
+     * bound allows.
+     */
+    public const MAXIMUM_EXPONENT_LENGTH = 256;
 
     private function __construct(
         private readonly int $minimumModulusLength,
@@ -68,17 +87,33 @@ final class RsaKeyValidator
      */
     public static function modulusLength(RsaKey $key): int
     {
-        $modulus = ltrim($key->n(), "\x00");
-        if ($modulus === '') {
-            return 0;
-        }
+        return self::bitLength($key->n());
+    }
 
-        $length = (strlen($modulus) - 1) * 8;
-        for ($mostSignificantByte = ord($modulus[0]); $mostSignificantByte > 0; $mostSignificantByte >>= 1) {
-            ++$length;
-        }
+    /**
+     * Returns the length of the public exponent of the key, in bits.
+     */
+    public static function exponentLength(RsaKey $key): int
+    {
+        return self::bitLength($key->e());
+    }
 
-        return $length;
+    /**
+     * The upper bounds on the size of a key that every RSA algorithm of this library applies before it does anything
+     * with it. They are not a policy the caller opts into: an RSA operation costs an amount of CPU proportional to
+     * the size of the modulus and of the exponent it is given, both of which are attacker supplied whenever the key
+     * travels on the wire, and that cost is paid before anything is known about the signature. RFC 8230, section 6.1
+     * asks for exactly this: "It is highly recommended that checks on the key length be done before starting a
+     * cryptographic operation."
+     *
+     * No minimum is applied here, so that this method never rejects a key an earlier release accepted.
+     *
+     * @throws InvalidArgumentException when the key is larger than this library is willing to compute with
+     */
+    public static function checkLengthBounds(RsaKey $key): void
+    {
+        self::checkMaximumModulusLength($key, self::MAXIMUM_MODULUS_LENGTH);
+        self::checkMaximumExponentLength($key);
     }
 
     /**
@@ -94,13 +129,7 @@ final class RsaKeyValidator
                 $this->minimumModulusLength
             ));
         }
-        if ($modulusLength > $this->maximumModulusLength) {
-            throw new InvalidArgumentException(sprintf(
-                'The modulus of the key is %d bits long; at most %d bits are allowed',
-                $modulusLength,
-                $this->maximumModulusLength
-            ));
-        }
+        self::checkMaximumModulusLength($key, $this->maximumModulusLength);
 
         self::checkPublicParameters($key);
     }
@@ -152,27 +181,69 @@ final class RsaKeyValidator
 
     private static function checkExponent(RsaKey $key): void
     {
-        $rawExponent = ltrim($key->e(), "\x00");
-        if ($rawExponent === '' || (ord($rawExponent[strlen($rawExponent) - 1]) & 1) !== 1) {
+        $exponent = ltrim($key->e(), "\x00");
+        if ($exponent === '' || (ord($exponent[strlen($exponent) - 1]) & 1) !== 1) {
             throw new InvalidArgumentException('The public exponent of the key shall be odd');
         }
-
-        $exponent = self::toBigInteger($key->e());
-        if ($exponent->compareTo(BigInteger::of(3)) < 0) {
+        if (strlen($exponent) === 1 && ord($exponent[0]) < 3) {
             throw new InvalidArgumentException('The public exponent of the key shall be greater than or equal to 3');
         }
-        if ($exponent->compareTo(self::toBigInteger($key->n())) >= 0) {
+        if (self::compareMagnitudes($exponent, ltrim($key->n(), "\x00")) >= 0) {
             throw new InvalidArgumentException('The public exponent of the key shall be lower than its modulus');
+        }
+        self::checkMaximumExponentLength($key);
+    }
+
+    private static function checkMaximumModulusLength(RsaKey $key, int $maximumModulusLength): void
+    {
+        $modulusLength = self::modulusLength($key);
+        if ($modulusLength > $maximumModulusLength) {
+            throw new InvalidArgumentException(sprintf(
+                'The modulus of the key is %d bits long; at most %d bits are allowed',
+                $modulusLength,
+                $maximumModulusLength
+            ));
         }
     }
 
-    private static function toBigInteger(string $value): BigInteger
+    private static function checkMaximumExponentLength(RsaKey $key): void
+    {
+        $exponentLength = self::exponentLength($key);
+        if ($exponentLength > self::MAXIMUM_EXPONENT_LENGTH) {
+            throw new InvalidArgumentException(sprintf(
+                'The public exponent of the key is %d bits long; at most %d bits are allowed',
+                $exponentLength,
+                self::MAXIMUM_EXPONENT_LENGTH
+            ));
+        }
+    }
+
+    /**
+     * Compares two non-negative integers given as big-endian octet strings stripped of their leading zero octets: the
+     * longer one is the larger, and equal lengths are decided octet by octet.
+     */
+    private static function compareMagnitudes(string $left, string $right): int
+    {
+        $byLength = strlen($left) <=> strlen($right);
+
+        return $byLength === 0 ? strcmp($left, $right) : $byLength;
+    }
+
+    /**
+     * The length in bits of the non-negative integer whose big-endian octet string is $value.
+     */
+    private static function bitLength(string $value): int
     {
         $value = ltrim($value, "\x00");
         if ($value === '') {
-            return BigInteger::zero();
+            return 0;
         }
 
-        return BigInteger::fromBase(bin2hex($value), 16);
+        $length = (strlen($value) - 1) * 8;
+        for ($mostSignificantByte = ord($value[0]); $mostSignificantByte > 0; $mostSignificantByte >>= 1) {
+            ++$length;
+        }
+
+        return $length;
     }
 }

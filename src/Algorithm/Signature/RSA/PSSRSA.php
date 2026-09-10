@@ -16,9 +16,12 @@ use function hash_equals;
 use function intdiv;
 use InvalidArgumentException;
 use function is_string;
+use function ltrim;
 use function openssl_error_string;
 use const OPENSSL_NO_PADDING;
+use function openssl_pkey_get_public;
 use function openssl_private_encrypt;
+use function openssl_public_decrypt;
 use function ord;
 use function pack;
 use function random_bytes;
@@ -26,13 +29,21 @@ use RuntimeException;
 use function str_pad;
 use const STR_PAD_LEFT;
 use function str_repeat;
+use function strcmp;
 use function strlen;
+use function substr;
 use Throwable;
 
 /**
  * RSASSA-PSS as defined by RFC 8017, section 8.1.
  *
+ * The length of the key is bounded before it is used. RFC 8017, section 3.1 places no upper bound on the modulus nor
+ * on the public exponent, and the primitives of section 5.2 are modular exponentiations whose cost is proportional to
+ * the size of both - which a verifier takes from whoever produced the message. RFC 8230, section 6.1 asks for the
+ * bound: "It is highly recommended that checks on the key length be done before starting a cryptographic operation."
+ *
  * @see https://www.rfc-editor.org/rfc/rfc8017#section-8.1
+ * @see https://www.rfc-editor.org/rfc/rfc8230#section-6.1
  *
  * @internal
  */
@@ -42,6 +53,7 @@ abstract class PSSRSA implements Signature
     {
         $key = $this->handleKey($key);
         RsaKeyValidator::checkPublicParameters($key);
+        RsaKeyValidator::checkLengthBounds($key);
         if (! $key->isPrivate()) {
             throw new InvalidArgumentException('The key is not private.');
         }
@@ -65,9 +77,12 @@ abstract class PSSRSA implements Signature
         try {
             // Section 8.1.2 applies RSAVP1 under the assumption that the public key is valid (section 3.1). Nothing
             // downstream re-establishes it, and with e = 1 the exponentiation below is the identity map: the EMSA-PSS
-            // encoding of any message, which anyone can build, would then be accepted as its signature. A key that
-            // cannot be verified with is reported as an invalid signature, per the contract of Signature::verify().
+            // encoding of any message, which anyone can build, would then be accepted as its signature. Section 3.1
+            // bounds neither parameter either, and the cost of the exponentiation grows with the size of both. A key
+            // that cannot be verified with, or that is too large to compute with, is reported as an invalid
+            // signature, per the contract of Signature::verify().
             RsaKeyValidator::checkPublicParameters($key);
+            RsaKeyValidator::checkLengthBounds($key);
         } catch (InvalidArgumentException) {
             return false;
         }
@@ -78,19 +93,24 @@ abstract class PSSRSA implements Signature
         if (strlen($signature) !== $k) {
             return false;
         }
-        $s = BigInteger::createFromBinaryString($signature);
         // Step 2.b: "If RSAVP1 output 'signature representative out of range', output 'invalid signature' and stop."
-        if ($s->compare(BigInteger::createFromBinaryString($key->n())) >= 0) {
+        if (self::compareMagnitudes($signature, $key->n()) >= 0) {
             return false;
         }
-        $m = $this->rsavp1($key, $s);
+        $em = $this->rsavp1WithOpenSSL($key, $signature);
+        if ($em === null) {
+            return false;
+        }
         // RFC 8017, section 8.1.2, step 2.c: emLen = ceil((modBits - 1) / 8). "If I2OSP outputs 'integer too large',
-        // output 'invalid signature' and stop."
+        // output 'invalid signature' and stop." OpenSSL returns k octets, one more than emLen when the modulus is
+        // byte aligned, and the octets it drops have to be zero for the integer to fit.
         $emLen = intdiv($modBits - 1 + 7, 8);
-        if (strlen($m->toBytes()) > $emLen) {
-            return false;
+        if ($emLen < $k) {
+            if (ltrim(substr($em, 0, $k - $emLen), "\0") !== '') {
+                return false;
+            }
+            $em = substr($em, $k - $emLen);
         }
-        $em = $this->convertIntegerToOctetString($m, $emLen);
 
         return $this->verifyEMSAPSS($data, $em, $modBits - 1, $this->getHashAlgorithm());
     }
@@ -106,6 +126,7 @@ abstract class PSSRSA implements Signature
     public function exponentiate(RsaKey $key, BigInteger $c): BigInteger
     {
         RsaKeyValidator::checkPublicParameters($key);
+        RsaKeyValidator::checkLengthBounds($key);
 
         return $key->isPrivate() ? $this->rsasp1($key, $c) : $this->rsavp1($key, $c);
     }
@@ -119,6 +140,10 @@ abstract class PSSRSA implements Signature
 
     /**
      * RSAVP1 (RFC 8017, section 5.2.2).
+     *
+     * Only exponentiate() reaches this method: verify() applies the primitive to the octet strings themselves. The
+     * in-process exponentiation is kept here as a fallback so that a key OpenSSL declines still gets an answer, which
+     * is the behaviour this method has always had.
      */
     private function rsavp1(RsaKey $key, BigInteger $s): BigInteger
     {
@@ -126,8 +151,67 @@ abstract class PSSRSA implements Signature
         if ($s->compare(BigInteger::createFromDecimal(0)) < 0 || $s->compare($n) >= 0) {
             throw new RuntimeException('Signature representative out of range');
         }
+        $k = intdiv(RsaKeyValidator::modulusLength($key) + 7, 8);
+        $m = $this->rsavp1WithOpenSSL($key, $this->convertIntegerToOctetString($s, $k));
 
-        return $s->modPow(BigInteger::createFromBinaryString($key->e()), $n);
+        return $m === null
+            ? $s->modPow(BigInteger::createFromBinaryString($key->e()), $n)
+            : BigInteger::createFromBinaryString($m);
+    }
+
+    /**
+     * RSAVP1 computed by OpenSSL, on the octet strings themselves.
+     *
+     * The public operation is a modular exponentiation, and brick/math computes it in PHP whenever neither ext-gmp
+     * nor ext-bcmath is loaded - the configuration of the stock php and php-fpm images. That costs seconds of CPU per
+     * verification even for a 2048 bit key, and grows with the square of the modulus up to the largest one RFC 8230
+     * asks implementations to accept: a verifier takes its key from whoever produced the message, so the work it is
+     * asked to do must not depend on an extension being installed. ext-openssl is a hard requirement of this package,
+     * and RSASP1 already goes through it.
+     *
+     * Returns null when OpenSSL will not use the key, which for a verifier is an invalid signature: RFC 8017, section
+     * 8.1.2 is defined for a valid public key, and a key OpenSSL rejects is not one.
+     *
+     * @param string $s the signature representative, exactly k octets long and below the modulus
+     */
+    private function rsavp1WithOpenSSL(RsaKey $key, string $s): ?string
+    {
+        try {
+            // The key is loaded before use so that key material OpenSSL cannot decode yields null instead of an
+            // E_WARNING raised from inside openssl_public_decrypt().
+            $publicKey = openssl_pkey_get_public($key->toPublic()->asPem());
+            if ($publicKey === false) {
+                $this->clearOpenSSLErrors();
+
+                return null;
+            }
+            $computed = openssl_public_decrypt($s, $m, $publicKey, OPENSSL_NO_PADDING);
+        } catch (Throwable) {
+            $this->clearOpenSSLErrors();
+
+            return null;
+        }
+        if (! $computed || ! is_string($m)) {
+            $this->clearOpenSSLErrors();
+
+            return null;
+        }
+
+        return $m;
+    }
+
+    /**
+     * Compares two non-negative integers given as big-endian octet strings: the longer one, once the leading zero
+     * octets are gone, is the larger, and equal lengths are decided octet by octet. Comparing the values rather than
+     * the strings would mean converting them, which is the very base conversion this class avoids.
+     */
+    private static function compareMagnitudes(string $left, string $right): int
+    {
+        $left = ltrim($left, "\0");
+        $right = ltrim($right, "\0");
+        $byLength = strlen($left) <=> strlen($right);
+
+        return $byLength === 0 ? strcmp($left, $right) : $byLength;
     }
 
     /**

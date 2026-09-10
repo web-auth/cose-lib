@@ -241,8 +241,12 @@ such a key; nothing has to be done to get that behaviour.
 
 The modulus length is a different matter. [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) defers to
 [RFC 8230, section 6.1](https://www.rfc-editor.org/rfc/rfc8230#section-6.1), which requires a modulus of 2048 bits or
-larger and expects implementations to handle up to 16K bits. Because some deployments have to accept legacy sizes,
-the library never applies those bounds on its own; run them explicitly on a key before handing it to an algorithm:
+larger and expects implementations to handle up to 16K bits.
+
+The upper bounds are applied automatically: every RSA algorithm rejects a key whose modulus is longer than 16384 bits
+or whose public exponent is longer than 256 bits, before it computes anything with it. `verify()` returns `false` for
+such a key and `sign()` throws. The **minimum** modulus length is a policy decision and stays opt-in, because some
+deployments have to accept legacy sizes; run it explicitly on a key before handing it to an algorithm:
 
 ```php
 use Cose\Key\RsaKey;
@@ -269,6 +273,14 @@ own, without any modulus length policy:
 // Throws an InvalidArgumentException unless the modulus is odd and 3 <= e < n
 RsaKeyValidator::checkPublicParameters($key);
 ```
+
+## Performance
+
+**ext-gmp** (recommended) or **ext-bcmath** is worth installing, but no longer required for RSA verification to be
+cheap: `RsaKey::asPem()`, `RsaKeyValidator` and the public operation of every RSA algorithm are computed without
+`brick/math`. Signing with RSASSA-PSS (`PS256`, `PS384`, `PS512`) still uses it for the blinding of the private
+exponentiation, and falls back to a pure PHP calculator when neither extension is loaded — which is the configuration
+of the stock `php` and `php-fpm` Docker images.
 
 ## Testing
 

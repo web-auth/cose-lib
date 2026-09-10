@@ -23,6 +23,10 @@ use function openssl_verify;
  * is the identity map, so the EMSA-PKCS1-v1_5 encoding of a message - public data anyone can compute - would be
  * accepted as a signature of that message under an attacker chosen key. Every key is therefore checked here.
  *
+ * Its length is bounded too, before it is used. RFC 8230, section 6.1 asks for it - "It is highly recommended that
+ * checks on the key length be done before starting a cryptographic operation" - because the work an RSA operation
+ * costs grows with the size of the key it is given, and a verifier takes that key from whoever produced the message.
+ *
  * @see https://www.rfc-editor.org/rfc/rfc8017#section-8.2
  * @see \Cose\Tests\Algorithm\Signature\RSA\RSATest
  */
@@ -32,6 +36,7 @@ abstract class RSA implements Signature
     {
         $key = $this->handleKey($key);
         RsaKeyValidator::checkPublicParameters($key);
+        RsaKeyValidator::checkLengthBounds($key);
         if (! $key->isPrivate()) {
             throw new InvalidArgumentException('The key is not private.');
         }
@@ -54,9 +59,11 @@ abstract class RSA implements Signature
         $key = $this->handleKey($key);
         try {
             RsaKeyValidator::checkPublicParameters($key);
+            RsaKeyValidator::checkLengthBounds($key);
         } catch (InvalidArgumentException) {
-            // A key that does not satisfy RFC 8017, section 3.1 is key material no verification can be performed
-            // with: the contract of Signature::verify() reports it as an invalid signature, not as an error.
+            // A key too large to compute with, or one that does not satisfy RFC 8017, section 3.1, is key material no
+            // verification can be performed with: the contract of Signature::verify() reports it as an invalid
+            // signature, not as an error.
             return false;
         }
         // The key is loaded before use so that key material OpenSSL cannot decode yields false instead of an
