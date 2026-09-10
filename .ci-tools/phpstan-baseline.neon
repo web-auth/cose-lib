@@ -91,12 +91,6 @@ parameters:
 			path: ../src/Key/Ec2Key.php
 
 		-
-			rawMessage: Cannot cast mixed to int.
-			identifier: cast.int
-			count: 1
-			path: ../src/Key/Key.php
-
-		-
 			rawMessage: 'Method Cose\Key\Key::type() should return int|string but returns mixed.'
 			identifier: return.type
 			count: 1

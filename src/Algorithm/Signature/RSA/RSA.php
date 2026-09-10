@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Signature\RSA;
 
+use Cose\Algorithm\KeyRestrictionAware;
+use Cose\Algorithm\KeyRestrictionEnforcement;
 use Cose\Algorithm\Signature\OpenSslError;
 use Cose\Algorithm\Signature\Signature;
 use Cose\Key\Key;
@@ -30,11 +32,13 @@ use function openssl_verify;
  * @see https://www.rfc-editor.org/rfc/rfc8017#section-8.2
  * @see \Cose\Tests\Algorithm\Signature\RSA\RSATest
  */
-abstract class RSA implements Signature
+abstract class RSA implements Signature, KeyRestrictionAware
 {
+    use KeyRestrictionEnforcement;
+
     public function sign(string $data, Key $key): string
     {
-        $key = $this->handleKey($key);
+        $key = $this->handleKey($key, Key::OP_SIGN);
         RsaKeyValidator::checkPublicParameters($key);
         RsaKeyValidator::checkLengthBounds($key);
         if (! $key->isPrivate()) {
@@ -56,7 +60,7 @@ abstract class RSA implements Signature
 
     public function verify(string $data, Key $key, string $signature): bool
     {
-        $key = $this->handleKey($key);
+        $key = $this->handleKey($key, Key::OP_VERIFY);
         try {
             RsaKeyValidator::checkPublicParameters($key);
             RsaKeyValidator::checkLengthBounds($key);
@@ -78,8 +82,10 @@ abstract class RSA implements Signature
 
     abstract protected function getHashAlgorithm(): int;
 
-    private function handleKey(Key $key): RsaKey
+    private function handleKey(Key $key, int $operation): RsaKey
     {
+        $this->checkKeyRestrictions($key, $operation);
+
         return RsaKey::create($key->getData());
     }
 }
