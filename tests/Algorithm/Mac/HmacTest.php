@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cose\Tests\Algorithm\Mac;
 
 use function base64_decode;
+use CBOR\ByteStringObject;
 use CBOR\Decoder;
 use CBOR\OtherObject\OtherObjectManager;
 use CBOR\StringStream;
@@ -18,14 +19,27 @@ use Cose\Algorithm\Mac\HS512;
 use Cose\Key\Key;
 use Cose\Key\OkpKey;
 use Cose\Key\SymmetricKey;
+use const E_USER_WARNING;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\WithoutErrorHandler;
 use PHPUnit\Framework\TestCase;
+use function restore_error_handler;
+use function set_error_handler;
+use function sprintf;
+use function str_repeat;
 use function strlen;
 
 final class HmacTest extends TestCase
 {
+    private const DATA = 'eyJhbGciOiJIUzI1NiIsImtpZCI6IjAxOGMwYWU1LTRkOWItNDcxYi1iZmQ2LWVlZjMxNGJjNzAzNyJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdSBkb24ndCBrZWVwIHlvdXIgZmVldCwgdGhlcmXigJlzIG5vIGtub3dpbmcgd2hlcmUgeW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4';
+
+    /**
+     * @var array<int, array{severity: int, message: string}>
+     */
+    private array $capturedErrors = [];
+
     #[Test]
     public function theAlgorithsmHaveCorrectInnerParameters(): void
     {
@@ -77,7 +91,7 @@ final class HmacTest extends TestCase
     {
         // Then
         static::expectException(InvalidArgumentException::class);
-        static::expectExceptionMessage('Invalid symmetric key. The key type does not correspond to a symmetric key');
+        static::expectExceptionMessage('Invalid key. Must be of type symmetric');
 
         // Given
         $algorithm = new HS256();
@@ -88,10 +102,7 @@ final class HmacTest extends TestCase
         ]);
 
         // When
-        $algorithm->hash(
-            'eyJhbGciOiJIUzI1NiIsImtpZCI6IjAxOGMwYWU1LTRkOWItNDcxYi1iZmQ2LWVlZjMxNGJjNzAzNyJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdSBkb24ndCBrZWVwIHlvdXIgZmVldCwgdGhlcmXigJlzIG5vIGtub3dpbmcgd2hlcmUgeW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4',
-            $key
-        );
+        $algorithm->hash(self::DATA, $key);
     }
 
     #[Test]
@@ -108,50 +119,216 @@ final class HmacTest extends TestCase
         ]);
 
         // When
-        $algorithm->hash(
-            'eyJhbGciOiJIUzI1NiIsImtpZCI6IjAxOGMwYWU1LTRkOWItNDcxYi1iZmQ2LWVlZjMxNGJjNzAzNyJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdSBkb24ndCBrZWVwIHlvdXIgZmVldCwgdGhlcmXigJlzIG5vIGtub3dpbmcgd2hlcmUgeW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4',
-            $key
+        $algorithm->hash(self::DATA, $key);
+    }
+
+    #[Test]
+    public function theKeyDataIsMissing(): void
+    {
+        // Then
+        static::expectException(InvalidArgumentException::class);
+        static::expectExceptionMessage('Invalid key. The value of the key is missing');
+
+        // Given
+        $algorithm = new HS256();
+        $key = Key::create([
+            Key::TYPE => Key::TYPE_OCT,
+        ]);
+
+        // When
+        $algorithm->hash(self::DATA, $key);
+    }
+
+    /**
+     * A "k" that is not a byte string used to be coerced with (string), which keys the MAC with a constant an
+     * outsider can guess: "Array" for an array, "1" for true, "" for false or null.
+     */
+    #[Test]
+    #[DataProvider('getInvalidKeyValues')]
+    public function theKeyValueIsNotAByteString(mixed $k): void
+    {
+        // Then
+        static::expectException(InvalidArgumentException::class);
+        static::expectExceptionMessage('Invalid key. The value of the key must be a byte string');
+
+        // Given
+        $algorithm = new HS256();
+        $key = Key::create([
+            Key::TYPE => Key::TYPE_OCT,
+            SymmetricKey::DATA_K => $k,
+        ]);
+
+        // When
+        $algorithm->hash(self::DATA, $key);
+    }
+
+    #[Test]
+    #[DataProvider('getAlgorithms')]
+    public function theKeyValueIsEmpty(Hmac $algorithm): void
+    {
+        // Then
+        static::expectException(InvalidArgumentException::class);
+        static::expectExceptionMessage('Invalid key. The value of the key is empty');
+
+        // Given
+        $key = Key::create([
+            Key::TYPE => Key::TYPE_OCT,
+            SymmetricKey::DATA_K => '',
+        ]);
+
+        // When
+        $algorithm->hash(self::DATA, $key);
+    }
+
+    #[Test]
+    #[DataProvider('getAlgorithms')]
+    public function theVerificationOfAnInvalidKeyThrowsAsWell(Hmac $algorithm): void
+    {
+        // Then
+        static::expectException(InvalidArgumentException::class);
+        static::expectExceptionMessage('Invalid key. The value of the key must be a byte string');
+
+        // Given
+        $key = Key::create([
+            Key::TYPE => Key::TYPE_OCT,
+            SymmetricKey::DATA_K => null,
+        ]);
+
+        // When
+        $algorithm->verify(self::DATA, $key, str_repeat("\0", 32));
+    }
+
+    #[Test]
+    #[DataProvider('getMinimumKeyLengths')]
+    public function theMinimumKeyLengthIsTheHashOutputLength(Hmac $algorithm, int $expectedLength): void
+    {
+        // Then
+        static::assertSame($expectedLength, $algorithm->minimumKeyLength());
+    }
+
+    #[Test]
+    #[DataProvider('getMinimumKeyLengths')]
+    #[WithoutErrorHandler]
+    public function aShortKeyTriggersAWarning(Hmac $algorithm, int $minimumKeyLength): void
+    {
+        // Given
+        $key = SymmetricKey::create([
+            SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
+            SymmetricKey::DATA_K => str_repeat("\x2a", $minimumKeyLength - 1),
+        ]);
+        $this->captureErrors();
+
+        // When
+        $hash = $algorithm->hash(self::DATA, $key);
+        restore_error_handler();
+
+        // Then
+        static::assertNotSame('', $hash);
+        static::assertCount(1, $this->capturedErrors);
+        static::assertSame(E_USER_WARNING, $this->capturedErrors[0]['severity']);
+        static::assertSame(
+            sprintf(Hmac::SHORT_KEY_MESSAGE, $minimumKeyLength - 1, $minimumKeyLength),
+            $this->capturedErrors[0]['message']
         );
+    }
+
+    #[Test]
+    #[DataProvider('getMinimumKeyLengths')]
+    #[WithoutErrorHandler]
+    public function aKeyOfTheHashOutputLengthTriggersNoWarning(Hmac $algorithm, int $minimumKeyLength): void
+    {
+        // Given
+        $key = SymmetricKey::create([
+            SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
+            SymmetricKey::DATA_K => str_repeat("\x2a", $minimumKeyLength),
+        ]);
+        $this->captureErrors();
+
+        // When
+        $algorithm->hash(self::DATA, $key);
+        restore_error_handler();
+
+        // Then
+        static::assertSame([], $this->capturedErrors);
+    }
+
+    #[Test]
+    #[DataProvider('getAcknowledgedAlgorithms')]
+    #[WithoutErrorHandler]
+    public function acknowledgingTheRiskSilencesTheWarning(Hmac $algorithm): void
+    {
+        // Given
+        $key = SymmetricKey::create([
+            SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
+            SymmetricKey::DATA_K => "\x2a",
+        ]);
+        $this->captureErrors();
+
+        // When
+        $hash = $algorithm->hash(self::DATA, $key);
+        $isValid = $algorithm->verify(self::DATA, $key, $hash);
+        restore_error_handler();
+
+        // Then
+        static::assertTrue($isValid);
+        static::assertSame([], $this->capturedErrors);
+    }
+
+    /**
+     * verify() computes the MAC, so it warns exactly like hash() does: once per operation.
+     */
+    #[Test]
+    #[WithoutErrorHandler]
+    public function everyOperationWithAShortKeyWarnsOnce(): void
+    {
+        // Given
+        $algorithm = HS256::create();
+        $key = SymmetricKey::create([
+            SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
+            SymmetricKey::DATA_K => "\x2a",
+        ]);
+        $this->captureErrors();
+
+        // When
+        $hash = $algorithm->hash(self::DATA, $key);
+        $isValid = $algorithm->verify(self::DATA, $key, $hash);
+        restore_error_handler();
+
+        // Then
+        static::assertTrue($isValid);
+        static::assertCount(2, $this->capturedErrors);
+        static::assertSame(sprintf(Hmac::SHORT_KEY_MESSAGE, 1, 32), $this->capturedErrors[0]['message']);
     }
 
     /**
      * spomky-labs/cbor-php renders a CBOR integer as a numeric string, so a symmetric COSE_Key decoded from CBOR
-     * carries the string "4" as its key type. SymmetricKey was the one key class that did not store the normalised
-     * integer, so such a key was dispatched to it by Key::createFromData() and then rejected by every HMAC
-     * algorithm.
+     * carries the string "4" as its key type, which used to be compared against the integer 4 and rejected. The key
+     * type is now normalised for every key class, the generic one included.
      */
     #[Test]
-    public function aKeyDecodedFromCborCanComputeAndVerifyAMac(): void
+    #[DataProvider('getDecodedKeys')]
+    public function aKeyDecodedFromCborCanComputeAndVerifyAMac(Key $key): void
     {
         // Given
-        $k = base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true);
-        $decoded = (new Decoder(new TagManager(), new OtherObjectManager()))
-            ->decode(new StringStream(
-                // The CBOR map {1: 4, -1: k}.
-                "\xa2\x01\x04\x20\x58" . chr(strlen($k)) . $k
-            ))
-            ->normalize();
+        $algorithm = HS256::create();
 
         // When
-        $key = Key::createFromData($decoded);
+        $mac = $algorithm->hash(self::DATA, $key);
 
         // Then
-        static::assertInstanceOf(SymmetricKey::class, $key);
         static::assertSame(SymmetricKey::TYPE_OCT, $key->type());
-        static::assertTrue(HS256::create()->verify('Live long and Prosper.', $key, HS256::create()->hash(
-            'Live long and Prosper.',
-            $key
-        )));
+        static::assertTrue($algorithm->verify(self::DATA, $key, $mac));
     }
 
     /**
-     * The three sibling key classes accept the name of their key type; "oct" was rejected by SymmetricKey while the
-     * HMAC algorithms accepted it through a generic Key, so the two disagreed on the same input.
+     * The three sibling key classes accept the name of their key type, and Hmac has always accepted "oct" through a
+     * generic Key; SymmetricKey used to reject it, so the two disagreed on the same input.
      */
     #[Test]
     public function theNameOfTheSymmetricKeyTypeIsAccepted(): void
     {
         // Given
+        $algorithm = HS256::create();
         $k = base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true);
 
         // When
@@ -162,105 +339,75 @@ final class HmacTest extends TestCase
 
         // Then
         static::assertSame(SymmetricKey::TYPE_NAME_OCT, $key->type());
-        static::assertSame(
-            HS256::create()->hash('Live long and Prosper.', $key),
-            HS256::create()->hash('Live long and Prosper.', SymmetricKey::create([
-                SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
-                SymmetricKey::DATA_K => $k,
-            ]))
-        );
+        static::assertSame($algorithm->hash(self::DATA, $key), $algorithm->hash(self::DATA, SymmetricKey::create([
+            SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
+            SymmetricKey::DATA_K => $k,
+        ])));
     }
 
     /**
-     * The key type used to be compared through a lenient (int) cast, which let "4abc" through and turned a float
-     * into a TypeError raised later by Key::type().
+     * The CBOR map {1: 4, -1: k}, as spomky-labs/cbor-php normalises it, reaching the algorithm through each of the
+     * three entry points a caller has.
      *
-     * @param array<int|string, mixed> $data
+     * @return iterable<string, array{0: Key}>
      */
-    #[Test]
-    #[DataProvider('getMalformedSymmetricKeys')]
-    public function aMalformedSymmetricKeyIsRejectedWithTheDocumentedException(array $data, string $message): void
-    {
-        // Then
-        static::expectException(InvalidArgumentException::class);
-        static::expectExceptionMessage($message);
-
-        // When
-        SymmetricKey::create($data);
-    }
-
-    /**
-     * @return iterable<string, array{array<int|string, mixed>, string}>
-     */
-    public static function getMalformedSymmetricKeys(): iterable
+    public static function getDecodedKeys(): iterable
     {
         $k = base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true);
-        $wrongType = 'Invalid symmetric key. The key type does not correspond to a symmetric key';
-        $wrongK = 'Invalid symmetric key. The parameter "k" is missing or is not a byte string';
+        $decoded = (new Decoder(new TagManager(), new OtherObjectManager()))
+            ->decode(new StringStream("\xa2\x01\x04\x20\x58" . chr(strlen($k)) . $k))
+            ->normalize();
 
-        yield 'no key type' => [[
-            SymmetricKey::DATA_K => $k,
-        ], 'Invalid key: the type is not defined'];
-        yield 'a key type with a trailing suffix' => [
-            [
-                SymmetricKey::TYPE => '4abc',
-                SymmetricKey::DATA_K => $k,
-            ],
-            $wrongType,
-        ];
-        yield 'a truncatable key type' => [[
-            SymmetricKey::TYPE => 4.9,
-            SymmetricKey::DATA_K => $k,
-        ], $wrongType];
-        yield 'a key type given as a float' => [[
-            SymmetricKey::TYPE => 4.0,
-            SymmetricKey::DATA_K => $k,
-        ], $wrongType];
-        yield 'an EC2 key type' => [
-            [
-                SymmetricKey::TYPE => SymmetricKey::TYPE_EC2,
-                SymmetricKey::DATA_K => $k,
-            ],
-            $wrongType,
-        ];
-        yield 'no k' => [[
-            SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
-        ], $wrongK];
-        yield 'k given as an array' => [[
-            SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
-            SymmetricKey::DATA_K => [],
-        ], $wrongK];
-        yield 'k given as an integer' => [[
-            SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
-            SymmetricKey::DATA_K => 42,
-        ], $wrongK];
+        yield 'through Key::createFromData()' => [Key::createFromData($decoded)];
+        yield 'through SymmetricKey::create()' => [SymmetricKey::create($decoded)];
+        yield 'through the generic Key::create()' => [Key::create($decoded)];
     }
 
     /**
-     * @return array<string>[]
+     * @return iterable<array{0: Hmac, 1: string, 2: string, 3: string}>
      */
     public static function getVectors(): iterable
     {
-        yield [
+        yield 'HS256 with a 32-byte key' => [
             HS256::create(),
             base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true),
-            'eyJhbGciOiJIUzI1NiIsImtpZCI6IjAxOGMwYWU1LTRkOWItNDcxYi1iZmQ2LWVlZjMxNGJjNzAzNyJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdSBkb24ndCBrZWVwIHlvdXIgZmVldCwgdGhlcmXigJlzIG5vIGtub3dpbmcgd2hlcmUgeW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4',
+            self::DATA,
             base64_decode('s0h6KThzkfBBBkLspW1h84VsJZFTsPPqMDA7g1Md7p0', true),
         ];
-        yield [
+        yield 'HS256/64 with a 32-byte key' => [
             HS256Truncated64::create(),
             base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true),
-            'eyJhbGciOiJIUzI1NiIsImtpZCI6IjAxOGMwYWU1LTRkOWItNDcxYi1iZmQ2LWVlZjMxNGJjNzAzNyJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdSBkb24ndCBrZWVwIHlvdXIgZmVldCwgdGhlcmXigJlzIG5vIGtub3dpbmcgd2hlcmUgeW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4',
+            self::DATA,
             base64_decode('s0h6KThzkfA', true),
         ];
-        yield [
+        yield 'HS384 with a 48-byte key' => [
             HS384::create(),
+            base64_decode('DDVKiA7ujY+xdy1WhIYbJpAPCgFUFyyotcFhh5elhvRE2rph61YMR8xVMwCtYERs', true),
+            'Live long and Prosper.',
+            base64_decode('yuGcnpTocjcTCLtzbHe8ZLcQGFzOTuKFgh9zMzc+FYeV31WP5ACSe+bg9hrHxVvs', true),
+        ];
+        yield 'HS512 with a 64-byte key' => [
+            HS512::create(),
+            base64_decode(
+                'EdxdisiEXoRKH/HPzH05ZyEoAnC2DH5ztKcXNQx41do/DVuw7/pkZ35OioKyKRMMTTiMeeG68d38fWSFmlKgPw==',
+                true
+            ),
+            'Live long and Prosper.',
+            base64_decode(
+                'WoFFyV1QXnzqBlTHyb/ZAmzXTIsTQCnNLJg+dTw5QW19XoQXLUjfQ4L7G/D5GisPZU/Y8k9xjDF+gemNuJqYfQ==',
+                true
+            ),
+        ];
+        // A 32-byte key is shorter than the output of SHA-384 and SHA-512: these vectors are the regression test of
+        // the acknowledgement path.
+        yield 'HS384 with an acknowledged 32-byte key' => [
+            HS384::create(acknowledgeShortKey: true),
             base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true),
             'Live long and Prosper.',
             base64_decode('siXuHzld4TPYfNB5blTxAlSjIV3QG3GWBisyp8F2RHbT7tL82ex+y46PqVCeUrEG', true),
         ];
-        yield [
-            HS512::create(),
+        yield 'HS512 with an acknowledged 32-byte key' => [
+            HS512::create(acknowledgeShortKey: true),
             base64_decode('hJtXIZ2uSN5kbQfbtTNWbpdmhkV8FJG+Onbc6mxCcYg', true),
             'Live long and Prosper.',
             base64_decode(
@@ -268,5 +415,67 @@ final class HmacTest extends TestCase
                 true
             ),
         ];
+    }
+
+    /**
+     * @return iterable<array{0: mixed}>
+     */
+    public static function getInvalidKeyValues(): iterable
+    {
+        yield 'null' => [null];
+        yield 'array' => [[
+            'k' => str_repeat("\x2a", 32),
+        ]];
+        yield 'integer' => [123];
+        yield 'false' => [false];
+        yield 'true' => [true];
+        yield 'float' => [1.5];
+        yield 'CBOR object' => [ByteStringObject::create(str_repeat("\x2a", 32))];
+    }
+
+    /**
+     * @return iterable<array{0: Hmac}>
+     */
+    public static function getAlgorithms(): iterable
+    {
+        yield 'HS256' => [HS256::create()];
+        yield 'HS256/64' => [HS256Truncated64::create()];
+        yield 'HS384' => [HS384::create()];
+        yield 'HS512' => [HS512::create()];
+    }
+
+    /**
+     * @return iterable<array{0: Hmac}>
+     */
+    public static function getAcknowledgedAlgorithms(): iterable
+    {
+        yield 'HS256' => [HS256::create(acknowledgeShortKey: true)];
+        yield 'HS256/64' => [HS256Truncated64::create(acknowledgeShortKey: true)];
+        yield 'HS384' => [HS384::create(acknowledgeShortKey: true)];
+        yield 'HS512' => [HS512::create(acknowledgeShortKey: true)];
+    }
+
+    /**
+     * @return iterable<array{0: Hmac, 1: int}>
+     */
+    public static function getMinimumKeyLengths(): iterable
+    {
+        yield 'HS256' => [HS256::create(), 32];
+        yield 'HS256/64' => [HS256Truncated64::create(), 32];
+        yield 'HS384' => [HS384::create(), 48];
+        yield 'HS512' => [HS512::create(), 64];
+    }
+
+    private function captureErrors(): void
+    {
+        $this->capturedErrors = [];
+        set_error_handler(function (int $severity, string $message): bool {
+            $this->capturedErrors[] = [
+                'severity' => $severity,
+                'message' => $message,
+            ];
+
+            return true;
+        });
     }
 }

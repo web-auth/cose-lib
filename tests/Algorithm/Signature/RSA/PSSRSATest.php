@@ -11,6 +11,7 @@ use Cose\Algorithm\Signature\RSA\PS512;
 use Cose\Algorithm\Signature\RSA\PSSRSA;
 use Cose\BigInteger;
 use Cose\Key\RsaKey;
+use Cose\Key\RsaKeyValidator;
 use const E_DEPRECATED;
 use const E_USER_DEPRECATED;
 use InvalidArgumentException;
@@ -255,7 +256,7 @@ final class PSSRSATest extends TestCase
     public function theSmallestModulusPs512CanEncodeIsAccepted(): void
     {
         // Given
-        $algorithm = PS512::create();
+        $algorithm = PS512::create(RsaKeyValidator::create(minimumModulusLength: 1024));
         $key = RsaKeys::shortPrivateKey();
         $opensslSignature = base64_decode(
             'Oy42J6jxml86dEe/FiZIm9gDfMOfuTslnxxgilfSISCc25xDwiy7VQlddqljAwh7BsO9INIXl/Aeu2RztLIEYobHQbJXvyuf' .
@@ -282,7 +283,7 @@ final class PSSRSATest extends TestCase
         $this->expectExceptionMessage('the modulus is too short for this hash and salt length');
 
         // When
-        PS512::create()
+        PS512::create(RsaKeyValidator::create(minimumModulusLength: 1024))
             ->sign(self::MESSAGE, $key)
         ;
     }

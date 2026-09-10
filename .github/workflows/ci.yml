@@ -12,12 +12,23 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
+# No job of this workflow writes anything back to the repository: reading the code is all the
+# GITHUB_TOKEN is needed for. This block overrides the repository default, so it holds even if the
+# default is (or becomes again) "Read and write permissions".
+permissions:
+  contents: read
+
 jobs:
   pre_checks:
     name: "0️⃣ Pre-checks"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: "Audit the GitHub Actions workflows"
+        run: php .ci-tools/workflow-audit.php
 
       - name: "Check file permissions"
         run: |
@@ -45,6 +56,8 @@ jobs:
       cache-key: ${{ steps.cache-key-generator.outputs.key }}
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
       - id: cache-key-generator
         run: echo "key=composer-${{ runner.os }}-${{ hashFiles('composer.json') }}" >> $GITHUB_OUTPUT
@@ -71,6 +84,8 @@ jobs:
       image: ghcr.io/spomky-labs/phpqa:8.4
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/cache@v6
         with:
           path: |
@@ -87,6 +102,8 @@ jobs:
       image: ghcr.io/spomky-labs/phpqa:8.4
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/cache@v6
         with:
           path: |
@@ -103,6 +120,8 @@ jobs:
       image: ghcr.io/spomky-labs/phpqa:8.4
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/cache@v6
         with:
           path: |
@@ -119,6 +138,8 @@ jobs:
       image: ghcr.io/spomky-labs/phpqa:8.4
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/cache@v6
         with:
           path: |
@@ -138,6 +159,8 @@ jobs:
       image: ghcr.io/spomky-labs/phpqa:8.4
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - run: composer exec -- parallel-lint src tests
 
   check_licenses:
@@ -148,6 +171,8 @@ jobs:
       image: ghcr.io/spomky-labs/phpqa:8.4
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - run: castor check-licenses
 
   deptrac:
@@ -158,6 +183,8 @@ jobs:
       image: ghcr.io/spomky-labs/phpqa:8.4
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/cache@v6
         with:
           path: |
@@ -197,6 +224,8 @@ jobs:
       PHP_VERSION: ${{ matrix.php-version }}
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Install dependencies
         run: |
           if [ "${{ matrix.lowest-deps || 'false' }}" = "true" ]; then
@@ -221,6 +250,8 @@ jobs:
       XDEBUG_MODE: coverage
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Install dependencies
         run: composer install --no-interaction --no-progress
       - name: Run PHPUnit
@@ -234,6 +265,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Check exported files
         run: |
           EXPECTED="CODE_OF_CONDUCT.md,LICENSE,README.md,RELEASES.md,SECURITY.md,composer.json"

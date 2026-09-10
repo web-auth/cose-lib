@@ -51,7 +51,11 @@ class Key
         if (! array_key_exists(self::TYPE, $data)) {
             throw new InvalidArgumentException('Invalid key: the type is not defined');
         }
-        $this->data = $data;
+        // The key type is normalised for every key, the generic one included, so that type() answers with the
+        // registry value whether the key was decoded from CBOR - where spomky-labs/cbor-php renders an integer as a
+        // numeric string - or built by hand. Everything that checks a key type, from the subclasses below to the
+        // MAC algorithms, then compares against Key::TYPE_* and sees the same value on both paths.
+        $this->data = self::normalizeIntegerEntries($data, self::TYPE);
     }
 
     /**

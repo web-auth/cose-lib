@@ -8,6 +8,15 @@ use InvalidArgumentException;
 use function is_string;
 
 /**
+ * A symmetric COSE key (RFC 9053, section 7.3).
+ *
+ * Table 21 of that section types the key value `k` as a `bstr`, which is what the k() accessor of this class has
+ * always returned. The constructor enforces the same contract: a `k` that is not a PHP string, or that is empty, is
+ * rejected where the mistake is easiest to attribute rather than at the first cryptographic operation.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc9053#section-7.3
+ * @see \Cose\Tests\Key\SymmetricKeyTest
+ *
  * @final
  */
 class SymmetricKey extends Key
@@ -28,11 +37,16 @@ class SymmetricKey extends Key
                 'Invalid symmetric key. The key type does not correspond to a symmetric key'
             );
         }
-        // RFC 9053 section 7.3, table 21 types "k" as a byte string.
-        if (! isset($data[self::DATA_K]) || ! is_string($data[self::DATA_K])) {
+        if (! isset($data[self::DATA_K])) {
+            throw new InvalidArgumentException('Invalid symmetric key. The parameter "k" is missing');
+        }
+        if (! is_string($data[self::DATA_K])) {
             throw new InvalidArgumentException(
-                'Invalid symmetric key. The parameter "k" is missing or is not a byte string'
+                'Invalid symmetric key. The parameter "k" shall be a byte string (CBOR objects shall be normalized first)'
             );
+        }
+        if ($data[self::DATA_K] === '') {
+            throw new InvalidArgumentException('Invalid symmetric key. The parameter "k" is empty');
         }
     }
 

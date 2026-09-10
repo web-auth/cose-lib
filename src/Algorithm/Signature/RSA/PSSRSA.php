@@ -41,6 +41,8 @@ use Throwable;
  * on the public exponent, and the primitives of section 5.2 are modular exponentiations whose cost is proportional to
  * the size of both - which a verifier takes from whoever produced the message. RFC 8230, section 6.1 asks for the
  * bound: "It is highly recommended that checks on the key length be done before starting a cryptographic operation."
+ * The same section requires "a key size of 2048 bits or larger": that bound is applied by RsaKeyPolicy, with the
+ * validator this algorithm was created with or, by default, with RsaKeyValidator::create().
  *
  * @see https://www.rfc-editor.org/rfc/rfc8017#section-8.1
  * @see https://www.rfc-editor.org/rfc/rfc8230#section-6.1
@@ -49,11 +51,19 @@ use Throwable;
  */
 abstract class PSSRSA implements Signature
 {
+    use RsaKeyPolicy;
+
+    public function __construct(?RsaKeyValidator $keyValidator = null)
+    {
+        $this->initializeKeyValidator($keyValidator);
+    }
+
     public function sign(string $data, Key $key): string
     {
         $key = $this->handleKey($key);
         RsaKeyValidator::checkPublicParameters($key);
         RsaKeyValidator::checkLengthBounds($key);
+        $this->checkKeyPolicy($key);
         if (! $key->isPrivate()) {
             throw new InvalidArgumentException('The key is not private.');
         }
@@ -83,6 +93,9 @@ abstract class PSSRSA implements Signature
             // signature, per the contract of Signature::verify().
             RsaKeyValidator::checkPublicParameters($key);
             RsaKeyValidator::checkLengthBounds($key);
+            // A key below the bound the caller asked for is a key it declared it does not verify with, which is an
+            // invalid signature rather than an error here too. The implicit default only warns.
+            $this->checkKeyPolicy($key);
         } catch (InvalidArgumentException) {
             return false;
         }
@@ -121,12 +134,14 @@ abstract class PSSRSA implements Signature
      * The operation is selected from the key: RSASP1 (RFC 8017, section 5.2.1) for a private key, RSAVP1 (section
      * 5.2.2) for a public one.
      *
-     * @throws InvalidArgumentException when the public parameters of the key are not those of a valid RSA key
+     * @throws InvalidArgumentException when the public parameters of the key are not those of a valid RSA key, or
+     *                                  when it is rejected by the validator this algorithm was created with
      */
     public function exponentiate(RsaKey $key, BigInteger $c): BigInteger
     {
         RsaKeyValidator::checkPublicParameters($key);
         RsaKeyValidator::checkLengthBounds($key);
+        $this->checkKeyPolicy($key);
 
         return $key->isPrivate() ? $this->rsasp1($key, $c) : $this->rsavp1($key, $c);
     }

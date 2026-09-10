@@ -49,7 +49,7 @@ final class HS256Test extends TestCase
     public function theKeyIsNotAcceptable(): void
     {
         static::expectException(InvalidArgumentException::class);
-        static::expectExceptionMessage('Invalid symmetric key. The key type does not correspond to a symmetric key');
+        static::expectExceptionMessage('Invalid key. Must be of type symmetric');
         $algorithm = new HS256();
         $key = OkpKey::create([
             OkpKey::TYPE => SymmetricKey::TYPE_OKP,

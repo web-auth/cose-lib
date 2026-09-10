@@ -4,9 +4,16 @@ on:
   schedule:
     - cron: '12 6 * * *'
 
+# Nothing is granted by default; the single job raises only what locking an issue needs.
+permissions: {}
+
 jobs:
   lock:
     runs-on: ubuntu-latest
+    permissions:
+      # `process-only: issues` below: pull requests are never touched, so `pull-requests: write`
+      # is deliberately not granted. Add it if that input is ever widened.
+      issues: write
     steps:
       - uses: dessant/lock-threads@v6
         with:
