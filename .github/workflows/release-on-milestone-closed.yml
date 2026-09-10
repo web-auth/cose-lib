@@ -9,25 +9,60 @@ name: "Automatic Releases"
 # The checkout must be unshallow for the same reason: "switch-default-branch-
 # to-next-minor" resolves the newest release branch locally, and the default
 # shallow clone only contains the ref that triggered the workflow.
+#
+# The steps run `./.github/actions/automatic-releases`, a local wrapper around
+# laminas/automatic-releases that pins the executed container image by digest;
+# see that action.yml for why the upstream `uses:` reference is not enough.
 
 on:
   milestone:
     types:
       - "closed"
 
+# The release job raises what it needs below; anything this workflow may grow
+# later starts from read-only.
+permissions:
+  contents: read
+
 jobs:
   release:
     name: "Release"
     runs-on: ubuntu-latest
 
+    # The two organisation secrets used below are the most valuable credentials this repository can
+    # reach. Restrict them to this environment and give it required reviewers, so that closing a
+    # milestone alone no longer hands them out:
+    #
+    #   gh api -X PUT repos/web-auth/cose-lib/environments/release \
+    #     -F 'reviewers[][type]=User' -F "reviewers[][id]=$(gh api users/Spomky --jq .id)"
+    #
+    # Until that is done the environment is created on the first run with no protection rule and
+    # changes nothing.
+    environment: release
+
+    # `create-merge-up-pull-request`, `bump-changelog` and `create-milestones` below run with
+    # secrets.GITHUB_TOKEN: they push a branch, open a pull request and create milestones.
+    # `release` and `switch-default-branch-to-next-minor` use ORGANIZATION_ADMIN_TOKEN instead and
+    # need nothing from this token.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
     steps:
       - name: "Checkout"
-        uses: "actions/checkout@v7.0.1"
+        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
         with:
           fetch-depth: 0
+          # The commands do not use the checkout credential: each one removes the `origin` remote
+          # and re-adds it behind its own `credential.helper store` file, built from the GITHUB_TOKEN
+          # environment variable (Laminas\AutomaticReleases\Git\
+          # FetchAndSetCurrentUserByReplacingCurrentOriginRemote). Not persisting it keeps the token
+          # out of the workspace `.git/config` that is mounted into the container.
+          persist-credentials: false
 
       - name: "Release"
-        uses: "laminas/automatic-releases@1.26.2"
+        uses: "./.github/actions/automatic-releases"
         with:
           command-name: "laminas:automatic-releases:release"
         env:
@@ -38,7 +73,7 @@ jobs:
           "GIT_AUTHOR_EMAIL": ${{ secrets.GIT_AUTHOR_EMAIL }}
 
       - name: "Create Merge-Up Pull Request"
-        uses: "laminas/automatic-releases@1.26.2"
+        uses: "./.github/actions/automatic-releases"
         with:
           command-name: "laminas:automatic-releases:create-merge-up-pull-request"
         env:
@@ -49,7 +84,7 @@ jobs:
           "GIT_AUTHOR_EMAIL": ${{ secrets.GIT_AUTHOR_EMAIL }}
 
       - name: "Create and/or Switch to new Release Branch"
-        uses: "laminas/automatic-releases@1.26.2"
+        uses: "./.github/actions/automatic-releases"
         with:
           command-name: "laminas:automatic-releases:switch-default-branch-to-next-minor"
         env:
@@ -60,7 +95,7 @@ jobs:
           "GIT_AUTHOR_EMAIL": ${{ secrets.GIT_AUTHOR_EMAIL }}
 
       - name: "Bump Changelog Version On Originating Release Branch"
-        uses: "laminas/automatic-releases@1.26.2"
+        uses: "./.github/actions/automatic-releases"
         with:
           command-name: "laminas:automatic-releases:bump-changelog"
         env:
@@ -71,7 +106,7 @@ jobs:
           "GIT_AUTHOR_EMAIL": ${{ secrets.GIT_AUTHOR_EMAIL }}
 
       - name: "Create new milestones"
-        uses: "laminas/automatic-releases@1.26.2"
+        uses: "./.github/actions/automatic-releases"
         with:
           command-name: "laminas:automatic-releases:create-milestones"
         env:

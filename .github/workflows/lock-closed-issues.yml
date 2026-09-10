@@ -4,11 +4,18 @@ on:
   schedule:
     - cron: '12 6 * * *'
 
+# Nothing is granted by default; the single job raises only what locking an issue needs.
+permissions: {}
+
 jobs:
   lock:
     runs-on: ubuntu-latest
+    permissions:
+      # `process-only: issues` below: pull requests are never touched, so `pull-requests: write`
+      # is deliberately not granted. Add it if that input is ever widened.
+      issues: write
     steps:
-      - uses: dessant/lock-threads@v6
+      - uses: dessant/lock-threads@89ae32b08ed1a541efecbab17912962a5e38981c # v6.0.2
         with:
           github-token: ${{ github.token }}
           issue-inactive-days: '31'

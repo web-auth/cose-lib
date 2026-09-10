@@ -1,0 +1,43 @@
+name: 'automatic-releases (digest-pinned)'
+description: >
+  laminas/automatic-releases with its container image pinned by digest instead of by the floating
+  `ghcr.io/laminas/automatic-releases:1` tag used by the upstream action.yml.
+
+# Why this wrapper exists
+# ----------------------
+# `uses: laminas/automatic-releases@<sha>` pins the *metadata* of the action, not the code that
+# runs: upstream `action.yml` selects the executed code with `image: docker://ghcr.io/laminas/
+# automatic-releases:1`, a floating major tag that was observed to resolve to two different images
+# (1.27.0, then 1.28.0) on two consecutive days with no change in this repository. That code is
+# handed ORGANIZATION_ADMIN_TOKEN and SIGNING_SECRET_KEY, so it is pinned here by digest.
+#
+# The input and the environment contract are copied from upstream `action.yml` verbatim, so the
+# calling workflow is unchanged apart from the `uses:` line.
+#
+# To upgrade, read the new digest from the registry and replace it below, keeping the version in
+# the comment in sync:
+#
+#   TOKEN=$(curl -s 'https://ghcr.io/token?scope=repository:laminas/automatic-releases:pull' | jq -r .token)
+#   curl -sI -H "Authorization: Bearer $TOKEN" \
+#     -H 'Accept: application/vnd.oci.image.index.v1+json' \
+#     https://ghcr.io/v2/laminas/automatic-releases/manifests/<version> | grep -i docker-content-digest
+#
+# Dependabot does not update `runs.image` of a local action, so this bump is deliberate and manual.
+
+inputs:
+  command-name:
+    description: |
+      Command to execute: one of
+       * `laminas:automatic-releases:release`
+       * `laminas:automatic-releases:create-merge-up-pull-request`
+       * `laminas:automatic-releases:switch-default-branch-to-next-minor`
+       * `laminas:automatic-releases:bump-changelog`
+       * `laminas:automatic-releases:create-milestones`
+    required: true
+
+runs:
+  using: 'docker'
+  # ghcr.io/laminas/automatic-releases:1.28.0, published 2026-09-10.
+  image: 'docker://ghcr.io/laminas/automatic-releases@sha256:c86f165782c462d031f7f8a5932cad237c4a7d16a57b1b0ab0e76e68e08ffba1'
+  args:
+    - ${{ inputs.command-name }}
