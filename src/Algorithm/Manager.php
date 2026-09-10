@@ -45,6 +45,27 @@ final class Manager
         yield from $this->algorithms;
     }
 
+    /**
+     * Returns the same set of algorithms, each enforcing - or no longer enforcing - the "alg" and "key_ops"
+     * restrictions of the keys it is given, as RFC 9052, section 7.1 requires. Algorithms that cannot enforce them
+     * are carried over unchanged. This manager is left untouched.
+     *
+     * @see KeyRestrictionAware
+     */
+    public function withKeyRestrictionsEnforced(bool $enforce = true): self
+    {
+        $manager = self::create();
+        foreach ($this->algorithms as $algorithm) {
+            $manager->add(
+                $algorithm instanceof KeyRestrictionAware
+                    ? $algorithm->withKeyRestrictionsEnforced($enforce)
+                    : $algorithm
+            );
+        }
+
+        return $manager;
+    }
+
     public function has(int $identifier): bool
     {
         return array_key_exists($identifier, $this->algorithms);

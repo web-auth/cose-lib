@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Signature\EdDSA;
 
+use Cose\Algorithm\KeyRestrictionAware;
+use Cose\Algorithm\KeyRestrictionEnforcement;
 use Cose\Algorithm\Signature\Signature;
 use Cose\Algorithms;
 use Cose\Key\Key;
@@ -23,8 +25,10 @@ use SodiumException;
 /**
  * @see \Cose\Tests\Algorithm\Signature\EdDSA\EdDSATest
  */
-class EdDSA implements Signature
+class EdDSA implements Signature, KeyRestrictionAware
 {
+    use KeyRestrictionEnforcement;
+
     public function __construct()
     {
         if (! self::isSupported()) {
@@ -47,7 +51,7 @@ class EdDSA implements Signature
 
     public function sign(string $data, Key $key): string
     {
-        $key = $this->handleKey($key);
+        $key = $this->handleKey($key, Key::OP_SIGN);
         if (! $key->isPrivate()) {
             throw new InvalidArgumentException('The key is not private.');
         }
@@ -83,7 +87,7 @@ class EdDSA implements Signature
 
     public function verify(string $data, Key $key, string $signature): bool
     {
-        $key = $this->handleKey($key);
+        $key = $this->handleKey($key, Key::OP_VERIFY);
         if ($key->curve() !== OkpKey::CURVE_ED25519 && $key->curve() !== OkpKey::CURVE_NAME_ED25519) {
             throw new InvalidArgumentException('Unsupported curve');
         }
@@ -102,8 +106,10 @@ class EdDSA implements Signature
         return Algorithms::COSE_ALGORITHM_EDDSA;
     }
 
-    private function handleKey(Key $key): OkpKey
+    private function handleKey(Key $key, int $operation): OkpKey
     {
+        $this->checkKeyRestrictions($key, $operation);
+
         return OkpKey::create($key->getData());
     }
 }
