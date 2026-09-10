@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Mac;
 
+use Cose\Algorithm\KeyRestrictionAware;
+use Cose\Algorithm\KeyRestrictionEnforcement;
 use Cose\Key\Key;
 use Cose\Key\SymmetricKey;
 use const E_USER_WARNING;
@@ -36,8 +38,10 @@ use function trigger_error;
  * @see https://www.rfc-editor.org/rfc/rfc2104#section-3
  * @see \Cose\Tests\Algorithm\Mac\HmacTest
  */
-abstract class Hmac implements Mac
+abstract class Hmac implements Mac, KeyRestrictionAware
 {
+    use KeyRestrictionEnforcement;
+
     public const SHORT_KEY_MESSAGE = 'The HMAC key is %d bytes long, shorter than the %d-byte hash output (RFC 2104, section 3). Create the algorithm with "acknowledgeShortKey: true" to acknowledge it; as of v5.0.0 this will throw.';
 
     public function __construct(
@@ -47,14 +51,15 @@ abstract class Hmac implements Mac
 
     public function hash(string $data, Key $key): string
     {
-        $signature = hash_hmac($this->getHashAlgorithm(), $data, $this->checKey($key), true);
-
-        return substr($signature, 0, intdiv($this->getSignatureLength(), 8));
+        // RFC 9053, section 3.1: "If the 'key_ops' field is present, it MUST include 'MAC create' when creating an
+        // HMAC authentication tag."
+        return $this->compute($data, $this->checKey($key, Key::OP_MAC_CREATE));
     }
 
     public function verify(string $data, Key $key, string $signature): bool
     {
-        return hash_equals($this->hash($data, $key), $signature);
+        // ... and it MUST include 'MAC verify' when verifying one, so the two operations cannot share a code path.
+        return hash_equals($this->compute($data, $this->checKey($key, Key::OP_MAC_VERIFY)), $signature);
     }
 
     /**
@@ -70,10 +75,19 @@ abstract class Hmac implements Mac
 
     abstract protected function getSignatureLength(): int;
 
+    private function compute(string $data, string $k): string
+    {
+        $signature = hash_hmac($this->getHashAlgorithm(), $data, $k, true);
+
+        return substr($signature, 0, intdiv($this->getSignatureLength(), 8));
+    }
+
     /**
+     * @param int $operation the Key::OP_* constant of the operation the key is about to be used for
+     *
      * @throws InvalidArgumentException when the key cannot be used with this algorithm
      */
-    private function checKey(Key $key): string
+    private function checKey(Key $key, int $operation): string
     {
         if ($key->type() !== Key::TYPE_OCT && $key->type() !== Key::TYPE_NAME_OCT) {
             throw new InvalidArgumentException('Invalid key. Must be of type symmetric');
@@ -97,6 +111,8 @@ abstract class Hmac implements Mac
         if (strlen($k) < $minimumKeyLength && ! $this->acknowledgeShortKey) {
             trigger_error(sprintf(self::SHORT_KEY_MESSAGE, strlen($k), $minimumKeyLength), E_USER_WARNING);
         }
+
+        $this->checkKeyRestrictions($key, $operation);
 
         return $k;
     }

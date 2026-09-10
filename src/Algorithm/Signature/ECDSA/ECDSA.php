@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Signature\ECDSA;
 
+use Cose\Algorithm\KeyRestrictionAware;
+use Cose\Algorithm\KeyRestrictionEnforcement;
 use Cose\Algorithm\Signature\OpenSslError;
 use Cose\Algorithm\Signature\Signature;
 use Cose\Key\Ec2Key;
@@ -19,11 +21,13 @@ use Throwable;
 /**
  * @see \Cose\Tests\Algorithm\Signature\ECDSA\ECDSATest
  */
-abstract class ECDSA implements Signature
+abstract class ECDSA implements Signature, KeyRestrictionAware
 {
+    use KeyRestrictionEnforcement;
+
     public function sign(string $data, Key $key): string
     {
-        $key = $this->handleKey($key);
+        $key = $this->handleKey($key, Key::OP_SIGN);
         if (! $key->isPrivate()) {
             throw new InvalidArgumentException('The key is not private.');
         }
@@ -43,7 +47,7 @@ abstract class ECDSA implements Signature
 
     public function verify(string $data, Key $key, string $signature): bool
     {
-        $key = $this->handleKey($key);
+        $key = $this->handleKey($key, Key::OP_VERIFY);
         $length = $this->getSignaturePartLength();
         // A signature that does not hold exactly the two coordinates of this curve is an invalid signature, not a
         // caller error: webauthn-lib hands the bytes of an assertion straight to verify().
@@ -73,8 +77,9 @@ abstract class ECDSA implements Signature
 
     abstract protected function getSignaturePartLength(): int;
 
-    private function handleKey(Key $key): Ec2Key
+    private function handleKey(Key $key, int $operation): Ec2Key
     {
+        $this->checkKeyRestrictions($key, $operation);
         try {
             $key = Ec2Key::create($key->getData());
         } catch (InvalidArgumentException $e) {

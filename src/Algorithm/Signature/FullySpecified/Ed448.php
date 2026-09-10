@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Signature\FullySpecified;
 
+use Cose\Algorithm\KeyRestrictionAware;
+use Cose\Algorithm\KeyRestrictionEnforcement;
 use Cose\Algorithm\Signature\OpenSslError;
 use Cose\Algorithm\Signature\Signature;
 use Cose\Key\Key;
@@ -25,8 +27,10 @@ use Throwable;
  *
  * @see https://www.rfc-editor.org/rfc/rfc9864.html#section-2.2
  */
-final class Ed448 implements Signature
+final class Ed448 implements Signature, KeyRestrictionAware
 {
+    use KeyRestrictionEnforcement;
+
     public const ID = -53;
 
     /**
@@ -56,7 +60,7 @@ final class Ed448 implements Signature
 
     public function sign(string $data, Key $key): string
     {
-        $key = $this->handleKey($key);
+        $key = $this->handleKey($key, Key::OP_SIGN);
         if (! $key->isPrivate()) {
             throw new InvalidArgumentException('The key is not private.');
         }
@@ -76,7 +80,7 @@ final class Ed448 implements Signature
 
     public function verify(string $data, Key $key, string $signature): bool
     {
-        $key = $this->handleKey($key);
+        $key = $this->handleKey($key, Key::OP_VERIFY);
 
         // RFC 8032 section 5.2.7: a public key that cannot be decoded as a point makes the signature invalid; it is
         // a verification outcome, not an error.
@@ -88,7 +92,7 @@ final class Ed448 implements Signature
         return openssl_verify($data, $signature, $publicKey, self::NO_DIGEST) === 1;
     }
 
-    private function handleKey(Key $key): OkpKey
+    private function handleKey(Key $key, int $operation): OkpKey
     {
         if (! self::isSupported()) {
             throw new RuntimeException(
@@ -96,6 +100,7 @@ final class Ed448 implements Signature
             );
         }
 
+        $this->checkKeyRestrictions($key, $operation);
         try {
             $key = OkpKey::create($key->getData());
         } catch (InvalidArgumentException $e) {

@@ -18,6 +18,7 @@ This library provides full support for COSE (CBOR Object Signing and Encryption)
 - [Supported Algorithms](#supported-algorithms)
   - [Fully-Specified Algorithms](#fully-specified-algorithms)
   - [Signature Verification Contract](#signature-verification-contract)
+  - [Key Restrictions (alg and key_ops)](#key-restrictions-alg-and-key_ops)
   - [Ed25519 Private Keys](#ed25519-private-keys)
   - [Key Parameter Forms](#key-parameter-forms)
   - [Validating RSA Keys](#validating-rsa-keys)
@@ -410,8 +411,10 @@ The brainpool curves are also available on `Cose\Key\Ec2Key` as `CURVE_BP256`, `
 crypto layer cannot decode — a point that is not on the named curve, a public key that is not a valid group element —
 all return `false`. No PHP warning is raised on the way.
 
-It throws an `InvalidArgumentException` in one case only: the key cannot be used with the algorithm at all, i.e. its
-key type or its curve does not match. Structurally invalid key components — an empty or zero RSA modulus, an `x`, `y`
+It throws an `InvalidArgumentException` when the key cannot be used with the algorithm at all: its key type or its
+curve does not match, or - when the algorithm was asked to enforce them, see
+[Key Restrictions](#key-restrictions-alg-and-key_ops) - the key itself forbids the algorithm or the operation.
+Structurally invalid key components — an empty or zero RSA modulus, an `x`, `y`
 or `d` whose length does not fit the curve — are rejected earlier, by the `Key` constructors, so the exception is
 raised when the key is first seen rather than at every verification.
 
@@ -432,6 +435,75 @@ $isValid = $algorithm->verify($data, $key, $signature);
 
 `sign()` throws an `InvalidArgumentException` when the key is public, when the crypto layer cannot load it, or when the
 signature operation itself fails, for instance for an RSA modulus too short for the digest.
+
+### Key Restrictions (`alg` and `key_ops`)
+
+A COSE key may restrict itself. [RFC 9052, section 7.1](https://www.rfc-editor.org/rfc/rfc9052.html#section-7.1) gives
+it two parameters for that: `alg` (label 3) pins it to one algorithm — "If the algorithms do not match, then this key
+object MUST NOT be used to perform the cryptographic operation" — and `key_ops` (label 4) pins it to a set of
+operations, whose values are those of Table 5: `sign` (1), `verify` (2), `MAC create` (9) and `MAC verify` (10) for
+the algorithms this library implements. [RFC 9053](https://www.rfc-editor.org/rfc/rfc9053.html#section-2.1) repeats
+both as a per-algorithm requirement for ECDSA (§2.1), EdDSA (§2.2) and HMAC (§3.1).
+
+Enforcing them is **opt-in**, so that a key which used to work keeps working. Ask an algorithm — or a whole
+`Manager` — to enforce the restrictions, and it refuses the key with an `InvalidArgumentException` whenever the key
+forbids what is being done with it:
+
+```php
+use Cose\Algorithm\Manager;
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Algorithm\Signature\RSA\RS256;
+
+$algorithm = ES256::create()->withKeyRestrictionsEnforced();
+
+// …or for every algorithm of a manager at once
+$manager = Manager::create()
+    ->add(ES256::create(), RS256::create())
+    ->withKeyRestrictionsEnforced();
+
+// The key says "alg": -7 and "key_ops": [2], i.e. ES256, verification only
+$isValid = $algorithm->verify($data, $key, $signature); // fine
+$signature = $algorithm->sign($data, $key);             // InvalidArgumentException: the key does not allow "sign"
+```
+
+`withKeyRestrictionsEnforced()` returns a new algorithm and leaves the one it is called on untouched, so a manager
+that enforces the restrictions can live next to one that does not. `enforcesKeyRestrictions()` says which one you are
+holding, and `withKeyRestrictionsEnforced(false)` turns it off again.
+
+This matters when the algorithm is chosen from the message rather than from the key. A verifier that reads `alg` from
+the protected header and looks it up with `Manager::get()` has, without enforcement, no reason to refuse an RS1
+(RSASSA-PKCS1-v1_5 with SHA-1) signature made under a key that says it is for RS256, nor a 64 bit HMAC tag under a key
+that says it is for HMAC 256/256. With enforcement, the key itself rejects the downgrade.
+
+The restrictions can also be read and applied without going through an algorithm:
+
+```php
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Key\Key;
+
+$key->alg();    // -7; throws when "alg" is absent or is not an algorithm identifier
+$key->keyOps(); // [2] or ['verify'], null when the key carries no "key_ops"
+
+// Throws an InvalidArgumentException naming the restriction that is not satisfied
+$key->assertUsableWith(ES256::ID, Key::OP_VERIFY);
+
+// …or ask without the exception
+$isUsable = $key->isUsableWith(ES256::ID, Key::OP_SIGN);
+```
+
+Two details are worth knowing:
+
+- **Identifiers are compared as they are.** A key with `alg` = `ES256` (-7) is refused by `ESP256` (-9), and one with
+  `alg` = `EdDSA` (-8) is refused by the fully-specified `Ed25519` (-19), even though the cryptography is the same.
+  [RFC 9864, section 7](https://www.rfc-editor.org/rfc/rfc9864.html#section-7) asks for it: "A cryptographic key MUST
+  be used with only a single algorithm unless the use of the same key with different algorithms is proven secure."
+  A key meant to serve both carries no `alg` at all.
+- **`key_ops` accepts both spellings.** COSE writes the operations as the integers of Table 5; a key converted from a
+  JWK may carry the text names JOSE uses (`"sign"`, `"verify"`, `"MAC create"`, `"MAC verify"`). Both are recognised.
+
+`Key::alg()` is strict about the value it reads: an `alg` that is not an integer — the text `'RS256'`, for instance —
+throws instead of being cast to `0`, an identifier no algorithm is registered under. An integer written as a string
+(`'-7'`) is accepted, as the key constructors do for `kty` and `crv`.
 
 ### Ed25519 Private Keys
 

@@ -6,6 +6,8 @@ namespace Cose\Algorithm\Signature\RSA;
 
 use Brick\Math\Exception\MathException;
 use function chr;
+use Cose\Algorithm\KeyRestrictionAware;
+use Cose\Algorithm\KeyRestrictionEnforcement;
 use Cose\Algorithm\Signature\Signature;
 use Cose\BigInteger;
 use Cose\Hash;
@@ -49,8 +51,9 @@ use Throwable;
  *
  * @internal
  */
-abstract class PSSRSA implements Signature
+abstract class PSSRSA implements Signature, KeyRestrictionAware
 {
+    use KeyRestrictionEnforcement;
     use RsaKeyPolicy;
 
     public function __construct(?RsaKeyValidator $keyValidator = null)
@@ -60,7 +63,7 @@ abstract class PSSRSA implements Signature
 
     public function sign(string $data, Key $key): string
     {
-        $key = $this->handleKey($key);
+        $key = $this->handleKey($key, Key::OP_SIGN);
         RsaKeyValidator::checkPublicParameters($key);
         RsaKeyValidator::checkLengthBounds($key);
         $this->checkKeyPolicy($key);
@@ -82,7 +85,7 @@ abstract class PSSRSA implements Signature
     public function verify(string $data, Key $key, string $signature): bool
     {
         // RFC 8017, section 8.1.2: the verification operation uses the public key (n, e) only.
-        $key = $this->handleKey($key)
+        $key = $this->handleKey($key, Key::OP_VERIFY)
             ->toPublic();
         try {
             // Section 8.1.2 applies RSAVP1 under the assumption that the public key is valid (section 3.1). Nothing
@@ -148,8 +151,10 @@ abstract class PSSRSA implements Signature
 
     abstract protected function getHashAlgorithm(): Hash;
 
-    private function handleKey(Key $key): RsaKey
+    private function handleKey(Key $key, int $operation): RsaKey
     {
+        $this->checkKeyRestrictions($key, $operation);
+
         return RsaKey::create($key->getData());
     }
 

@@ -28,6 +28,11 @@ This library implements:
 - **MAC**: HMAC with SHA-256/384/512
 - Compatible with WebAuthn, FIDO2, and digital COVID certificates
 
+✅ **Key Restrictions** ([RFC 9052](https://www.rfc-editor.org/rfc/rfc9052.html#section-7.1) §7.1)
+- Opt-in enforcement of the `alg` (label 3) and `key_ops` (label 4) parameters a COSE key carries
+- Turned on per algorithm or for a whole `Manager`: `ES256::create()->withKeyRestrictionsEnforced()`
+- See [Key Restrictions](doc/Usage.md#key-restrictions-alg-and-key_ops)
+
 ✅ **Modern PHP**
 - PHP 8.1+ with strict types
 - Full type safety and PHPStan compliance
