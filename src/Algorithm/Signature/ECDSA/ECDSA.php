@@ -10,6 +10,7 @@ use Cose\Key\Key;
 use InvalidArgumentException;
 use function openssl_sign;
 use function openssl_verify;
+use function strlen;
 
 /**
  * @see \Cose\Tests\Algorithm\Signature\ECDSA\ECDSATest
@@ -28,7 +29,19 @@ abstract class ECDSA implements Signature
     {
         $key = $this->handleKey($key);
         $publicKey = $key->toPublic();
-        $signature = ECSignature::toAsn1($signature, $this->getSignaturePartLength());
+        $length = $this->getSignaturePartLength();
+        if (strlen($signature) !== $length) {
+            // A signature of the wrong size is a caller error, not attacker input: the exception is kept.
+            throw new InvalidArgumentException('Invalid signature length.');
+        }
+
+        try {
+            $signature = ECSignature::toAsn1($signature, $length);
+        } catch (InvalidArgumentException) {
+            // A well-formed but invalid signature (e.g. R = 0) is a verification failure, not an error.
+            return false;
+        }
+
         return openssl_verify($data, $signature, $publicKey->asPEM(), $this->getHashAlgorithm()) === 1;
     }
 

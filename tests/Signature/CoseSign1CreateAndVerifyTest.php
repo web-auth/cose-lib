@@ -13,6 +13,7 @@ use CBOR\OtherObject\OtherObjectManager;
 use CBOR\StringStream;
 use CBOR\Tag\TagManager;
 use CBOR\UnsignedIntegerObject;
+use Cose\Algorithm\Signature\ECDSA\ECSignature;
 use Cose\Signature\CoseSign1Tag;
 use Cose\Signature\Signature1;
 use PHPUnit\Framework\Attributes\Test;
