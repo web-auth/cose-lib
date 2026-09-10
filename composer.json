@@ -26,16 +26,19 @@
         "spomky-labs/pki-framework": "^1.0"
     },
     "require-dev": {
-        "spomky-labs/cbor-php": "^3.2.2"
+        "spomky-labs/cbor-php": "^3.3.4"
     },
     "replace": {
         "symfony/polyfill-php81": "*"
+    },
+    "conflict": {
+        "spomky-labs/cbor-php": "<3.3.4"
     },
     "suggest": {
         "ext-bcmath": "Recommended: without GMP or BCMath, signing with RSASSA-PSS (PS256/PS384/PS512) blinds its private exponentiation in pure PHP",
         "ext-gmp": "Recommended: without GMP or BCMath, signing with RSASSA-PSS (PS256/PS384/PS512) blinds its private exponentiation in pure PHP",
         "ext-sodium": "Required by the EdDSA/Ed25519 signature algorithms (-8, -19, -260, -261) and to recompute an OKP public key from its private key",
-        "spomky-labs/cbor-php": "For COSE Signature support"
+        "spomky-labs/cbor-php": "Required by the COSE_Sign/COSE_Encrypt/COSE_Mac tag classes. 3.3.4 or later: the decoder is what enforces the RFC 9052 label uniqueness and nesting bounds this library relies on"
     },
     "autoload": {
         "psr-4": {
@@ -46,5 +49,8 @@
         "psr-4": {
             "Cose\\Tests\\": "tests/"
         }
+    },
+    "scripts": {
+        "test": "@composer exec -- phpunit-11 --configuration .ci-tools/phpunit.xml.dist"
     }
 }
