@@ -140,41 +140,64 @@ $isValid = $algorithm->verify((string) $sigStructure, $key, $coseSign1->getSigna
 
 ```php
 use CBOR\ByteStringObject;
+use CBOR\ListObject;
 use CBOR\MapItem;
 use CBOR\MapObject;
 use CBOR\NegativeIntegerObject;
-use CBOR\UnsignedIntegerObject;
 use CBOR\Tag\CoseSign1Tag;
+use CBOR\UnsignedIntegerObject;
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Key\Ec2Key;
+use Cose\Signature\Signature1;
+use Cose\Structure\HeaderMapHelper;
+
+$algorithm = ES256::create();
+$key = Ec2Key::create($yourPrivateCoseKey);
 
 // Define headers
 $protectedHeader = MapObject::create([
     MapItem::create(
-        UnsignedIntegerObject::create(1), // alg
-        NegativeIntegerObject::create(-7) // ES256
+        UnsignedIntegerObject::create(1),                  // alg
+        NegativeIntegerObject::create(ES256::identifier()) // ES256 (-7)
     ),
 ]);
-
 $unprotectedHeader = MapObject::create([
     MapItem::create(
-        UnsignedIntegerObject::create(4), // kid
+        UnsignedIntegerObject::create(4),                  // kid
         ByteStringObject::create('my-key-id')
     ),
 ]);
+$payload = ByteStringObject::create('Message to sign');
 
-// Create COSE_Sign1
-$coseSign1 = CoseSign1Tag::createFromComponents(
-    $protectedHeader,
+// The signature covers the Sig_structure, never the payload on its own. Encode the protected bucket once, so the
+// bytes that are signed are the bytes the message carries. HeaderMapHelper applies RFC 9052 §3 on the way out: an
+// empty map becomes h'' rather than h'a0', and the labels are checked (§1.5, §9).
+$protectedHeaderAsBytes = HeaderMapHelper::encodeProtected($protectedHeader);
+$toBeSigned = Signature1::create($protectedHeaderAsBytes, $payload);
+$signature = ByteStringObject::create($algorithm->sign((string) $toBeSigned, $key));
+
+// Assemble the message around those exact bytes
+$coseSign1 = CoseSign1Tag::create(ListObject::create([
+    $protectedHeaderAsBytes,
     $unprotectedHeader,
-    ByteStringObject::create('Message to sign'),
-    ByteStringObject::create($signatureBytes)
-);
+    $payload,
+    $signature,
+]));
 
 // Encode to CBOR
 $encoded = (string) $coseSign1;
 ```
 
+> [!NOTE]
+> `CoseSign1Tag::createFromComponents($protectedHeader, $unprotectedHeader, $payload, $signature)` takes the protected
+> header as a **map** and encodes it itself, which is shorter but re-encodes what you already signed. Use it when the
+> signature is computed after the message, and `create()` — as above — when the bytes have to travel verbatim.
+> [`examples/01-sign1.php`](examples/01-sign1.php) is the whole round trip, key generation included, and runs as it
+> stands.
+
 ## Documentation
 
+- **[Examples](examples/)** - A runnable program per topic; `php examples/01-sign1.php` to start
 - **[Usage Guide](doc/Usage.md)** - Complete documentation with examples
 - **[RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052)** - COSE Structures
 - **[RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053)** - COSE Algorithms
