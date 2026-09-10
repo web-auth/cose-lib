@@ -1,58 +1,10 @@
 parameters:
 	ignoreErrors:
 		-
-			rawMessage: Class "Cose\Algorithm\Mac\HS256" is not allowed to extend "Cose\Algorithm\Mac\Hmac".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Mac/HS256.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Mac\HS256Truncated64" is not allowed to extend "Cose\Algorithm\Mac\Hmac".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Mac/HS256Truncated64.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Mac\HS384" is not allowed to extend "Cose\Algorithm\Mac\Hmac".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Mac/HS384.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Mac\HS512" is not allowed to extend "Cose\Algorithm\Mac\Hmac".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Mac/HS512.php
-
-		-
 			rawMessage: Cannot cast mixed to string.
 			identifier: cast.string
 			count: 1
 			path: ../src/Algorithm/Mac/Hmac.php
-
-		-
-			rawMessage: 'Method Cose\Algorithm\Mac\Hmac::hash() is not final, but since the containing class is abstract, it should be.'
-			identifier: ergebnis.finalInAbstractClass
-			count: 1
-			path: ../src/Algorithm/Mac/Hmac.php
-
-		-
-			rawMessage: 'Method Cose\Algorithm\Mac\Hmac::verify() is not final, but since the containing class is abstract, it should be.'
-			identifier: ergebnis.finalInAbstractClass
-			count: 1
-			path: ../src/Algorithm/Mac/Hmac.php
-
-		-
-			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECDSA::sign() is not final, but since the containing class is abstract, it should be.'
-			identifier: ergebnis.finalInAbstractClass
-			count: 1
-			path: ../src/Algorithm/Signature/ECDSA/ECDSA.php
-
-		-
-			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECDSA::verify() is not final, but since the containing class is abstract, it should be.'
-			identifier: ergebnis.finalInAbstractClass
-			count: 1
-			path: ../src/Algorithm/Signature/ECDSA/ECDSA.php
 
 		-
 			rawMessage: 'Parameter #1 $signature of static method Cose\Algorithm\Signature\ECDSA\ECSignature::fromAsn1() expects string, mixed given.'
@@ -67,18 +19,6 @@ parameters:
 			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
 
 		-
-			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECSignature::readAsn1Content() has parameter $position that is passed by reference.'
-			identifier: ergebnis.noParameterPassedByReference
-			count: 1
-			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
-
-		-
-			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECSignature::readAsn1Integer() has parameter $position that is passed by reference.'
-			identifier: ergebnis.noParameterPassedByReference
-			count: 1
-			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
-
-		-
 			rawMessage: 'Method Cose\Algorithm\Signature\ECDSA\ECSignature::toAsn1() should return string but returns string|false.'
 			identifier: return.type
 			count: 1
@@ -89,54 +29,6 @@ parameters:
 			identifier: identical.alwaysFalse
 			count: 1
 			path: ../src/Algorithm/Signature/ECDSA/ECSignature.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\ECDSA\ES256" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/ECDSA/ES256.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\ECDSA\ES256K" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/ECDSA/ES256K.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\ECDSA\ES384" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/ECDSA/ES384.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\ECDSA\ES512" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/ECDSA/ES512.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\EdDSA\Ed25519" is not allowed to extend "Cose\Algorithm\Signature\EdDSA\EdDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/EdDSA/Ed25519.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\EdDSA\Ed256" is not allowed to extend "Cose\Algorithm\Signature\EdDSA\EdDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/EdDSA/Ed256.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\EdDSA\Ed512" is not allowed to extend "Cose\Algorithm\Signature\EdDSA\EdDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/EdDSA/Ed512.php
-
-		-
-			rawMessage: Class Cose\Algorithm\Signature\EdDSA\EdDSA is neither abstract nor final.
-			identifier: ergebnis.final
-			count: 1
-			path: ../src/Algorithm/Signature/EdDSA/EdDSA.php
 
 		-
 			rawMessage: 'Parameter #1 $signature of function sodium_crypto_sign_verify_detached expects non-empty-string, string given.'
@@ -157,93 +49,15 @@ parameters:
 			path: ../src/Algorithm/Signature/EdDSA/EdDSA.php
 
 		-
-			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESB256" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/FullySpecified/ESB256.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESB320" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/FullySpecified/ESB320.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESB384" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/FullySpecified/ESB384.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESB512" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/FullySpecified/ESB512.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESP256" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/FullySpecified/ESP256.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESP384" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/FullySpecified/ESP384.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\ESP512" is not allowed to extend "Cose\Algorithm\Signature\ECDSA\ECDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/FullySpecified/ESP512.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\FullySpecified\Ed25519" is not allowed to extend "Cose\Algorithm\Signature\EdDSA\EdDSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/FullySpecified/Ed25519.php
-
-		-
 			rawMessage: 'Method Cose\Algorithm\Signature\FullySpecified\Ed448::sign() should return string but returns mixed.'
 			identifier: return.type
 			count: 1
 			path: ../src/Algorithm/Signature/FullySpecified/Ed448.php
 
 		-
-			rawMessage: Class "Cose\Algorithm\Signature\RSA\PS256" is not allowed to extend "Cose\Algorithm\Signature\RSA\PSSRSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/RSA/PS256.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\RSA\PS384" is not allowed to extend "Cose\Algorithm\Signature\RSA\PSSRSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/RSA/PS384.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\RSA\PS512" is not allowed to extend "Cose\Algorithm\Signature\RSA\PSSRSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/RSA/PS512.php
-
-		-
-			rawMessage: 'Method Cose\Algorithm\Signature\RSA\PSSRSA::exponentiate() is not final, but since the containing class is abstract, it should be.'
-			identifier: ergebnis.finalInAbstractClass
-			count: 1
-			path: ../src/Algorithm/Signature/RSA/PSSRSA.php
-
-		-
-			rawMessage: 'Method Cose\Algorithm\Signature\RSA\PSSRSA::sign() is not final, but since the containing class is abstract, it should be.'
-			identifier: ergebnis.finalInAbstractClass
-			count: 1
-			path: ../src/Algorithm/Signature/RSA/PSSRSA.php
-
-		-
-			rawMessage: 'Method Cose\Algorithm\Signature\RSA\PSSRSA::verify() is not final, but since the containing class is abstract, it should be.'
-			identifier: ergebnis.finalInAbstractClass
-			count: 1
+			rawMessage: 'Parameter #1 $codepoint of function chr expects int<0, 255>, int given.'
+			identifier: argument.type
+			count: 3
 			path: ../src/Algorithm/Signature/RSA/PSSRSA.php
 
 		-
@@ -253,64 +67,10 @@ parameters:
 			path: ../src/Algorithm/Signature/RSA/PSSRSA.php
 
 		-
-			rawMessage: Class "Cose\Algorithm\Signature\RSA\RS1" is not allowed to extend "Cose\Algorithm\Signature\RSA\RSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/RSA/RS1.php
-
-		-
-			rawMessage: Constructor in Cose\Algorithm\Signature\RSA\RS1 has parameter $acknowledgeInsecureAlgorithm with default value.
-			identifier: ergebnis.noConstructorParameterWithDefaultValue
-			count: 1
-			path: ../src/Algorithm/Signature/RSA/RS1.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\RSA\RS256" is not allowed to extend "Cose\Algorithm\Signature\RSA\RSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/RSA/RS256.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\RSA\RS384" is not allowed to extend "Cose\Algorithm\Signature\RSA\RSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/RSA/RS384.php
-
-		-
-			rawMessage: Class "Cose\Algorithm\Signature\RSA\RS512" is not allowed to extend "Cose\Algorithm\Signature\RSA\RSA".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Algorithm/Signature/RSA/RS512.php
-
-		-
-			rawMessage: 'Method Cose\Algorithm\Signature\RSA\RSA::sign() is not final, but since the containing class is abstract, it should be.'
-			identifier: ergebnis.finalInAbstractClass
-			count: 1
-			path: ../src/Algorithm/Signature/RSA/RSA.php
-
-		-
 			rawMessage: 'Method Cose\Algorithm\Signature\RSA\RSA::sign() should return string but returns mixed.'
 			identifier: return.type
 			count: 1
 			path: ../src/Algorithm/Signature/RSA/RSA.php
-
-		-
-			rawMessage: 'Method Cose\Algorithm\Signature\RSA\RSA::verify() is not final, but since the containing class is abstract, it should be.'
-			identifier: ergebnis.finalInAbstractClass
-			count: 1
-			path: ../src/Algorithm/Signature/RSA/RSA.php
-
-		-
-			rawMessage: 'Method Cose\Algorithms::getHashAlgorithmFor() is not final, but since the containing class is abstract, it should be.'
-			identifier: ergebnis.finalInAbstractClass
-			count: 1
-			path: ../src/Algorithms.php
-
-		-
-			rawMessage: 'Method Cose\Algorithms::getOpensslAlgorithmFor() is not final, but since the containing class is abstract, it should be.'
-			identifier: ergebnis.finalInAbstractClass
-			count: 1
-			path: ../src/Algorithms.php
 
 		-
 			rawMessage: 'Parameter #1 $array of function current expects array|object, array|false given.'
@@ -325,87 +85,9 @@ parameters:
 			path: ../src/BigInteger.php
 
 		-
-			rawMessage: Class "Cose\Encryption\CoseEncrypt0Tag" is not allowed to extend "CBOR\Tag".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Encryption/CoseEncrypt0Tag.php
-
-		-
-			rawMessage: 'Method Cose\Encryption\CoseEncrypt0Tag::__construct() has parameter $data with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Encryption/CoseEncrypt0Tag.php
-
-		-
-			rawMessage: 'Method Cose\Encryption\CoseEncrypt0Tag::createFromLoadedData() has parameter $data with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Encryption/CoseEncrypt0Tag.php
-
-		-
-			rawMessage: 'Method Cose\Encryption\CoseEncrypt0Tag::getProtectedHeaderAsMap() has parameter $decoder with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Encryption/CoseEncrypt0Tag.php
-
-		-
-			rawMessage: 'Method Cose\Encryption\CoseEncrypt0Tag::getProtectedHeaderAsMap() has parameter $decoder with null as default value.'
-			identifier: ergebnis.noParameterWithNullDefaultValue
-			count: 1
-			path: ../src/Encryption/CoseEncrypt0Tag.php
-
-		-
-			rawMessage: Class "Cose\Encryption\CoseEncryptTag" is not allowed to extend "CBOR\Tag".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Encryption/CoseEncryptTag.php
-
-		-
-			rawMessage: 'Method Cose\Encryption\CoseEncryptTag::__construct() has parameter $data with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Encryption/CoseEncryptTag.php
-
-		-
-			rawMessage: 'Method Cose\Encryption\CoseEncryptTag::createFromLoadedData() has parameter $data with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Encryption/CoseEncryptTag.php
-
-		-
-			rawMessage: 'Method Cose\Encryption\CoseEncryptTag::getProtectedHeaderAsMap() has parameter $decoder with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Encryption/CoseEncryptTag.php
-
-		-
-			rawMessage: 'Method Cose\Encryption\CoseEncryptTag::getProtectedHeaderAsMap() has parameter $decoder with null as default value.'
-			identifier: ergebnis.noParameterWithNullDefaultValue
-			count: 1
-			path: ../src/Encryption/CoseEncryptTag.php
-
-		-
 			rawMessage: Cannot cast mixed to string.
 			identifier: cast.string
 			count: 2
-			path: ../src/Key/Ec2Key.php
-
-		-
-			rawMessage: Class "Cose\Key\Ec2Key" is not allowed to extend "Cose\Key\Key".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Key/Ec2Key.php
-
-		-
-			rawMessage: Class Cose\Key\Ec2Key is neither abstract nor final.
-			identifier: ergebnis.final
-			count: 1
-			path: ../src/Key/Ec2Key.php
-
-		-
-			rawMessage: 'Language construct isset() should not be used.'
-			identifier: ergebnis.noIsset
-			count: 1
 			path: ../src/Key/Ec2Key.php
 
 		-
@@ -445,12 +127,6 @@ parameters:
 			path: ../src/Key/Key.php
 
 		-
-			rawMessage: Class Cose\Key\Key is neither abstract nor final.
-			identifier: ergebnis.final
-			count: 1
-			path: ../src/Key/Key.php
-
-		-
 			rawMessage: 'Method Cose\Key\Key::type() should return int|string but returns mixed.'
 			identifier: return.type
 			count: 1
@@ -461,24 +137,6 @@ parameters:
 			identifier: argument.type
 			count: 1
 			path: ../src/Key/Key.php
-
-		-
-			rawMessage: Class "Cose\Key\OkpKey" is not allowed to extend "Cose\Key\Key".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Key/OkpKey.php
-
-		-
-			rawMessage: Class Cose\Key\OkpKey is neither abstract nor final.
-			identifier: ergebnis.final
-			count: 1
-			path: ../src/Key/OkpKey.php
-
-		-
-			rawMessage: 'Language construct isset() should not be used.'
-			identifier: ergebnis.noIsset
-			count: 1
-			path: ../src/Key/OkpKey.php
 
 		-
 			rawMessage: 'Method Cose\Key\OkpKey::curve() should return int|string but returns mixed.'
@@ -497,24 +155,6 @@ parameters:
 			identifier: return.type
 			count: 1
 			path: ../src/Key/OkpKey.php
-
-		-
-			rawMessage: Class "Cose\Key\RsaKey" is not allowed to extend "Cose\Key\Key".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Key/RsaKey.php
-
-		-
-			rawMessage: Class Cose\Key\RsaKey is neither abstract nor final.
-			identifier: ergebnis.final
-			count: 1
-			path: ../src/Key/RsaKey.php
-
-		-
-			rawMessage: 'Language construct isset() should not be used.'
-			identifier: ergebnis.noIsset
-			count: 1
-			path: ../src/Key/RsaKey.php
 
 		-
 			rawMessage: 'Method Cose\Key\RsaKey::QInv() should return string but returns mixed.'
@@ -601,145 +241,7 @@ parameters:
 			path: ../src/Key/SymmetricKey.php
 
 		-
-			rawMessage: Class "Cose\Key\SymmetricKey" is not allowed to extend "Cose\Key\Key".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Key/SymmetricKey.php
-
-		-
-			rawMessage: Class Cose\Key\SymmetricKey is neither abstract nor final.
-			identifier: ergebnis.final
-			count: 1
-			path: ../src/Key/SymmetricKey.php
-
-		-
-			rawMessage: 'Language construct isset() should not be used.'
-			identifier: ergebnis.noIsset
-			count: 2
-			path: ../src/Key/SymmetricKey.php
-
-		-
 			rawMessage: 'Method Cose\Key\SymmetricKey::k() should return string but returns mixed.'
 			identifier: return.type
 			count: 1
 			path: ../src/Key/SymmetricKey.php
-
-		-
-			rawMessage: Class "Cose\Mac\CoseMac0Tag" is not allowed to extend "CBOR\Tag".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Mac/CoseMac0Tag.php
-
-		-
-			rawMessage: 'Method Cose\Mac\CoseMac0Tag::__construct() has parameter $data with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Mac/CoseMac0Tag.php
-
-		-
-			rawMessage: 'Method Cose\Mac\CoseMac0Tag::createFromLoadedData() has parameter $data with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Mac/CoseMac0Tag.php
-
-		-
-			rawMessage: 'Method Cose\Mac\CoseMac0Tag::getProtectedHeaderAsMap() has parameter $decoder with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Mac/CoseMac0Tag.php
-
-		-
-			rawMessage: 'Method Cose\Mac\CoseMac0Tag::getProtectedHeaderAsMap() has parameter $decoder with null as default value.'
-			identifier: ergebnis.noParameterWithNullDefaultValue
-			count: 1
-			path: ../src/Mac/CoseMac0Tag.php
-
-		-
-			rawMessage: Class "Cose\Mac\CoseMacTag" is not allowed to extend "CBOR\Tag".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Mac/CoseMacTag.php
-
-		-
-			rawMessage: 'Method Cose\Mac\CoseMacTag::__construct() has parameter $data with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Mac/CoseMacTag.php
-
-		-
-			rawMessage: 'Method Cose\Mac\CoseMacTag::createFromLoadedData() has parameter $data with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Mac/CoseMacTag.php
-
-		-
-			rawMessage: 'Method Cose\Mac\CoseMacTag::getProtectedHeaderAsMap() has parameter $decoder with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Mac/CoseMacTag.php
-
-		-
-			rawMessage: 'Method Cose\Mac\CoseMacTag::getProtectedHeaderAsMap() has parameter $decoder with null as default value.'
-			identifier: ergebnis.noParameterWithNullDefaultValue
-			count: 1
-			path: ../src/Mac/CoseMacTag.php
-
-		-
-			rawMessage: Class "Cose\Signature\CoseSign1Tag" is not allowed to extend "CBOR\Tag".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Signature/CoseSign1Tag.php
-
-		-
-			rawMessage: 'Method Cose\Signature\CoseSign1Tag::__construct() has parameter $data with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Signature/CoseSign1Tag.php
-
-		-
-			rawMessage: 'Method Cose\Signature\CoseSign1Tag::createFromLoadedData() has parameter $data with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Signature/CoseSign1Tag.php
-
-		-
-			rawMessage: 'Method Cose\Signature\CoseSign1Tag::getProtectedHeaderAsMap() has parameter $decoder with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Signature/CoseSign1Tag.php
-
-		-
-			rawMessage: 'Method Cose\Signature\CoseSign1Tag::getProtectedHeaderAsMap() has parameter $decoder with null as default value.'
-			identifier: ergebnis.noParameterWithNullDefaultValue
-			count: 1
-			path: ../src/Signature/CoseSign1Tag.php
-
-		-
-			rawMessage: Class "Cose\Signature\CoseSignTag" is not allowed to extend "CBOR\Tag".
-			identifier: ergebnis.noExtends
-			count: 1
-			path: ../src/Signature/CoseSignTag.php
-
-		-
-			rawMessage: 'Method Cose\Signature\CoseSignTag::__construct() has parameter $data with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Signature/CoseSignTag.php
-
-		-
-			rawMessage: 'Method Cose\Signature\CoseSignTag::createFromLoadedData() has parameter $data with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Signature/CoseSignTag.php
-
-		-
-			rawMessage: 'Method Cose\Signature\CoseSignTag::getProtectedHeaderAsMap() has parameter $decoder with a nullable type declaration.'
-			identifier: ergebnis.noParameterWithNullableTypeDeclaration
-			count: 1
-			path: ../src/Signature/CoseSignTag.php
-
-		-
-			rawMessage: 'Method Cose\Signature\CoseSignTag::getProtectedHeaderAsMap() has parameter $decoder with null as default value.'
-			identifier: ergebnis.noParameterWithNullDefaultValue
-			count: 1
-			path: ../src/Signature/CoseSignTag.php
