@@ -8,6 +8,7 @@ use function base64_decode;
 use function bin2hex;
 use Cose\Algorithm\Signature\ECDSA\ES256;
 use Cose\Key\EC2Key;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -82,6 +83,56 @@ final class EC2KeyTest extends TestCase
             EC2Key::DATA_X => random_bytes($coordinateLength - 1),
             EC2Key::DATA_Y => random_bytes($coordinateLength),
         ]);
+    }
+
+    /**
+     * RFC 5915 section 3 fixes the length of the private key, but only x and y used to be checked. A degenerate d
+     * produced signatures that the key's own public point rejected, with nothing failing at signing time.
+     */
+    #[Test]
+    #[DataProvider('getInvalidPrivateKeyLengths')]
+    public function aPrivateKeyOfTheWrongLengthIsRejected(mixed $d): void
+    {
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid length for d');
+
+        // When
+        EC2Key::create([
+            EC2Key::TYPE => EC2Key::TYPE_EC2,
+            EC2Key::DATA_CURVE => EC2Key::CURVE_P256,
+            EC2Key::DATA_X => random_bytes(32),
+            EC2Key::DATA_Y => random_bytes(32),
+            EC2Key::DATA_D => $d,
+        ]);
+    }
+
+    #[Test]
+    public function anUnsupportedCurveIsRejected(): void
+    {
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The curve is not supported');
+
+        // When
+        EC2Key::create([
+            EC2Key::TYPE => EC2Key::TYPE_EC2,
+            EC2Key::DATA_CURVE => 4242,
+            EC2Key::DATA_X => random_bytes(32),
+            EC2Key::DATA_Y => random_bytes(32),
+        ]);
+    }
+
+    /**
+     * @return iterable<string, array{mixed}>
+     */
+    public static function getInvalidPrivateKeyLengths(): iterable
+    {
+        yield 'empty' => [''];
+        yield 'a single byte' => ["\x00"];
+        yield 'too short' => [random_bytes(31)];
+        yield 'too long' => [random_bytes(40)];
+        yield 'an integer' => [42];
     }
 
     /**

@@ -17,6 +17,7 @@ This library provides full support for COSE (CBOR Object Signing and Encryption)
   - [COSE_Mac (With Recipients)](#cose_mac-with-recipients)
 - [Supported Algorithms](#supported-algorithms)
   - [Fully-Specified Algorithms](#fully-specified-algorithms)
+  - [Signature Verification Contract](#signature-verification-contract)
   - [Validating RSA Keys](#validating-rsa-keys)
 
 ## Installation
@@ -331,6 +332,36 @@ PHP 8.4. Call `Ed448::isSupported()` when the platform is not known in advance; 
 
 The brainpool curves are also available on `Cose\Key\Ec2Key` as `CURVE_BP256`, `CURVE_BP320`, `CURVE_BP384` and
 `CURVE_BP512` (values 256 to 259 of the COSE Elliptic Curves registry).
+
+### Signature Verification Contract
+
+`Cose\Algorithm\Signature\Signature::verify()` is total for every condition the governing specifications define as an
+"invalid signature" outcome. A malformed, truncated, over-long or out-of-range signature, and key material that the
+crypto layer cannot decode — a point that is not on the named curve, a public key that is not a valid group element —
+all return `false`. No PHP warning is raised on the way.
+
+It throws an `InvalidArgumentException` in one case only: the key cannot be used with the algorithm at all, i.e. its
+key type or its curve does not match. Structurally invalid key components — an empty or zero RSA modulus, an `x`, `y`
+or `d` whose length does not fit the curve — are rejected earlier, by the `Key` constructors, so the exception is
+raised when the key is first seen rather than at every verification.
+
+```php
+use Cose\Key\Key;
+use InvalidArgumentException;
+
+try {
+    // Throws only when $key is an RSA key, an EC key on another curve, …
+    $key = Key::createFromData($credentialPublicKey);
+} catch (InvalidArgumentException $e) {
+    // The credential cannot be used with this algorithm: reject it at registration.
+}
+
+// From here on, verification is a plain boolean, whatever the client sent.
+$isValid = $algorithm->verify($data, $key, $signature);
+```
+
+`sign()` throws an `InvalidArgumentException` when the key is public, when the crypto layer cannot load it, or when the
+signature operation itself fails, for instance for an RSA modulus too short for the digest.
 
 ### Validating RSA Keys
 

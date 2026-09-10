@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cose\Tests\Algorithm\Signature\ECDSA;
 
+use function chr;
 use Cose\Algorithm\Signature\ECDSA\ECDSA;
 use Cose\Algorithm\Signature\ECDSA\ES256;
 use Cose\Algorithm\Signature\ECDSA\ES256K;
@@ -11,10 +12,17 @@ use Cose\Algorithm\Signature\ECDSA\ES384;
 use Cose\Algorithm\Signature\ECDSA\ES512;
 use Cose\Key\Ec2Key;
 use Cose\Key\OkpKey;
+use ErrorException;
+use function hex2bin;
 use InvalidArgumentException;
+use function ord;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use function random_bytes;
+use function restore_error_handler;
+use function set_error_handler;
+use function str_repeat;
 
 final class ECDSATest extends TestCase
 {
@@ -97,7 +105,7 @@ final class ECDSATest extends TestCase
         $key = OkpKey::create([
             OkpKey::TYPE => Ec2Key::TYPE_OKP,
             OkpKey::DATA_CURVE => OkpKey::CURVE_X25519,
-            OkpKey::DATA_X => '',
+            OkpKey::DATA_X => str_repeat("\0", 32),
         ]);
 
         // When
@@ -129,6 +137,121 @@ final class ECDSATest extends TestCase
             'eyJhbGciOiJIUzI1NiIsImtpZCI6IjAxOGMwYWU1LTRkOWItNDcxYi1iZmQ2LWVlZjMxNGJjNzAzNyJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdSBkb24ndCBrZWVwIHlvdXIgZmVldCwgdGhlcmXigJlzIG5vIGtub3dpbmcgd2hlcmUgeW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4',
             $key
         );
+    }
+
+    /**
+     * ECSignature::toAsn1() strips the leading zero bytes of r and s before writing their DER length. A stripped
+     * coordinate shorter than 16 octets used to be prefixed with a single hex digit, which made hex2bin() fail and
+     * the string return type raise a TypeError.
+     */
+    #[Test]
+    public function aSignatureWhoseCoordinatesAreAlmostEntirelyZeroIsRejected(): void
+    {
+        // Given
+        $algorithm = ES256::create();
+        $key = self::sampleP256Key();
+        // r has 17 leading zero bytes, so only 15 octets are left once they are stripped.
+        $signature = str_repeat("\x00", 17) . random_bytes(15) . random_bytes(32);
+
+        // When
+        $isValid = $algorithm->verify('sample', $key, $signature);
+
+        // Then
+        static::assertFalse($isValid);
+    }
+
+    #[Test]
+    #[DataProvider('getInvalidSignatureLengths')]
+    public function aSignatureOfTheWrongLengthIsRejected(int $length): void
+    {
+        // Given
+        $algorithm = ES256::create();
+        $key = self::sampleP256Key();
+
+        // When
+        $isValid = $algorithm->verify('sample', $key, $length === 0 ? '' : random_bytes($length));
+
+        // Then
+        static::assertFalse($isValid);
+    }
+
+    /**
+     * Nothing checks that (x, y) is a point of the named curve, so OpenSSL is the one that refuses the key. It used
+     * to do so from inside openssl_verify(), with an E_WARNING that a Symfony style error handler turns into an
+     * ErrorException.
+     */
+    #[Test]
+    public function aPublicKeyThatIsNotOnTheCurveIsRejectedWithoutRaisingAWarning(): void
+    {
+        // Given
+        $algorithm = ES256::create();
+        $y = hex2bin('7903FE1008B8BC99A41AE9E95628BC64F2F1B20C2D7E9F5177A3C294D4462299');
+        // chr()/ord() rather than the shorthand operator: PHP does not allow "^=" on a string offset.
+        $y[31] = chr(ord($y[31]) ^ 0x01);
+        $key = Ec2Key::create([
+            Ec2Key::TYPE => Ec2Key::TYPE_EC2,
+            Ec2Key::DATA_CURVE => Ec2Key::CURVE_P256,
+            Ec2Key::DATA_X => hex2bin('60FED4BA255A9D31C961EB74C6356D68C049B8923B61FA6CE669622E60F29FB6'),
+            Ec2Key::DATA_Y => $y,
+        ]);
+
+        // When
+        $isValid = self::withoutErrorHandler(
+            static fn (): bool => $algorithm->verify('sample', $key, random_bytes(64))
+        );
+
+        // Then
+        static::assertFalse($isValid);
+    }
+
+    /**
+     * A genuine P-256 point, but labelled with the P-256K curve identifier: OpenSSL cannot decode it either.
+     */
+    #[Test]
+    public function aPointLabelledWithAnotherCurveIsRejectedWithoutRaisingAWarning(): void
+    {
+        // Given
+        $algorithm = ES256K::create();
+        $key = Ec2Key::create([
+            Ec2Key::TYPE => Ec2Key::TYPE_EC2,
+            Ec2Key::DATA_CURVE => Ec2Key::CURVE_P256K,
+            Ec2Key::DATA_X => hex2bin('60FED4BA255A9D31C961EB74C6356D68C049B8923B61FA6CE669622E60F29FB6'),
+            Ec2Key::DATA_Y => hex2bin('7903FE1008B8BC99A41AE9E95628BC64F2F1B20C2D7E9F5177A3C294D4462299'),
+        ]);
+
+        // When
+        $isValid = self::withoutErrorHandler(
+            static fn (): bool => $algorithm->verify('sample', $key, random_bytes(64))
+        );
+
+        // Then
+        static::assertFalse($isValid);
+    }
+
+    #[Test]
+    public function aSignatureCannotBeComputedWithAPublicKey(): void
+    {
+        // Given
+        $algorithm = ES256::create();
+        $key = self::sampleP256Key();
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The key is not private.');
+
+        // When
+        $algorithm->sign('sample', $key);
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function getInvalidSignatureLengths(): iterable
+    {
+        yield 'empty' => [0];
+        yield 'one byte short' => [63];
+        yield 'one byte too long' => [65];
+        yield 'the length of another curve' => [96];
     }
 
     /**
@@ -283,5 +406,40 @@ final class ECDSATest extends TestCase
         $isValid = $algorithm->verify($data, $key, $invalidSignature);
         // Then
         static::assertFalse($isValid);
+    }
+
+    private static function sampleP256Key(): Ec2Key
+    {
+        return Ec2Key::create([
+            Ec2Key::TYPE => Ec2Key::TYPE_EC2,
+            Ec2Key::DATA_CURVE => Ec2Key::CURVE_P256,
+            Ec2Key::DATA_X => hex2bin('60FED4BA255A9D31C961EB74C6356D68C049B8923B61FA6CE669622E60F29FB6'),
+            Ec2Key::DATA_Y => hex2bin('7903FE1008B8BC99A41AE9E95628BC64F2F1B20C2D7E9F5177A3C294D4462299'),
+        ]);
+    }
+
+    /**
+     * Runs the callback with an error handler that turns any PHP error into an exception, so that a stray E_WARNING
+     * fails the test instead of being swallowed.
+     *
+     * @param callable(): bool $callback
+     */
+    private static function withoutErrorHandler(callable $callback): bool
+    {
+        set_error_handler(
+            static fn (int $severity, string $message, string $file, int $line): bool => throw new ErrorException(
+                $message,
+                0,
+                $severity,
+                $file,
+                $line
+            )
+        );
+
+        try {
+            return $callback();
+        } finally {
+            restore_error_handler();
+        }
     }
 }

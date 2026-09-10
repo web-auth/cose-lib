@@ -8,6 +8,7 @@ use function array_key_exists;
 use function in_array;
 use InvalidArgumentException;
 use function is_int;
+use function is_string;
 use SpomkyLabs\Pki\ASN1\Type\Constructed\Sequence;
 use SpomkyLabs\Pki\ASN1\Type\Primitive\BitString;
 use SpomkyLabs\Pki\ASN1\Type\Primitive\Integer;
@@ -147,18 +148,25 @@ class Ec2Key extends Key
         if (! isset($data[self::DATA_CURVE], $data[self::DATA_X], $data[self::DATA_Y])) {
             throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x/y" coordinates are missing');
         }
-        if (strlen((string) $data[self::DATA_X]) !== self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]]) {
-            throw new InvalidArgumentException('Invalid length for x coordinate');
-        }
-        if (strlen((string) $data[self::DATA_Y]) !== self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]]) {
-            throw new InvalidArgumentException('Invalid length for y coordinate');
-        }
+        // The curve is checked first: the coordinate lengths below are read from a table indexed by the curve.
         if (is_int($data[self::DATA_CURVE])) {
             if (! in_array($data[self::DATA_CURVE], self::SUPPORTED_CURVES_INT, true)) {
                 throw new InvalidArgumentException('The curve is not supported');
             }
         } elseif (! in_array($data[self::DATA_CURVE], self::SUPPORTED_CURVES_NAMES, true)) {
             throw new InvalidArgumentException('The curve is not supported');
+        }
+        $length = self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]];
+        if (strlen((string) $data[self::DATA_X]) !== $length) {
+            throw new InvalidArgumentException('Invalid length for x coordinate');
+        }
+        if (strlen((string) $data[self::DATA_Y]) !== $length) {
+            throw new InvalidArgumentException('Invalid length for y coordinate');
+        }
+        // RFC 5915 section 3: the private key is "an octet string of length ceiling (log2(n)/8)".
+        if (array_key_exists(self::DATA_D, $data)
+            && (! is_string($data[self::DATA_D]) || strlen($data[self::DATA_D]) !== $length)) {
+            throw new InvalidArgumentException('Invalid length for d');
         }
     }
 

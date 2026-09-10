@@ -8,6 +8,8 @@ use function array_key_exists;
 use Brick\Math\BigInteger;
 use function in_array;
 use InvalidArgumentException;
+use function is_string;
+use function ltrim;
 use SpomkyLabs\Pki\CryptoTypes\Asymmetric\PublicKeyInfo;
 use SpomkyLabs\Pki\CryptoTypes\Asymmetric\RSA\RSAPrivateKey;
 use SpomkyLabs\Pki\CryptoTypes\Asymmetric\RSA\RSAPublicKey;
@@ -43,6 +45,18 @@ class RsaKey extends Key
     final public const DATA_TI = -12;
 
     /**
+     * @var array<int>
+     */
+    private const PRIVATE_PARAMETERS = [
+        self::DATA_D,
+        self::DATA_P,
+        self::DATA_Q,
+        self::DATA_DP,
+        self::DATA_DQ,
+        self::DATA_QI,
+    ];
+
+    /**
      * @param array<int|string, mixed> $data
      */
     public function __construct(array $data)
@@ -58,6 +72,21 @@ class RsaKey extends Key
         }
         if (! isset($data[self::DATA_N], $data[self::DATA_E])) {
             throw new InvalidArgumentException('Invalid RSA key. The modulus or the exponent is missing');
+        }
+        $modulus = $data[self::DATA_N];
+        $exponent = $data[self::DATA_E];
+        if (! is_string($modulus) || $modulus === '' || ! is_string($exponent) || $exponent === '') {
+            throw new InvalidArgumentException(
+                'Invalid RSA key. The modulus and the exponent shall be non-empty byte strings'
+            );
+        }
+        if (ltrim($modulus, "\0") === '') {
+            throw new InvalidArgumentException('Invalid RSA key. The modulus shall not be zero');
+        }
+        foreach (self::PRIVATE_PARAMETERS as $parameter) {
+            if (array_key_exists($parameter, $data) && ! is_string($data[$parameter])) {
+                throw new InvalidArgumentException('Invalid RSA key. The private parameters shall be byte strings');
+            }
         }
     }
 

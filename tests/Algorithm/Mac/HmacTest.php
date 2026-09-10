@@ -77,7 +77,7 @@ final class HmacTest extends TestCase
         $key = OkpKey::create([
             OkpKey::TYPE => SymmetricKey::TYPE_OKP,
             OkpKey::DATA_CURVE => OkpKey::CURVE_X25519,
-            OkpKey::DATA_X => '',
+            OkpKey::DATA_X => str_repeat("\0", 32),
         ]);
 
         // When

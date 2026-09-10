@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Signature\ECDSA;
 
+use Cose\Algorithm\Signature\OpenSslError;
 use Cose\Algorithm\Signature\Signature;
 use Cose\Key\Ec2Key;
 use Cose\Key\Key;
 use InvalidArgumentException;
+use function openssl_pkey_get_private;
+use function openssl_pkey_get_public;
 use function openssl_sign;
 use function openssl_verify;
 use function strlen;
@@ -20,7 +23,19 @@ abstract class ECDSA implements Signature
     public function sign(string $data, Key $key): string
     {
         $key = $this->handleKey($key);
-        openssl_sign($data, $signature, $key->asPEM(), $this->getHashAlgorithm());
+        if (! $key->isPrivate()) {
+            throw new InvalidArgumentException('The key is not private.');
+        }
+        $privateKey = openssl_pkey_get_private($key->asPEM());
+        if ($privateKey === false) {
+            throw new InvalidArgumentException('Unable to load the EC private key');
+        }
+        OpenSslError::clear();
+        // openssl_sign() reports failure with a boolean and never throws: an unusable key would otherwise leave
+        // $signature null and raise a TypeError inside ECSignature::fromAsn1().
+        if (! openssl_sign($data, $signature, $privateKey, $this->getHashAlgorithm())) {
+            throw new InvalidArgumentException('Unable to sign the data: ' . OpenSslError::lastMessage());
+        }
 
         return ECSignature::fromAsn1($signature, $this->getSignaturePartLength());
     }
@@ -28,11 +43,11 @@ abstract class ECDSA implements Signature
     public function verify(string $data, Key $key, string $signature): bool
     {
         $key = $this->handleKey($key);
-        $publicKey = $key->toPublic();
         $length = $this->getSignaturePartLength();
+        // A signature that does not hold exactly the two coordinates of this curve is an invalid signature, not a
+        // caller error: webauthn-lib hands the bytes of an assertion straight to verify().
         if (strlen($signature) !== $length) {
-            // A signature of the wrong size is a caller error, not attacker input: the exception is kept.
-            throw new InvalidArgumentException('Invalid signature length.');
+            return false;
         }
 
         try {
@@ -41,8 +56,14 @@ abstract class ECDSA implements Signature
             // A well-formed but invalid signature (e.g. R = 0) is a verification failure, not an error.
             return false;
         }
+        // The key is loaded before use: openssl_verify() would raise an E_WARNING for key material OpenSSL cannot
+        // coerce into a public key, e.g. a point that is not on the named curve.
+        $publicKey = openssl_pkey_get_public($key->toPublic()->asPEM());
+        if ($publicKey === false) {
+            return false;
+        }
 
-        return openssl_verify($data, $signature, $publicKey->asPEM(), $this->getHashAlgorithm()) === 1;
+        return openssl_verify($data, $signature, $publicKey, $this->getHashAlgorithm()) === 1;
     }
 
     abstract protected function getCurve(): int;

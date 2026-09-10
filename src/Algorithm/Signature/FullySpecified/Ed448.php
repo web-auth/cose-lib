@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Signature\FullySpecified;
 
+use Cose\Algorithm\Signature\OpenSslError;
 use Cose\Algorithm\Signature\Signature;
 use Cose\Key\Key;
 use Cose\Key\OkpKey;
@@ -64,8 +65,9 @@ final class Ed448 implements Signature
             throw new InvalidArgumentException('Unable to load the Ed448 private key');
         }
 
+        OpenSslError::clear();
         if (! openssl_sign($data, $signature, $privateKey, self::NO_DIGEST)) {
-            throw new InvalidArgumentException('Unable to sign the data');
+            throw new InvalidArgumentException('Unable to sign the data: ' . OpenSslError::lastMessage());
         }
 
         return $signature;
@@ -75,9 +77,11 @@ final class Ed448 implements Signature
     {
         $key = $this->handleKey($key);
 
+        // RFC 8032 section 5.2.7: a public key that cannot be decoded as a point makes the signature invalid; it is
+        // a verification outcome, not an error.
         $publicKey = openssl_pkey_get_public($key->toPublic()->asPEM());
         if ($publicKey === false) {
-            throw new InvalidArgumentException('Unable to load the Ed448 public key');
+            return false;
         }
 
         return openssl_verify($data, $signature, $publicKey, self::NO_DIGEST) === 1;
