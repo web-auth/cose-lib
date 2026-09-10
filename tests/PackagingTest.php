@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Cose\Tests;
 
+use CBOR\Tag\CoseEncrypt0Tag;
+use CBOR\Tag\CoseEncryptTag;
+use CBOR\Tag\CoseMac0Tag;
+use CBOR\Tag\CoseMacTag;
+use CBOR\Tag\CoseSign1Tag;
+use CBOR\Tag\CoseSignTag;
 use function file_get_contents;
 use function is_array;
 use function is_string;
@@ -41,25 +47,50 @@ final class PackagingTest extends TestCase
     }
 
     /**
-     * RFC 9052 label uniqueness (sections 3 and 9) and the nesting bound are enforced by the CBOR decoder alone.
-     * Duplicate labels are rejected since spomky-labs/cbor-php 3.3.4 (GHSA-388j-mw2g-rx5f) and the depth bound
-     * exists since 3.3.3, so anything below 3.3.4 must not be installed next to this library. "require-dev" is never
-     * read downstream: only the "conflict" entry makes the floor binding.
+     * Two things this library does not implement itself come from the CBOR decoder: RFC 9052 label uniqueness
+     * (sections 3 and 9) and the nesting bound. Since 4.8.0 a third does -- the six COSE message classes the
+     * deprecated Cose\...Tag classes point at, which spomky-labs/cbor-php ships from 3.4.0.
+     *
+     * "require-dev" is never read downstream: only the "conflict" entry makes the floor binding, so a deprecation
+     * message naming CBOR\Tag\CoseSign1Tag is only honest while anything below 3.4.0 is excluded.
      */
     #[Test]
-    public function theCborDecoderFloorIsBinding(): void
+    public function theCborFloorIsBinding(): void
     {
         // Given
         $composer = self::composerJson();
 
         // Then
-        static::assertSame('<3.3.4', $composer['conflict']['spomky-labs/cbor-php'] ?? null);
-        static::assertSame('^3.3.4', $composer['require-dev']['spomky-labs/cbor-php'] ?? null);
+        static::assertSame('<3.4.0', $composer['conflict']['spomky-labs/cbor-php'] ?? null);
+        static::assertSame('^3.4', $composer['require-dev']['spomky-labs/cbor-php'] ?? null);
         static::assertStringContainsString(
-            '3.3.4',
+            '3.4.0',
             (string) ($composer['suggest']['spomky-labs/cbor-php'] ?? ''),
-            'The suggestion does not mention the version the header-map rules need'
+            'The suggestion does not mention the version the replacement classes need'
         );
+    }
+
+    /**
+     * The classes every deprecation message points at have to be installable next to this library, which is what
+     * the floor above buys. A message naming a class nobody can autoload is worse than no message.
+     */
+    #[Test]
+    public function theReplacementOfEveryDeprecatedClassExists(): void
+    {
+        // Given: the six classes deprecated in 4.8.0 (issue #176)
+        $replacements = [
+            CoseSign1Tag::class,
+            CoseSignTag::class,
+            CoseMac0Tag::class,
+            CoseMacTag::class,
+            CoseEncrypt0Tag::class,
+            CoseEncryptTag::class,
+        ];
+
+        // Then
+        foreach ($replacements as $replacement) {
+            static::assertTrue(class_exists($replacement), $replacement . ' is not installed');
+        }
     }
 
     /**

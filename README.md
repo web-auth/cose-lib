@@ -14,13 +14,24 @@ This library implements:
 
 ## Features
 
-✅ **Complete COSE Tag Support**
-- COSE_Sign1 (tag 18) - Single signature
-- COSE_Sign (tag 98) - Multiple signatures
-- COSE_Encrypt0 (tag 16) - Single recipient encryption
-- COSE_Encrypt (tag 96) - Multiple recipients encryption
-- COSE_Mac0 (tag 17) - MAC without recipients
-- COSE_Mac (tag 97) - MAC with recipients
+✅ **RFC 9052 Cryptographic Structures**
+- `Sig_structure`: `Signature1` (§4.4) and `Signature`, which also covers the signer's own protected header
+- `MAC_structure`: `Mac0Structure` and `MacStructure` (§6.3) — a MAC tag covers this, never the bare payload
+- `Enc_structure`: `Encrypt0Structure`, `EncryptStructure` and `RecipientStructure` (§5.3)
+- Each takes the optional `external_aad`, defaulting to the zero-length byte string the RFC prescribes
+
+✅ **RFC 9052 Header and Structure Rules**
+- `CoseHeaders` reads the two buckets of any COSE message: a label is an integer *or* a text string (§1.5) and the
+  two never answer for each other, the zero-length protected header is accepted (§3), trailing bytes in the
+  protected bucket are not, and the protected value wins a combined lookup
+- `CoseSignature` and `CoseRecipient` are the checked views over the `signatures` and `recipients` lists (`[+ ...]`)
+- Works on the COSE message classes of spomky-labs/cbor-php 3.4.0
+
+✅ **COSE Tag Support** (via [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0)
+- `CBOR\Tag\CoseSign1Tag` (18), `CoseSignTag` (98), `CoseEncrypt0Tag` (16), `CoseEncryptTag` (96),
+  `CoseMac0Tag` (17), `CoseMacTag` (97), plus `CwtTag` (61), all registered in the default decoder
+- The `Cose\...Tag` classes of this library are **deprecated since 4.8.0** and removed in 5.0.0; see
+  [Upgrading](doc/Usage.md#upgrading-from-the-cosetag-classes)
 
 ✅ **Cryptographic Algorithms**
 - **Signatures**: ECDSA (ES256, ES384, ES512, ES256K), EdDSA (Ed25519, Ed448), RSA (RS256/384/512, PS256/384/512)
@@ -52,9 +63,10 @@ For COSE tag support (Sign, Encrypt, Mac operations), also install:
 composer require "spomky-labs/cbor-php:^3.3.4"
 ```
 
-3.3.4 is the floor this library declares (`conflict: <3.3.4`): the CBOR decoder is what enforces the header-map rules
-of [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) — a label appearing twice in a map makes the message
-malformed (§3, §9), and nesting is bounded so that a crafted header cannot exhaust the memory of the process.
+3.4.0 is the floor this library declares (`conflict: <3.4.0`). Two things come from there rather than from here: the
+CBOR decoder enforces the header-map rules of [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) — a label
+appearing twice in a map makes the message malformed (§3, §9), and nesting is bounded so that a crafted header cannot
+exhaust the memory of the process — and, since 3.4.0, the six COSE message classes themselves.
 
 ## Quick Start
 
@@ -63,13 +75,13 @@ malformed (§3, §9), and nesting is bounded so that a crafted header cannot exh
 ```php
 use CBOR\Decoder;
 use CBOR\ListObject;
-use CBOR\OtherObject\OtherObjectManager;
+use CBOR\OtherObject\NullObject;
 use CBOR\StringStream;
-use CBOR\Tag\TagManager;
+use CBOR\Tag\CoseSign1Tag;
 use Cose\Algorithm\Signature\ECDSA\ES256;
 use Cose\Key\Ec2Key;
-use Cose\Signature\CoseSign1Tag;
 use Cose\Signature\Signature1;
+use Cose\Structure\CoseHeaders;
 
 // The key of the signer you trust, and the algorithm you expect it to be used with.
 $key = Ec2Key::create($theCoseKeyYouPinned);
@@ -77,22 +89,26 @@ $algorithm = ES256::create();
 // The protected header labels this application knows how to process (1 = alg, 2 = crit).
 $understoodLabels = [1, 2];
 
-// Setup decoder with COSE tag support
-$tagManager = TagManager::create()->add(CoseSign1Tag::class);
-$decoder = Decoder::create($tagManager, OtherObjectManager::create());
+// cbor-php 3.4.0 registers the six COSE tags in the default decoder: tag 18 resolves on its own.
+$coseSign1 = Decoder::create()->decode(new StringStream($encodedData));
+if (! $coseSign1 instanceof CoseSign1Tag) {
+    throw new RuntimeException('Not a COSE_Sign1 message');
+}
 
-// Decode COSE_Sign1 message
-$coseSign1 = $decoder->decode(new StringStream($encodedData));
-$header = $coseSign1->getProtectedHeaderAsMap();
+// cbor-php carries the header buckets; this library reads them the way RFC 9052 defines them.
+$headers = CoseHeaders::fromMessage($coseSign1);
 
 // RFC 9052 §3.1: bind the signature to the algorithm the protected header declares.
-if (! $header->has(1) || (int) $header->get(1)->normalize() !== $algorithm::identifier()) {
+// The label is matched by type as well as by value, so the text string "1" — a different label under §1.5 —
+// never answers a lookup for the integer label 1.
+$alg = $headers->getProtectedHeaderParameter(1);
+if ($alg === null || (int) $alg->normalize() !== $algorithm::identifier()) {
     throw new RuntimeException('Unexpected or missing "alg" in the protected header');
 }
 
 // RFC 9052 §3.1: every parameter listed in "crit" must be processed, or the message must be rejected.
-if ($header->has(2)) {
-    $crit = $header->get(2);
+$crit = $headers->getProtectedHeaderParameter(2);
+if ($crit !== null) {
     if (! $crit instanceof ListObject) {
         throw new RuntimeException('"crit" is not an array');
     }
@@ -103,8 +119,14 @@ if ($header->has(2)) {
     }
 }
 
+// RFC 9052 §4.2: a nil payload is detached and the application supplies the content itself.
+$payload = $coseSign1->getPayload();
+if ($payload instanceof NullObject) {
+    throw new RuntimeException('The payload is detached; supply it from the application');
+}
+
 // Verify the Sig_structure the signature covers
-$sigStructure = Signature1::create($coseSign1->getProtectedHeader(), $coseSign1->getPayload());
+$sigStructure = Signature1::create($coseSign1->getProtectedHeader(), $payload);
 $isValid = $algorithm->verify((string) $sigStructure, $key, $coseSign1->getSignature()->getValue());
 ```
 
@@ -122,7 +144,7 @@ use CBOR\MapItem;
 use CBOR\MapObject;
 use CBOR\NegativeIntegerObject;
 use CBOR\UnsignedIntegerObject;
-use Cose\Signature\CoseSign1Tag;
+use CBOR\Tag\CoseSign1Tag;
 
 // Define headers
 $protectedHeader = MapObject::create([
@@ -140,7 +162,7 @@ $unprotectedHeader = MapObject::create([
 ]);
 
 // Create COSE_Sign1
-$coseSign1 = CoseSign1Tag::create(
+$coseSign1 = CoseSign1Tag::createFromComponents(
     $protectedHeader,
     $unprotectedHeader,
     ByteStringObject::create('Message to sign'),

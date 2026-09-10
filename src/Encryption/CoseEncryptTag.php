@@ -12,9 +12,34 @@ use CBOR\MapObject;
 use CBOR\OtherObject\OtherObjectManager;
 use CBOR\StringStream;
 use CBOR\Tag;
+use CBOR\Tag\CoseEncryptTag as UpstreamTag;
 use CBOR\Tag\TagManager;
+use const E_USER_DEPRECATED;
 use InvalidArgumentException;
+use function sprintf;
+use function trigger_error;
 
+/**
+ * A tagged COSE_Encrypt (RFC 9052, CBOR tag 96).
+ *
+ * @deprecated since 4.8.0, use \CBOR\Tag\CoseEncryptTag from spomky-labs/cbor-php 3.4.0 or later instead. Will be removed
+ * in 5.0.0.
+ *
+ * The six COSE structures were ported upstream in cbor-php 3.4.0, where they share AbstractCoseTag and are
+ * registered in the default decoder, so Decoder::create() resolves tag 96 on its own. The replacement accepts what
+ * this class rejects -- a zero-length protected header, a detached (nil) payload, the indefinite-length encodings --
+ * and reads every item through the list it carries, so its accessors cannot drift from the bytes it serializes.
+ *
+ * What does not move upstream is the RFC 9052 layer above the CBOR shape, and that stays here: {@see \Cose\Structure\CoseHeaders}
+ * for header labels typed as RFC 9052 section 1.5 defines them, and the Sig_structure, MAC_structure and
+ * Enc_structure builders that a signature or a MAC is actually computed over. Both work on the upstream classes.
+ *
+ * Migrating: the class name changes, and the four-argument create() becomes createFromComponents() -- upstream
+ * create() takes the whole list instead.
+ *
+ * @see https://github.com/web-auth/cose-lib/issues/176
+ * @see \Cose\Tests\Structure\DeprecatedTagClassesTest
+ */
 final class CoseEncryptTag extends Tag
 {
     /**
@@ -36,6 +61,12 @@ final class CoseEncryptTag extends Tag
 
     public function __construct(int $additionalInformation, ?string $data, CBORObject $object)
     {
+        trigger_error(sprintf(
+            'The class "%s" is deprecated since 4.8.0 and will be removed in 5.0.0. Use "%s" from spomky-labs/cbor-php 3.4.0 or later instead.',
+            self::class,
+            UpstreamTag::class
+        ), E_USER_DEPRECATED);
+
         if (! $object instanceof ListObject) {
             throw new InvalidArgumentException('Not a valid CoseEncrypt object. No list.');
         }

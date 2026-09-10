@@ -16,6 +16,7 @@ use CBOR\UnsignedIntegerObject;
 use Cose\Algorithm\Signature\ECDSA\ECSignature;
 use Cose\Signature\CoseSign1Tag;
 use Cose\Signature\Signature1;
+use PHPUnit\Framework\Attributes\IgnoreDeprecations;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use function strlen;
@@ -23,6 +24,12 @@ use function strlen;
 /**
  * Basé sur l'exemple de https://github.com/Spomky-Labs/cbor-php/issues/32
  */
+/**
+ * The class under test is deprecated since 4.8.0 in favour of its cbor-php 3.4.0 counterpart (issue #176). Its
+ * behaviour is frozen for the 4.8.x line, so these tests keep running against it with the deprecation silenced;
+ * {@see \Cose\Tests\Structure\DeprecatedTagClassesTest} is what asserts the notice is raised.
+ */
+#[IgnoreDeprecations]
 final class CoseSign1CreateAndVerifyTest extends TestCase
 {
     #[Test]
