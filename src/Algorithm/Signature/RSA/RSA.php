@@ -8,6 +8,7 @@ use Cose\Algorithm\Signature\OpenSslError;
 use Cose\Algorithm\Signature\Signature;
 use Cose\Key\Key;
 use Cose\Key\RsaKey;
+use Cose\Key\RsaKeyValidator;
 use InvalidArgumentException;
 use function openssl_pkey_get_private;
 use function openssl_pkey_get_public;
@@ -15,6 +16,14 @@ use function openssl_sign;
 use function openssl_verify;
 
 /**
+ * RSASSA-PKCS1-v1_5 as defined by RFC 8017, section 8.2.
+ *
+ * Section 8.2.2 applies RSAVP1 under the assumption that the public key is valid, i.e. that its exponent is an odd
+ * integer between 3 and n - 1 (section 3.1). openssl_verify() does not re-check it: with e = 1 the public operation
+ * is the identity map, so the EMSA-PKCS1-v1_5 encoding of a message - public data anyone can compute - would be
+ * accepted as a signature of that message under an attacker chosen key. Every key is therefore checked here.
+ *
+ * @see https://www.rfc-editor.org/rfc/rfc8017#section-8.2
  * @see \Cose\Tests\Algorithm\Signature\RSA\RSATest
  */
 abstract class RSA implements Signature
@@ -22,6 +31,7 @@ abstract class RSA implements Signature
     public function sign(string $data, Key $key): string
     {
         $key = $this->handleKey($key);
+        RsaKeyValidator::checkPublicParameters($key);
         if (! $key->isPrivate()) {
             throw new InvalidArgumentException('The key is not private.');
         }
@@ -42,6 +52,13 @@ abstract class RSA implements Signature
     public function verify(string $data, Key $key, string $signature): bool
     {
         $key = $this->handleKey($key);
+        try {
+            RsaKeyValidator::checkPublicParameters($key);
+        } catch (InvalidArgumentException) {
+            // A key that does not satisfy RFC 8017, section 3.1 is key material no verification can be performed
+            // with: the contract of Signature::verify() reports it as an invalid signature, not as an error.
+            return false;
+        }
         // The key is loaded before use so that key material OpenSSL cannot decode yields false instead of an
         // E_WARNING raised from inside openssl_verify().
         $publicKey = openssl_pkey_get_public($key->toPublic()->asPem());

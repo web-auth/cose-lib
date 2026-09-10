@@ -41,6 +41,7 @@ abstract class PSSRSA implements Signature
     public function sign(string $data, Key $key): string
     {
         $key = $this->handleKey($key);
+        RsaKeyValidator::checkPublicParameters($key);
         if (! $key->isPrivate()) {
             throw new InvalidArgumentException('The key is not private.');
         }
@@ -61,6 +62,15 @@ abstract class PSSRSA implements Signature
         // RFC 8017, section 8.1.2: the verification operation uses the public key (n, e) only.
         $key = $this->handleKey($key)
             ->toPublic();
+        try {
+            // Section 8.1.2 applies RSAVP1 under the assumption that the public key is valid (section 3.1). Nothing
+            // downstream re-establishes it, and with e = 1 the exponentiation below is the identity map: the EMSA-PSS
+            // encoding of any message, which anyone can build, would then be accepted as its signature. A key that
+            // cannot be verified with is reported as an invalid signature, per the contract of Signature::verify().
+            RsaKeyValidator::checkPublicParameters($key);
+        } catch (InvalidArgumentException) {
+            return false;
+        }
         $modBits = RsaKeyValidator::modulusLength($key);
         $k = intdiv($modBits + 7, 8);
         // RFC 8017, section 8.1.2, step 1: "If the length of the signature S is not k octets, output 'invalid
@@ -90,9 +100,13 @@ abstract class PSSRSA implements Signature
      *
      * The operation is selected from the key: RSASP1 (RFC 8017, section 5.2.1) for a private key, RSAVP1 (section
      * 5.2.2) for a public one.
+     *
+     * @throws InvalidArgumentException when the public parameters of the key are not those of a valid RSA key
      */
     public function exponentiate(RsaKey $key, BigInteger $c): BigInteger
     {
+        RsaKeyValidator::checkPublicParameters($key);
+
         return $key->isPrivate() ? $this->rsasp1($key, $c) : $this->rsavp1($key, $c);
     }
 

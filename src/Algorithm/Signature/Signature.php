@@ -18,8 +18,9 @@ interface Signature extends Algorithm
 
     /**
      * Verification is total for every condition the underlying specification defines as an "invalid signature"
-     * outcome: a malformed, truncated, over-long or out-of-range signature, and key material that the crypto layer
-     * cannot decode (an off-curve point, a public key that is not a valid group element, …) all yield false.
+     * outcome: a malformed, truncated, over-long or out-of-range signature, and key material no verification can be
+     * performed with (an off-curve point, a public key that is not a valid group element, an RSA key whose public
+     * parameters are not those RFC 8017 defines, …) all yield false.
      *
      * @throws InvalidArgumentException when $key cannot be used with this algorithm at all, i.e. its key type or its
      *                                  curve does not match. Structurally invalid key components are rejected earlier,

@@ -120,6 +120,7 @@ final class RsaKeysTest extends TestCase
     public static function getPrivateKeys(): iterable
     {
         yield 'main' => [RsaKeys::privateKey(), 2048];
+        yield 'smallest exponent' => [RsaKeys::smallestExponentPrivateKey(), 2048];
         yield 'padded modulus' => [RsaKeys::privateKeyWithPaddedModulus(), 2048];
         yield 'not byte aligned' => [RsaKeys::nonByteAlignedPrivateKey(), 2050];
         yield 'multi-prime' => [RsaKeys::multiPrimePrivateKey(), 2048];

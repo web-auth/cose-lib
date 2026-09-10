@@ -112,6 +112,57 @@ final class RsaKeyValidatorTest extends TestCase
     }
 
     #[Test]
+    #[DataProvider('getInvalidExponents')]
+    public function anInvalidExponentIsRejectedByThePublicParameterCheck(
+        string $exponent,
+        string $expectedMessage
+    ): void {
+        // Given
+        $key = self::key(str_repeat("\xff", 256), $exponent);
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($expectedMessage);
+
+        // When
+        RsaKeyValidator::checkPublicParameters($key);
+    }
+
+    #[Test]
+    public function anEvenModulusIsRejected(): void
+    {
+        // Given
+        $key = self::key(str_repeat("\xff", 255) . "\xfe", "\x01\x00\x01");
+        $validator = RsaKeyValidator::create();
+
+        // Then
+        static::assertFalse($validator->isValid($key));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The modulus of the key shall be odd');
+
+        // When
+        RsaKeyValidator::checkPublicParameters($key);
+    }
+
+    /**
+     * The public parameter constraints of RFC 8017 hold for every key, while the modulus length bounds of RFC 8230
+     * are a policy: the algorithms apply the former on their own and leave the latter to the caller.
+     */
+    #[Test]
+    public function thePublicParameterCheckIsIndependentOfTheModulusLengthBounds(): void
+    {
+        // Given
+        $key = self::key(str_repeat("\xff", 128), "\x01\x00\x01");
+
+        // When
+        RsaKeyValidator::checkPublicParameters($key);
+
+        // Then
+        static::assertSame(1024, RsaKeyValidator::modulusLength($key));
+        static::assertFalse(RsaKeyValidator::create()->isValid($key));
+    }
+
+    #[Test]
     #[DataProvider('getInvalidBounds')]
     public function inconsistentBoundsAreRejected(int $minimum, int $maximum, string $expectedMessage): void
     {

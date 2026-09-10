@@ -74,6 +74,57 @@ final class RsaKeys
     }
 
     /**
+     * A 2048 bit key whose public exponent is 3, the smallest value RFC 8017 section 3.1 allows. Signatures produced
+     * with it must keep verifying: only exponents below that bound, or even ones, are degenerate.
+     */
+    public static function smallestExponentPrivateKey(): RsaKey
+    {
+        return RsaKey::create([
+            RsaKey::TYPE => RsaKey::TYPE_RSA,
+            RsaKey::DATA_N => base64_decode(
+                '3rfK94jUFBdimyYMrEVtMLMJkK0tP612oEEbAVcM40WkFtL7IBKLdNKu/BkFRflz2piKaIcF8SrVks19bLD2U84EbgzPsyhxb55s' .
+                'eLJSQkUSp/+JtyZaY3qWPOsjzKqPum5TE0F20J51cmRtY0bTp5ZbMYwGRR1CR96W3+HJ3UTznXc+cAZ6jHhK5Kxtm24Do1paUlT2' .
+                '0ZHgyjSuR1J/rN2aklAQiBcmLbwLY98+QQyYapJOoP771cM7VaVsP8UiFeJT/r/cYAu6ToDyImFcI4JgJ2MHw1tnsitgqiD1cSUD' .
+                'WfqIqYrxU0wARcmwNiLUKWJtm1TikaV8oO/4IxU9/Q==',
+                true
+            ),
+            RsaKey::DATA_E => base64_decode('Aw==', true),
+            RsaKey::DATA_D => base64_decode(
+                'lHqHT7CNYrpBvMQIctjzdcyxCx4eKnOkatYSAOSzQi5tZIynarcHozcfUrtY2VD35xBcRa9ZS3HjtzOo8yCkN96tnrM1Ihr2Smmd' .
+                'pcw21ti3Gqpbz27m7PxkKJzCiHG1JvQ3YiukixROTELzl4SNGmQ8y7Ku2L4sL+m56paGk4IORl0HlIq778v1gdSnYy8cBGIzm9DY' .
+                '6bxo4M/hGTgvXBplXL4sw+tfGw0iVS6qCrUh44tW2/b+aOnB+2bd8QN90jNuPD3r++kYmuEPPCRbt1Ixn6+uW6BdXQss0+6Wi0Ue' .
+                'a8gPrPHmb5m/jwWcP4wuJ4nSJYDjLlmtNJG2T+6uaw==',
+                true
+            ),
+            RsaKey::DATA_P => base64_decode(
+                '+3+kAQA0+F+jVbVXbrkUq5ss6rwTMUhJ4+O74mFRNeIBAVI23R61HrxHgUP/PvH+JTOk4EpsnVnbU0cE78wyn8pPDQFBJ+hocPTB' .
+                '3oc1lRzbIMGmKmzK/UgS76vQ1lH1QINyOz9J45o0VBS9IUh4cV3W0La2Rg6OHluq2l8OMEk=',
+                true
+            ),
+            RsaKey::DATA_Q => base64_decode(
+                '4rRHshEBaEUjBOyWA82SrgGaIiyIgCqtX5VA+kAtAsC1ATT78EOA+Mjg1qAaAD7+wGGcbAyf4N6JRRWGL4oNRZBGIaMh0n3FpHFt' .
+                'fMD1PXOr9PY1V80f3l6HrcBqPU5IFTTcNebWNBGxDNqEJI5YHZA84axdR72Q2nZqjEwhCBU=',
+                true
+            ),
+            RsaKey::DATA_DP => base64_decode(
+                'p6ptVgAjUD/COSOPnyYNx7zInH1iINrb7UJ9QZY2I+wAq4wkk2nOFH2FANf/f0v+w3fDQDGdvjvnjNoDSoghv9w0s1Yrb/BFoKMr' .
+                '6a95DhM8wIEZcZ3cqNq3SnKLOYv41az20ioxQmbNjWMowNr69j6PNc8kLrRevufHPD9eyts=',
+                true
+            ),
+            RsaKey::DATA_DQ => base64_decode(
+                'lyLadrYA8C4XWJ25V95hyVZmwXMFqsceP7jV/CrIrIB4q3in9YJV+zCV5Gq8ACn/Kuu9nV2/6z8GLg5ZdQazg7WEFmzBNv6DwvZI' .
+                '/dX406Jyo07OOoi/6ZRac9WcKN7auM3oI+85eAvLXecCwwmQE7V968g+L9O15vmcXYgWBWM=',
+                true
+            ),
+            RsaKey::DATA_QI => base64_decode(
+                '7TlBflaHlS3613bcy5vnFvTeYbZ+wChtZfGsFqdprZPerR/070hyKgK/4W+Qn1/s5Xqf36BC84LDL1e/YvmsaB5a/GJBIGwlBdDp' .
+                'icvLSocbBpFAAJneBzf6gz//jYsjz/GkcoQyDhFudtzT5aq0Qrsuh6AX9KInvsd0I8KIGfA=',
+                true
+            ),
+        ]);
+    }
+
+    /**
      * The same key reduced to the first private key representation of RFC 8017 section 3.2: (n, e, d).
      */
     public static function privateKeyWithoutCrtParameters(): RsaKey
