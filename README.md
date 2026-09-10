@@ -44,8 +44,12 @@ composer require web-auth/cose-lib
 For COSE tag support (Sign, Encrypt, Mac operations), also install:
 
 ```bash
-composer require spomky-labs/cbor-php
+composer require "spomky-labs/cbor-php:^3.3.4"
 ```
+
+3.3.4 is the floor this library declares (`conflict: <3.3.4`): the CBOR decoder is what enforces the header-map rules
+of [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) — a label appearing twice in a map makes the message
+malformed (§3, §9), and nesting is bounded so that a crafted header cannot exhaust the memory of the process.
 
 ## Quick Start
 
@@ -53,36 +57,57 @@ composer require spomky-labs/cbor-php
 
 ```php
 use CBOR\Decoder;
+use CBOR\ListObject;
 use CBOR\OtherObject\OtherObjectManager;
 use CBOR\StringStream;
 use CBOR\Tag\TagManager;
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Key\Ec2Key;
 use Cose\Signature\CoseSign1Tag;
 use Cose\Signature\Signature1;
+
+// The key of the signer you trust, and the algorithm you expect it to be used with.
+$key = Ec2Key::create($theCoseKeyYouPinned);
+$algorithm = ES256::create();
+// The protected header labels this application knows how to process (1 = alg, 2 = crit).
+$understoodLabels = [1, 2];
 
 // Setup decoder with COSE tag support
 $tagManager = TagManager::create()->add(CoseSign1Tag::class);
 $decoder = Decoder::create($tagManager, OtherObjectManager::create());
 
 // Decode COSE_Sign1 message
-$stream = new StringStream($encodedData);
-$coseSign1 = $decoder->decode($stream);
+$coseSign1 = $decoder->decode(new StringStream($encodedData));
+$header = $coseSign1->getProtectedHeaderAsMap();
 
-// Extract components
-$protectedHeader = $coseSign1->getProtectedHeader();
-$payload = $coseSign1->getPayload();
-$signature = $coseSign1->getSignature();
+// RFC 9052 §3.1: bind the signature to the algorithm the protected header declares.
+if (! $header->has(1) || (int) $header->get(1)->normalize() !== $algorithm::identifier()) {
+    throw new RuntimeException('Unexpected or missing "alg" in the protected header');
+}
 
-// Create signature structure for verification
-$sigStructure = Signature1::create($protectedHeader, $payload);
+// RFC 9052 §3.1: every parameter listed in "crit" must be processed, or the message must be rejected.
+if ($header->has(2)) {
+    $crit = $header->get(2);
+    if (! $crit instanceof ListObject) {
+        throw new RuntimeException('"crit" is not an array');
+    }
+    foreach ($crit as $label) {
+        if (! in_array((int) $label->normalize(), $understoodLabels, true)) {
+            throw new RuntimeException('Unsupported critical header parameter');
+        }
+    }
+}
 
-// Verify (example with OpenSSL)
-$isValid = openssl_verify(
-    (string) $sigStructure,
-    $derSignature,
-    $publicKey,
-    'sha256'
-);
+// Verify the Sig_structure the signature covers
+$sigStructure = Signature1::create($coseSign1->getProtectedHeader(), $coseSign1->getPayload());
+$isValid = $algorithm->verify((string) $sigStructure, $key, $coseSign1->getSignature()->getValue());
 ```
+
+> [!IMPORTANT]
+> The library verifies signatures; it does not decide what a message is allowed to say. Checking that `alg` is the one
+> expected for that key, and refusing any `crit` label the application does not process, are the caller's
+> responsibility ([RFC 9052 §3.1](https://datatracker.ietf.org/doc/html/rfc9052#section-3.1)) — the snippet above is
+> the shape they take. `tests/Signature/DocumentedVerifierTest.php` runs exactly this code.
 
 ### Creating a COSE_Sign1 Message
 
@@ -148,7 +173,9 @@ This library is perfect for:
 | ES512 | -36 | ECDSA with SHA-512 |
 | ES256K | -47 | ECDSA with secp256k1 |
 | EdDSA | -8 | EdDSA |
-| Ed25519 | - | EdDSA with Curve25519 |
+| Ed25519 | -8 | Alias of EdDSA (Curve25519); see -19 below for the fully-specified form |
+| Ed256 | -260 | Ed25519 over a SHA-256 digest — non-standard, see below |
+| Ed512 | -261 | Ed25519 over a SHA-512 digest — non-standard, see below |
 | RS256 | -257 | RSASSA-PKCS1-v1_5 with SHA-256 |
 | RS384 | -258 | RSASSA-PKCS1-v1_5 with SHA-384 |
 | RS512 | -259 | RSASSA-PKCS1-v1_5 with SHA-512 |
@@ -180,6 +207,12 @@ the key. They live in the `Cose\Algorithm\Signature\FullySpecified` namespace.
 >
 > Ed448 is not covered by the sodium extension and goes through OpenSSL, which PHP only wires up for Edwards curves
 > as of PHP 8.4. Call `Ed448::isSupported()` when the platform is not known in advance.
+
+> [!WARNING]
+> `Cose\Algorithm\Signature\EdDSA\Ed256` (-260) and `Ed512` (-261) sign a SHA-256 or SHA-512 digest of the message
+> with **Ed25519**. They are neither EdDSA identifiers nor registered anywhere — IANA assigns -260 to WalnutDSA and
+> -261 to TurboSHAKE128 — and neither supports Curve448. They are kept for the authenticators that already produce
+> them. EdDSA with Curve448 is `FullySpecified\Ed448` (-53).
 
 > [!WARNING]
 > **RS1 (SHA-1) is not secure.** It is kept only for the legacy authenticators that still rely on it.
@@ -392,16 +425,16 @@ of the stock `php` and `php-fpm` Docker images.
 
 ## Testing
 
-Run the test suite with:
-
-```bash
-composer test
-```
-
-Or using Castor:
+Run the test suite in the project QA container (nothing to install):
 
 ```bash
 castor phpunit
+```
+
+Or directly, on a host that provides PHPUnit 11 as `phpunit-11`:
+
+```bash
+composer test
 ```
 
 The library includes comprehensive tests including:
@@ -417,13 +450,23 @@ The library includes comprehensive tests including:
 - ext-openssl
 - brick/math
 - spomky-labs/pki-framework
-- spomky-labs/cbor-php (for COSE tag support)
+
+Optional, depending on what you use:
+
+- **ext-sodium** — required by every Ed25519 algorithm (`EdDSA` -8, `Ed25519` -8 and -19, `Ed256` -260, `Ed512` -261)
+  and to recompute an OKP public key from its private key. Sodium ships with PHP and is enabled by default, but a
+  build can leave it out: creating one of these algorithms then throws a `RuntimeException` instead of reporting
+  valid signatures as invalid. Call `EdDSA::isSupported()` when the platform is not known in advance.
+- **spomky-labs/cbor-php** `^3.3.4` — required by the COSE tag classes (Sign, Encrypt, Mac). Versions below 3.3.4 are
+  rejected by a `conflict` entry, because that decoder is what enforces the RFC 9052 header-map rules.
+- **ext-gmp** or **ext-bcmath** — see [Performance](#performance).
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](doc/Contributing.md) for details.
+Contributions are welcome! Please see [CONTRIBUTING.md](.github/CONTRIBUTING.md) for details.
 
-For security vulnerabilities, please email **security [at] spomky-labs.com** instead of using the issue tracker.
+For security vulnerabilities, do not open an issue: report them privately through GitHub private vulnerability
+reporting or by e-mail to **security [at] spomky-labs.com**. See [SECURITY.md](SECURITY.md).
 
 ## Support
 

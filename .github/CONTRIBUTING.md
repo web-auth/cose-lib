@@ -23,6 +23,7 @@ such as fix tests, fix 2, fix 3, etc.
 Run test suite
 ------------
 
-* install composer: `curl -s http://getcomposer.org/installer | php`
-* install dependencies: `php composer.phar install`
-* run tests: `vendor/bin/phpunit`
+* install Composer with your distribution package manager, or follow https://getcomposer.org/download/ and verify the
+  SHA-384 of the installer before running it (never pipe the installer straight into `php`)
+* install dependencies: `composer install`
+* run tests: `composer test`, or `castor phpunit` to run them in the project QA container
