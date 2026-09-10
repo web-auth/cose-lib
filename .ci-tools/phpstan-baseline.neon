@@ -199,7 +199,7 @@ parameters:
 			path: ../src/Key/RsaKey.php
 
 		-
-			rawMessage: 'Method Cose\Key\RsaKey::other() should return array<mixed> but returns mixed.'
+			rawMessage: 'Method Cose\Key\RsaKey::other() should return array<int, array<int, string>> but returns mixed.'
 			identifier: return.type
 			count: 1
 			path: ../src/Key/RsaKey.php
