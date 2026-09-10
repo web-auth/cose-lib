@@ -28,6 +28,8 @@ use function openssl_verify;
  * Its length is bounded too, before it is used. RFC 8230, section 6.1 asks for it - "It is highly recommended that
  * checks on the key length be done before starting a cryptographic operation" - because the work an RSA operation
  * costs grows with the size of the key it is given, and a verifier takes that key from whoever produced the message.
+ * The same section requires "a key size of 2048 bits or larger": that bound is applied by RsaKeyPolicy, with the
+ * validator this algorithm was created with or, by default, with RsaKeyValidator::create().
  *
  * @see https://www.rfc-editor.org/rfc/rfc8017#section-8.2
  * @see \Cose\Tests\Algorithm\Signature\RSA\RSATest
@@ -35,12 +37,19 @@ use function openssl_verify;
 abstract class RSA implements Signature, KeyRestrictionAware
 {
     use KeyRestrictionEnforcement;
+    use RsaKeyPolicy;
+
+    public function __construct(?RsaKeyValidator $keyValidator = null)
+    {
+        $this->initializeKeyValidator($keyValidator);
+    }
 
     public function sign(string $data, Key $key): string
     {
         $key = $this->handleKey($key, Key::OP_SIGN);
         RsaKeyValidator::checkPublicParameters($key);
         RsaKeyValidator::checkLengthBounds($key);
+        $this->checkKeyPolicy($key);
         if (! $key->isPrivate()) {
             throw new InvalidArgumentException('The key is not private.');
         }
@@ -64,6 +73,9 @@ abstract class RSA implements Signature, KeyRestrictionAware
         try {
             RsaKeyValidator::checkPublicParameters($key);
             RsaKeyValidator::checkLengthBounds($key);
+            // A key below the bound the caller asked for is a key it declared it does not verify with, which is an
+            // invalid signature rather than an error here too. The implicit default only warns.
+            $this->checkKeyPolicy($key);
         } catch (InvalidArgumentException) {
             // A key too large to compute with, or one that does not satisfy RFC 8017, section 3.1, is key material no
             // verification can be performed with: the contract of Signature::verify() reports it as an invalid
