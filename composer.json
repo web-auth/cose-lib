@@ -28,6 +28,9 @@
     "require-dev": {
         "spomky-labs/cbor-php": "^3.2.2"
     },
+    "replace": {
+        "symfony/polyfill-php81": "*"
+    },
     "suggest": {
         "ext-bcmath": "For better performance, please install either GMP (recommended) or BCMath extension",
         "ext-gmp": "For better performance, please install either GMP (recommended) or BCMath extension",
