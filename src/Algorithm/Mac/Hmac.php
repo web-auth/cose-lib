@@ -38,7 +38,7 @@ use function trigger_error;
  */
 abstract class Hmac implements Mac
 {
-    public const SHORT_KEY_MESSAGE = 'The HMAC key is %d bytes long, which is shorter than the %d-byte output of the underlying hash function (RFC 2104, section 3, strongly discourages this). If you know what you are doing, create the algorithm with "acknowledgeShortKey: true"; as of v5.0.0, omitting that acknowledgement will throw an exception.';
+    public const SHORT_KEY_MESSAGE = 'The HMAC key is %d bytes long, shorter than the %d-byte hash output (RFC 2104, section 3). Create the algorithm with "acknowledgeShortKey: true" to acknowledge it; as of v5.0.0 this will throw.';
 
     public function __construct(
         private readonly bool $acknowledgeShortKey = false
