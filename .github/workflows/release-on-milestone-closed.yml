@@ -11,8 +11,9 @@ name: "Automatic Releases"
 # shallow clone only contains the ref that triggered the workflow.
 #
 # The steps run `./.github/actions/automatic-releases`, a local wrapper around
-# laminas/automatic-releases that pins the executed container image by digest;
-# see that action.yml for why the upstream `uses:` reference is not enough.
+# laminas/automatic-releases that pins the executed container image to an exact
+# version; see that action.yml for why the upstream `uses:` reference, whatever
+# it is pinned to, does not select the code that runs.
 
 on:
   milestone:
@@ -51,7 +52,7 @@ jobs:
 
     steps:
       - name: "Checkout"
-        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
+        uses: "actions/checkout@v7.0.1"
         with:
           fetch-depth: 0
           # The commands do not use the checkout credential: each one removes the `origin` remote

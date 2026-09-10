@@ -17,16 +17,16 @@ use function sprintf;
  * The workflows themselves cannot be executed here, so what is tested is the guard that describes
  * them: `.ci-tools/workflow-audit.php`, which the "Pre-checks" job of `ci.yml` runs on every push.
  *
- * The first test pins the state of this repository (every action pinned to a commit SHA, every
- * workflow scoped by a `permissions:` block); the others feed the guard workflows that are wrong on
- * purpose, so that a guard which silently stopped detecting anything fails here rather than passing
- * a compromised workflow.
+ * The first test pins the state of this repository (every third-party reference naming a version,
+ * every workflow scoped by a `permissions:` block); the others feed the guard workflows that are
+ * wrong on purpose, so that a guard which silently stopped detecting anything fails here rather
+ * than passing a workflow that follows whatever an upstream author pushes next.
  *
  * @see https://github.com/web-auth/cose-lib/issues/165
  */
 final class WorkflowHardeningTest extends TestCase
 {
-    private const CHECKOUT = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1';
+    private const CHECKOUT = 'actions/checkout@v7.0.1';
 
     private string $fixtureRoot = '';
 
@@ -130,8 +130,8 @@ final class WorkflowHardeningTest extends TestCase
     }
 
     #[Test]
-    #[DataProvider('mutableReferences')]
-    public function anActionThatIsNotPinnedToACommitShaIsRefused(string $reference): void
+    #[DataProvider('referencesWithoutAVersion')]
+    public function anActionThatNamesNoVersionIsRefused(string $reference): void
     {
         // Given
         $workflow = <<<YAML
@@ -146,47 +146,31 @@ final class WorkflowHardeningTest extends TestCase
             YAML;
 
         // Then
-        $this->assertGap($workflow, sprintf('`uses: %s` is not pinned to a commit SHA.', $reference));
+        $this->assertGap($workflow, sprintf('`uses: %s` names no version', $reference));
     }
 
     /**
      * @return iterable<string, array{string}>
      */
-    public static function mutableReferences(): iterable
+    public static function referencesWithoutAVersion(): iterable
     {
-        yield 'release tag' => ['actions/checkout@v7.0.1'];
-        yield 'major tag' => ['actions/cache@v6'];
-        yield 'branch head' => ['ramsey/composer-install@v4'];
         yield 'no reference at all' => ['actions/checkout'];
+        yield 'default branch' => ['actions/checkout@main'];
+        yield 'legacy default branch' => ['actions/checkout@master'];
+        yield 'named branch' => ['actions/checkout@releases/v7'];
+        yield 'moving alias' => ['actions/checkout@latest'];
+        yield 'pre-release alias' => ['actions/checkout@v7-beta'];
         yield 'truncated sha' => ['actions/checkout@3d3c42e5'];
-        yield 'uppercase sha' => ['actions/checkout@3D3C42E5AAC5BA805825DA76410C181273BA90B1'];
     }
 
     /**
-     * Dependabot reads the trailing comment to know which version the pin stands for; without it a
-     * pin is frozen forever and no reader can tell what it is.
+     * The floating major tag is what `laminas/automatic-releases` uses upstream: it resolved to two
+     * different images on two consecutive days, which is exactly what a version reference is
+     * trusted not to do.
      */
     #[Test]
-    public function aShaPinWithoutAVersionCommentIsRefused(): void
-    {
-        // Given
-        $workflow = <<<YAML
-            on: [push]
-            permissions:
-              contents: read
-            jobs:
-              build:
-                runs-on: ubuntu-latest
-                steps:
-                  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-            YAML;
-
-        // Then
-        $this->assertGap($workflow, 'has no trailing `# <version>` comment');
-    }
-
-    #[Test]
-    public function aThirdPartyContainerImageOnAMutableTagIsRefused(): void
+    #[DataProvider('imagesWithoutAVersion')]
+    public function aThirdPartyContainerImageThatNamesNoVersionIsRefused(string $image): void
     {
         // Given
         $workflow = <<<YAML
@@ -197,13 +181,24 @@ final class WorkflowHardeningTest extends TestCase
               build:
                 runs-on: ubuntu-latest
                 container:
-                  image: ghcr.io/laminas/automatic-releases:1
+                  image: {$image}
                 steps:
                   - uses: {$this->checkout()}
             YAML;
 
         // Then
-        $this->assertGap($workflow, '`image: ghcr.io/laminas/automatic-releases:1` is not pinned by digest.');
+        $this->assertGap($workflow, sprintf('`image: %s` names no version', $image));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function imagesWithoutAVersion(): iterable
+    {
+        yield 'floating major tag' => ['ghcr.io/laminas/automatic-releases:1'];
+        yield 'no tag at all' => ['ghcr.io/laminas/automatic-releases'];
+        yield 'latest' => ['ghcr.io/laminas/automatic-releases:latest'];
+        yield 'named tag' => ['ghcr.io/laminas/automatic-releases:edge'];
     }
 
     #[Test]
@@ -233,13 +228,24 @@ final class WorkflowHardeningTest extends TestCase
      */
     public static function acceptableWorkflows(): iterable
     {
-        yield 'sha-pinned action with a version comment' => ['    steps:
+        yield 'action referenced by version' => ['    steps:
       - uses: ' . self::CHECKOUT];
+
+        yield 'action referenced by major version' => ['    steps:
+      - uses: actions/cache@v6'];
+
+        yield 'action frozen to a commit sha' => ['    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'];
 
         yield 'local action' => ['    steps:
       - uses: ./.github/actions/automatic-releases'];
 
-        yield 'digest-pinned image' => ['    container:
+        yield 'image referenced by version' => ['    container:
+      image: ghcr.io/laminas/automatic-releases:1.28.0
+    steps:
+      - uses: ' . self::CHECKOUT];
+
+        yield 'image frozen to a digest' => ['    container:
       image: ghcr.io/laminas/automatic-releases@sha256:c86f165782c462d031f7f8a5932cad237c4a7d16a57b1b0ab0e76e68e08ffba1
     steps:
       - uses: ' . self::CHECKOUT];
@@ -271,13 +277,13 @@ final class WorkflowHardeningTest extends TestCase
     }
 
     /**
-     * The five release steps used to run `laminas/automatic-releases@<tag>`, whose `action.yml`
+     * The five release steps used to run `laminas/automatic-releases@<version>`, whose `action.yml`
      * selects the executed code with the floating `ghcr.io/laminas/automatic-releases:1` tag, and
-     * they are handed the organisation admin token and the release signing key. Pinning the `uses:`
-     * reference does not pin that image, so the wrapper must stay in the way.
+     * they are handed the organisation admin token and the release signing key. The version named
+     * in `uses:` does not choose that image, so the wrapper must stay in the way.
      */
     #[Test]
-    public function theReleaseWorkflowOnlyReachesTheUpstreamActionThroughTheDigestPinnedWrapper(): void
+    public function theReleaseWorkflowOnlyReachesTheUpstreamActionThroughTheVersionPinnedWrapper(): void
     {
         // Given
         $workflow = self::read('/.github/workflows/release-on-milestone-closed.yml');
@@ -288,7 +294,7 @@ final class WorkflowHardeningTest extends TestCase
         static::assertSame(5, substr_count($workflow, 'uses: "./.github/actions/automatic-releases"'));
         static::assertStringContainsString('persist-credentials: false', $workflow);
         static::assertMatchesRegularExpression(
-            '#image: \'docker://ghcr\.io/laminas/automatic-releases@sha256:[0-9a-f]{64}\'#',
+            '#image: \'docker://ghcr\.io/laminas/automatic-releases:\d+\.\d+\.\d+\'#',
             $wrapper
         );
     }

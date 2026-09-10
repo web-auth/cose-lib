@@ -11,31 +11,42 @@ declare(strict_types=1);
  * very first step of the CI, before any dependency is installed. It exits 1 as soon as one gap is
  * found and prints a report of everything it looked at.
  *
- * The gaps it refuses:
+ * The policy it enforces: third-party code is referenced by version, and the version is trusted to
+ * mean what semantic versioning says it means. What is refused is a reference that names no version
+ * at all, because such a reference silently follows whatever the upstream author pushes next.
  *
  *  1. a workflow without a top-level `permissions:` block: the job then inherits the repository
  *     default, which may be a write-scoped GITHUB_TOKEN;
- *  2. a `uses:` reference that is not a 40-hexadecimal commit SHA: a tag or a branch head can be
- *     moved by whoever compromises the upstream repository (CVE-2025-30066), and a commit SHA is
- *     the only immutable reference GitHub offers;
- *  3. a SHA-pinned `uses:` without a trailing `# <version>` comment: Dependabot reads that comment
- *     to know which version the pin stands for, and a human reader has no other way to tell;
- *  4. a container `image:` that is not pinned by digest, unless it is a first-party image (see
- *     FIRST_PARTY_IMAGES below).
+ *  2. a `uses:` without a reference, or with one that is not a version (`main`, `master`, a
+ *     branch name, a moving alias). A 40-hexadecimal commit SHA is accepted too, for the day a
+ *     given action is worth freezing;
+ *  3. a container `image:` that names no version: a bare image, `:latest`, or a major-only tag such
+ *     as `:1`, which is what upstream `laminas/automatic-releases` uses and the reason
+ *     `.github/actions/automatic-releases` exists. First-party images (see below) are exempt.
  *
  * @see https://github.com/web-auth/cose-lib/issues/165
  * @see https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions
  */
 
 /**
- * Images published by the owner of this repository. They cross no third-party trust boundary, they
- * are rebuilt on every upstream PHP release, and neither Dependabot nor Renovate updates a digest
- * written in a workflow `container.image`, so pinning them by digest would mean a manual bump of
- * ten references per PHP patch release for no gain in trust. They are allowed to stay on a tag.
+ * Images published by the owner of this repository. They cross no third-party trust boundary and
+ * they are rebuilt in place on every upstream PHP release, which is exactly what the CI wants of
+ * them, so they are allowed to be referenced by a PHP version alone.
  */
 const FIRST_PARTY_IMAGES = ['ghcr.io/spomky-labs/'];
 
+/**
+ * `v7.0.1`, `4.0.0`, `v6`: a reference that names a version. A major-only tag is accepted for an
+ * action, where it is the convention GitHub and Dependabot are built around.
+ */
+const VERSION_REFERENCE = '/^v?\d+(\.\d+)*$/';
+
 const SHA40 = '/^[0-9a-f]{40}$/';
+
+/**
+ * `1.28.0`, `8.4`: at least two components, so that a major-only image tag does not pass.
+ */
+const VERSION_IMAGE_TAG = '/^v?\d+\.\d+/';
 
 /**
  * @return array{0: int, 1: string} exit code and report
@@ -79,9 +90,9 @@ function audit(string $root): array
             $report .= sprintf("%s\n", $name);
         }
 
-        foreach (usesReferences($lines) as $reference => $occurrences) {
-            [$verdict, $gap] = checkUses((string) $reference, $occurrences['comment']);
-            $report .= sprintf("  %-58s x%-2d %s\n", $reference, $occurrences['count'], $verdict);
+        foreach (usesReferences($lines) as $reference => $count) {
+            [$verdict, $gap] = checkUses((string) $reference);
+            $report .= sprintf("  %-58s x%-2d %s\n", $reference, $count, $verdict);
             if ($gap !== null) {
                 $gaps[] = sprintf('%s: %s', $name, $gap);
             }
@@ -121,26 +132,19 @@ function stripComments(array $lines): array
 }
 
 /**
- * Collects every `uses:` reference with the number of times it appears and the trailing comment of
- * its first occurrence, which is where the version a SHA stands for is written.
- *
  * @param list<string> $lines
  *
- * @return array<string, array{count: int, comment: string}>
+ * @return array<string, int>
  */
 function usesReferences(array $lines): array
 {
     $references = [];
     foreach (stripComments($lines) as $line) {
-        if (preg_match('/^\s*-?\s*uses:\s*"?([^"\s]+)"?\s*(?:#\s*(.*))?$/', $line, $matches) !== 1) {
+        if (preg_match('/^\s*-?\s*uses:\s*"?([^"\s]+)"?/', $line, $matches) !== 1) {
             continue;
         }
         $reference = $matches[1];
-        $references[$reference] ??= [
-            'count' => 0,
-            'comment' => trim($matches[2] ?? ''),
-        ];
-        ++$references[$reference]['count'];
+        $references[$reference] = ($references[$reference] ?? 0) + 1;
     }
 
     return $references;
@@ -168,25 +172,25 @@ function imageReferences(array $lines): array
 /**
  * @return array{0: string, 1: string|null} verdict and gap
  */
-function checkUses(string $reference, string $comment): array
+function checkUses(string $reference): array
 {
     if (str_starts_with($reference, './')) {
         return ['local action', null];
     }
 
-    [$action, $version] = explode('@', $reference, 2) + [1 => ''];
-    if (preg_match(SHA40, $version) !== 1) {
-        return ['MUTABLE ref', sprintf('`uses: %s` is not pinned to a commit SHA.', $reference)];
+    [, $version] = explode('@', $reference, 2) + [1 => ''];
+    if (preg_match(SHA40, $version) === 1) {
+        return ['commit SHA', null];
     }
 
-    if ($comment === '') {
+    if (preg_match(VERSION_REFERENCE, $version) !== 1) {
         return [
-            'SHA-pinned, no version comment',
-            sprintf('`uses: %s` has no trailing `# <version>` comment.', $action),
+            'NO VERSION',
+            sprintf('`uses: %s` names no version: it follows whatever that ref points at.', $reference),
         ];
     }
 
-    return [sprintf('SHA-pinned (%s)', $comment), null];
+    return [sprintf('version %s', $version), null];
 }
 
 /**
@@ -195,17 +199,31 @@ function checkUses(string $reference, string $comment): array
 function checkImage(string $image): array
 {
     if (str_contains($image, '@sha256:')) {
-        return ['digest-pinned', null];
+        return ['digest', null];
     }
 
     $reference = str_starts_with($image, 'docker://') ? substr($image, 9) : $image;
     foreach (FIRST_PARTY_IMAGES as $prefix) {
         if (str_starts_with($reference, $prefix)) {
-            return ['MUTABLE tag, first-party image (allowed)', null];
+            return ['first-party image', null];
         }
     }
 
-    return ['MUTABLE tag', sprintf('`image: %s` is not pinned by digest.', $image)];
+    // The tag is what follows the last ":", unless that colon is the one of a registry port.
+    $tag = '';
+    $colon = strrpos($reference, ':');
+    if ($colon !== false && ! str_contains(substr($reference, $colon), '/')) {
+        $tag = substr($reference, $colon + 1);
+    }
+
+    if (preg_match(VERSION_IMAGE_TAG, $tag) !== 1) {
+        return [
+            'NO VERSION',
+            sprintf('`image: %s` names no version: a bare, `latest` or major-only tag moves.', $image),
+        ];
+    }
+
+    return [sprintf('version %s', $tag), null];
 }
 
 if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === realpath(__FILE__)) {
