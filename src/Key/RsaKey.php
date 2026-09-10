@@ -122,7 +122,10 @@ class RsaKey extends Key
     }
 
     /**
-     * @return array<mixed>
+     * The "other prime infos" of a multi-prime key (RFC 8230, section 4): one map per prime from the third one on,
+     * each holding the DATA_RI, DATA_DI and DATA_TI entries.
+     *
+     * @return array<int, array<int, string>>
      */
     public function other(): array
     {
@@ -193,6 +196,13 @@ class RsaKey extends Key
         return array_key_exists(self::DATA_D, $this->getData());
     }
 
+    /**
+     * A key carrying "other prime infos" (RFC 8230, section 4) is exported as a version 0, two-prime RSAPrivateKey in
+     * which p*q is not the modulus: spomky-labs/pki-framework does not model OtherPrimeInfos yet. RS1, RS256, RS384
+     * and RS512 keep working with such a key only because OpenSSL checks its CRT result against s^e mod n and falls
+     * back to m^d mod n when the two disagree. RSASSA-PSS does not go through this method and handles the additional
+     * primes itself.
+     */
     public function asPem(): string
     {
         if ($this->isPrivate()) {
