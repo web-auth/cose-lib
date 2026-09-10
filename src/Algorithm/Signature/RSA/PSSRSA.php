@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Signature\RSA;
 
+use Brick\Math\Exception\MathException;
 use function chr;
 use Cose\Algorithm\Signature\Signature;
 use Cose\BigInteger;
@@ -14,6 +15,10 @@ use Cose\Key\RsaKeyValidator;
 use function hash_equals;
 use function intdiv;
 use InvalidArgumentException;
+use function is_string;
+use function openssl_error_string;
+use const OPENSSL_NO_PADDING;
+use function openssl_private_encrypt;
 use function ord;
 use function pack;
 use function random_bytes;
@@ -22,6 +27,7 @@ use function str_pad;
 use const STR_PAD_LEFT;
 use function str_repeat;
 use function strlen;
+use Throwable;
 
 /**
  * RSASSA-PSS as defined by RFC 8017, section 8.1.
@@ -119,20 +125,143 @@ abstract class PSSRSA implements Signature
         if ($m->compare(BigInteger::createFromDecimal(0)) < 0 || $m->compare($n) >= 0) {
             throw new RuntimeException('Message representative out of range');
         }
-        $signature = $key->hasPrimes() && $key->hasExponents() && $key->hasCoefficient()
-            ? $this->rsasp1WithCrt($key, $m)
-            // RFC 8017, section 5.2.1, step 2.a: first form (n, d).
-            : $m->modPow(BigInteger::createFromBinaryString($key->d()), $n);
+        $e = BigInteger::createFromBinaryString($key->e());
+        $hasCrtParameters = $key->hasPrimes() && $key->hasExponents() && $key->hasCoefficient();
+
+        if ($hasCrtParameters && ! $key->has(RsaKey::DATA_OTHER)) {
+            // A two-prime key with a complete CRT quintuple is the only shape RsaKey::asPem() can express, and the
+            // only one OpenSSL can therefore compute. Its exponentiation is blinded and runs in constant time, which
+            // neither gmp_powm() nor bcpowmod() nor the native brick/math loop does.
+            $this->checkCrtParameters($key, $n);
+            $signature = $this->rsasp1WithOpenSSL($key, $m);
+        } else {
+            // Multi-prime keys (RFC 8230, section 4) and (n, e, d) keys have no PEM representation, so they keep the
+            // in-process exponentiation. Blinding the base hides it from an attacker timing the operation or watching
+            // the cache while it runs; it does not make the exponentiation itself constant-time.
+            [$blindingFactor, $unblindingFactor] = $this->blindingFactors($n, $e);
+            $blinded = $m->multiply($blindingFactor)
+                ->mod($n)
+            ;
+            $signature = $hasCrtParameters
+                ? $this->rsasp1WithCrt($key, $blinded)
+                // RFC 8017, section 5.2.1, step 2.a: first form (n, d).
+                : $blinded->modPow(BigInteger::createFromBinaryString($key->d()), $n);
+            $signature = $signature->multiply($unblindingFactor)
+                ->mod($n)
+            ;
+        }
 
         // A wrong CRT result must never leave this class: it would be a silently invalid signature and, on faulty
         // hardware, a private key recovery oracle. OpenSSL applies the very same check.
-        if ($signature->modPow(BigInteger::createFromBinaryString($key->e()), $n)->compare($m) !== 0) {
+        if ($signature->modPow($e, $n)->compare($m) !== 0) {
             throw new RuntimeException(
                 'Inconsistent RSA private key: the CRT parameters do not describe the modulus'
             );
         }
 
         return $signature;
+    }
+
+    /**
+     * RSASP1 computed by OpenSSL: base blinding and BN_mod_exp_mont_consttime on the private exponent, plus its own
+     * check of the CRT result against the public operation.
+     */
+    private function rsasp1WithOpenSSL(RsaKey $key, BigInteger $m): BigInteger
+    {
+        $k = intdiv(RsaKeyValidator::modulusLength($key) + 7, 8);
+
+        try {
+            $computed = openssl_private_encrypt(
+                $this->convertIntegerToOctetString($m, $k),
+                $signature,
+                $key->asPem(),
+                OPENSSL_NO_PADDING
+            );
+        } catch (Throwable $throwable) {
+            $this->clearOpenSSLErrors();
+
+            throw new RuntimeException('Unable to compute the RSA signature primitive', 0, $throwable);
+        }
+        if (! $computed || ! is_string($signature)) {
+            $this->clearOpenSSLErrors();
+
+            throw new RuntimeException('Unable to compute the RSA signature primitive');
+        }
+
+        return BigInteger::createFromBinaryString($signature);
+    }
+
+    /**
+     * OpenSSL repairs a key whose CRT parameters do not describe the modulus instead of reporting it, so the
+     * consistency of the quintuple is established before the exponentiation rather than after it.
+     */
+    private function checkCrtParameters(RsaKey $key, BigInteger $n): void
+    {
+        $one = BigInteger::createFromDecimal(1);
+        [$pS, $qS] = $key->primes();
+        [$dPS, $dQS] = $key->exponents();
+        $p = BigInteger::createFromBinaryString($pS);
+        $q = BigInteger::createFromBinaryString($qS);
+        $e = BigInteger::createFromBinaryString($key->e());
+        // A prime of 0 or 1 would make the reductions below meaningless, and n = p * q rules it out on its own only
+        // for the other factor.
+        $this->assertCrtParameter($p->compare($one) > 0 && $q->compare($one) > 0);
+        $this->assertCrtParameter($this->isEqual($p->multiply($q), $n));
+        // e * dP = 1 mod (p - 1), e * dQ = 1 mod (q - 1) and q * qInv = 1 mod p (RFC 8017, section 3.2).
+        $this->assertCrtParameter(
+            $this->isEqual($e->multiply(BigInteger::createFromBinaryString($dPS))->mod($p->subtract($one)), $one)
+        );
+        $this->assertCrtParameter(
+            $this->isEqual($e->multiply(BigInteger::createFromBinaryString($dQS))->mod($q->subtract($one)), $one)
+        );
+        $this->assertCrtParameter(
+            $this->isEqual($q->multiply(BigInteger::createFromBinaryString($key->QInv()))->mod($p), $one)
+        );
+    }
+
+    private function assertCrtParameter(bool $isConsistent): void
+    {
+        if (! $isConsistent) {
+            throw new RuntimeException(
+                'Inconsistent RSA private key: the CRT parameters do not describe the modulus'
+            );
+        }
+    }
+
+    private function isEqual(BigInteger $left, BigInteger $right): bool
+    {
+        return $left->compare($right) === 0;
+    }
+
+    /**
+     * A random r coprime with n, returned as the pair (r^e mod n, r^-1 mod n): multiplying the message representative
+     * by the first before the exponentiation and the result by the second after it leaves the signature unchanged,
+     * while the value actually exponentiated is unpredictable.
+     *
+     * @return array{BigInteger, BigInteger}
+     */
+    private function blindingFactors(BigInteger $n, BigInteger $e): array
+    {
+        $two = BigInteger::createFromDecimal(2);
+        // Eight bytes beyond the modulus keep the bias of the reduction below negligible.
+        $length = strlen($n->toBytes()) + 8;
+        $upperBound = $n->subtract(BigInteger::createFromDecimal(3));
+
+        while (true) {
+            $r = BigInteger::createFromBinaryString(random_bytes($length))
+                ->mod($upperBound)
+                ->add($two)
+            ;
+
+            try {
+                // Drawing an r sharing a factor with n means having factored n, so this never loops in practice.
+                $unblindingFactor = $r->modInverse($n);
+            } catch (MathException) {
+                continue;
+            }
+
+            return [$r->modPow($e, $n), $unblindingFactor];
+        }
     }
 
     /**
@@ -171,6 +300,15 @@ abstract class PSSRSA implements Signature
         }
 
         return $signature;
+    }
+
+    /**
+     * Drains the OpenSSL error queue so that a failure here is not reported by an unrelated later call.
+     */
+    private function clearOpenSSLErrors(): void
+    {
+        while (openssl_error_string() !== false) {
+        }
     }
 
     private function convertIntegerToOctetString(BigInteger $x, int $xLen): string

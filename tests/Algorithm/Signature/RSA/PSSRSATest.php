@@ -364,6 +364,78 @@ final class PSSRSATest extends TestCase
     }
 
     /**
+     * RSASP1 is a deterministic function of the key and the message representative. The private exponentiation of a
+     * multi-prime or (n, e, d) key is blinded with a random factor, which must leave the result untouched.
+     *
+     * @see https://github.com/web-auth/cose-lib/issues/172
+     */
+    #[Test]
+    #[DataProvider('getBlindedKeys')]
+    public function theBlindedSignaturePrimitiveIsDeterministic(RsaKey $key): void
+    {
+        // Given
+        $algorithm = PS256::create();
+        $message = BigInteger::createFromBinaryString(substr(self::MESSAGE, 0, 8));
+
+        // When
+        $first = $algorithm->exponentiate($key, $message);
+        $second = $algorithm->exponentiate($key, $message);
+
+        // Then
+        static::assertSame(0, $first->compare($second));
+        static::assertSame(0, $algorithm->exponentiate($key->toPublic(), $first)->compare($message));
+    }
+
+    /**
+     * A two-prime key is exponentiated by OpenSSL, which repairs an inconsistent CRT quintuple instead of reporting
+     * it. Every parameter of the quintuple must therefore be checked against the modulus beforehand.
+     *
+     * @see https://github.com/web-auth/cose-lib/issues/172
+     */
+    #[Test]
+    #[DataProvider('getCrtParameters')]
+    public function anInconsistentCrtParameterIsRejected(int $parameter): void
+    {
+        // Given
+        $data = RsaKeys::privateKey()
+            ->getData()
+        ;
+        $data[$parameter] = RsaKeys::nonByteAlignedPrivateKey()
+            ->getData()[$parameter]
+        ;
+
+        // Then
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Inconsistent RSA private key');
+
+        // When
+        PS256::create()
+            ->sign(self::MESSAGE, RsaKey::create($data))
+        ;
+    }
+
+    /**
+     * @return iterable<string, array{RsaKey}>
+     */
+    public static function getBlindedKeys(): iterable
+    {
+        yield 'without CRT parameters' => [RsaKeys::privateKeyWithoutCrtParameters()];
+        yield 'multi-prime' => [RsaKeys::multiPrimePrivateKey()];
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function getCrtParameters(): iterable
+    {
+        yield 'p' => [RsaKey::DATA_P];
+        yield 'q' => [RsaKey::DATA_Q];
+        yield 'dP' => [RsaKey::DATA_DP];
+        yield 'dQ' => [RsaKey::DATA_DQ];
+        yield 'qInv' => [RsaKey::DATA_QI];
+    }
+
+    /**
      * @return iterable<string, array{PSSRSA}>
      */
     public static function getAlgorithms(): iterable
