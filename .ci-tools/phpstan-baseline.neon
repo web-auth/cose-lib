@@ -13,15 +13,15 @@ parameters:
 			path: ../src/Algorithm/Signature/ECDSA/ECDSA.php
 
 		-
-			rawMessage: 'Parameter #1 $signature of function sodium_crypto_sign_verify_detached expects non-empty-string, string given.'
+			rawMessage: 'Parameter #1 $seed of function sodium_crypto_sign_seed_keypair expects non-empty-string, string given.'
 			identifier: argument.type
 			count: 1
 			path: ../src/Algorithm/Signature/EdDSA/EdDSA.php
 
 		-
-			rawMessage: 'Parameter #2 $secret_key of function sodium_crypto_sign_detached expects non-empty-string, string given.'
+			rawMessage: 'Parameter #1 $signature of function sodium_crypto_sign_verify_detached expects non-empty-string, string given.'
 			identifier: argument.type
-			count: 2
+			count: 1
 			path: ../src/Algorithm/Signature/EdDSA/EdDSA.php
 
 		-
@@ -123,6 +123,12 @@ parameters:
 		-
 			rawMessage: 'Method Cose\Key\OkpKey::x() should return string but returns mixed.'
 			identifier: return.type
+			count: 1
+			path: ../src/Key/OkpKey.php
+
+		-
+			rawMessage: 'Parameter #1 $seed of function sodium_crypto_sign_seed_keypair expects non-empty-string, string given.'
+			identifier: argument.type
 			count: 1
 			path: ../src/Key/OkpKey.php
 

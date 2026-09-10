@@ -5,9 +5,14 @@ declare(strict_types=1);
 namespace Cose\Key;
 
 use function array_key_exists;
+use function extension_loaded;
 use function in_array;
 use InvalidArgumentException;
 use function is_string;
+use RuntimeException;
+use function sodium_crypto_scalarmult_base;
+use function sodium_crypto_sign_publickey;
+use function sodium_crypto_sign_seed_keypair;
 use SpomkyLabs\Pki\ASN1\Type\Constructed\Sequence;
 use SpomkyLabs\Pki\ASN1\Type\Primitive\BitString;
 use SpomkyLabs\Pki\ASN1\Type\Primitive\Integer;
@@ -72,6 +77,17 @@ class OkpKey extends Key
         self::CURVE_NAME_ED448 => 57,
     ];
 
+    /**
+     * The curves whose public key the Sodium extension can recompute from the private one. Ed448 and X448 have no
+     * such primitive in PHP, so a key on those curves still has to carry its "x".
+     */
+    private const DERIVABLE_CURVES = [
+        self::CURVE_X25519,
+        self::CURVE_ED25519,
+        self::CURVE_NAME_X25519,
+        self::CURVE_NAME_ED25519,
+    ];
+
     private const CURVE_OID = [
         self::CURVE_X25519 => '1.3.101.110',
         self::CURVE_X448 => '1.3.101.111',
@@ -97,7 +113,11 @@ class OkpKey extends Key
         if ($data[self::TYPE] !== self::TYPE_OKP && $data[self::TYPE] !== self::TYPE_NAME_OKP) {
             throw new InvalidArgumentException('Invalid OKP key. The key type does not correspond to an OKP key');
         }
-        if (! isset($data[self::DATA_CURVE], $data[self::DATA_X])) {
+        // RFC 9053 section 7.2: "d" is the authoritative private key material and "x" is only RECOMMENDED for a
+        // private key, "it can be recomputed from the required elements". A private key carrying "crv" and "d"
+        // alone is therefore valid, and is the safest way to build a signing key: nothing can hand over an "x"
+        // inconsistent with the seed.
+        if (! isset($data[self::DATA_CURVE]) || (! isset($data[self::DATA_X]) && ! isset($data[self::DATA_D]))) {
             throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x" coordinate is missing');
         }
         if (is_numeric($data[self::DATA_CURVE])) {
@@ -108,7 +128,8 @@ class OkpKey extends Key
             throw new InvalidArgumentException('The curve is not supported');
         }
         $length = self::CURVE_KEY_LENGTH[$data[self::DATA_CURVE]];
-        if (! is_string($data[self::DATA_X]) || strlen($data[self::DATA_X]) !== $length) {
+        if (array_key_exists(self::DATA_X, $data)
+            && (! is_string($data[self::DATA_X]) || strlen($data[self::DATA_X]) !== $length)) {
             throw new InvalidArgumentException('Invalid length for x coordinate');
         }
         if (array_key_exists(self::DATA_D, $data)
@@ -127,7 +148,11 @@ class OkpKey extends Key
 
     public function x(): string
     {
-        return $this->get(self::DATA_X);
+        if ($this->has(self::DATA_X)) {
+            return $this->get(self::DATA_X);
+        }
+
+        return $this->derivePublicKey();
     }
 
     public function isPrivate(): bool
@@ -152,9 +177,33 @@ class OkpKey extends Key
     public function toPublic(): self
     {
         $data = $this->getData();
+        $data[self::DATA_X] = $this->x();
         unset($data[self::DATA_D]);
 
         return new self($data);
+    }
+
+    /**
+     * Recomputes the public key from the private one, as RFC 9053 section 7.2 allows when "x" was omitted.
+     */
+    private function derivePublicKey(): string
+    {
+        $curve = $this->curve();
+        if (! in_array($curve, self::DERIVABLE_CURVES, true)) {
+            throw new InvalidArgumentException(
+                'The "x" coordinate is missing and cannot be computed from "d" for this curve'
+            );
+        }
+        if (! extension_loaded('sodium')) {
+            throw new RuntimeException(
+                'The "x" coordinate is missing and computing it from "d" requires the Sodium extension, which is not loaded.'
+            );
+        }
+        $d = $this->d();
+
+        return $curve === self::CURVE_X25519 || $curve === self::CURVE_NAME_X25519
+            ? sodium_crypto_scalarmult_base($d)
+            : sodium_crypto_sign_publickey(sodium_crypto_sign_seed_keypair($d));
     }
 
     /**
