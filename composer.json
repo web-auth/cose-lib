@@ -28,9 +28,13 @@
     "require-dev": {
         "spomky-labs/cbor-php": "^3.2.2"
     },
+    "replace": {
+        "symfony/polyfill-php81": "*"
+    },
     "suggest": {
-        "ext-bcmath": "For better performance, please install either GMP (recommended) or BCMath extension",
-        "ext-gmp": "For better performance, please install either GMP (recommended) or BCMath extension",
+        "ext-bcmath": "Recommended: without GMP or BCMath, signing with RSASSA-PSS (PS256/PS384/PS512) blinds its private exponentiation in pure PHP",
+        "ext-gmp": "Recommended: without GMP or BCMath, signing with RSASSA-PSS (PS256/PS384/PS512) blinds its private exponentiation in pure PHP",
+        "ext-sodium": "Required by the EdDSA/Ed25519 signature algorithms (-8, -19, -260, -261) and to recompute an OKP public key from its private key",
         "spomky-labs/cbor-php": "For COSE Signature support"
     },
     "autoload": {

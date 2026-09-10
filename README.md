@@ -202,12 +202,51 @@ the key. They live in the `Cose\Algorithm\Signature\FullySpecified` namespace.
 | HS512 | 7 | HMAC with SHA-512 |
 | HS256/64 | 4 | HMAC with SHA-256 truncated to 64 bits |
 
+## Signature Verification Contract
+
+`Cose\Algorithm\Signature\Signature::verify()` is total for every condition the governing specifications define as an
+"invalid signature" outcome. A malformed, truncated, over-long or out-of-range signature, and key material that the
+crypto layer cannot decode — a point that is not on the named curve, a public key that is not a valid group element —
+all return `false`. No PHP warning is raised on the way.
+
+It throws an `InvalidArgumentException` in one case only: the key cannot be used with the algorithm at all, i.e. its
+key type or its curve does not match. Structurally invalid key components — an empty or zero RSA modulus, an `x`, `y`
+or `d` whose length does not fit the curve — are rejected earlier, by the `Key` constructors, so the exception is
+raised when the key is first seen rather than at every verification.
+
+```php
+use Cose\Key\Key;
+use InvalidArgumentException;
+
+try {
+    // Throws only when $key is an RSA key, an EC key on another curve, …
+    $key = Key::createFromData($credentialPublicKey);
+} catch (InvalidArgumentException $e) {
+    // The credential cannot be used with this algorithm: reject it at registration.
+}
+
+// From here on, verification is a plain boolean, whatever the client sent.
+$isValid = $algorithm->verify($data, $key, $signature);
+```
+
+`sign()` throws an `InvalidArgumentException` when the key is public, when the crypto layer cannot load it, or when the
+signature operation itself fails, for instance for an RSA modulus too short for the digest.
+
 ## Validating RSA Keys
 
-[RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) defers to
+The RSA algorithms reject, on their own, any key whose public parameters are not those
+[RFC 8017, section 3.1](https://datatracker.ietf.org/doc/html/rfc8017#section-3.1) defines: an odd modulus and a
+public exponent that is an odd integer between 3 and `n - 1`. `sign()` throws and `verify()` returns `false` for
+such a key; nothing has to be done to get that behaviour.
+
+The modulus length is a different matter. [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) defers to
 [RFC 8230, section 6.1](https://www.rfc-editor.org/rfc/rfc8230#section-6.1), which requires a modulus of 2048 bits or
-larger and expects implementations to handle up to 16K bits. The library never applies those bounds on its own; run
-them explicitly on a key before handing it to an algorithm:
+larger and expects implementations to handle up to 16K bits.
+
+The upper bounds are applied automatically: every RSA algorithm rejects a key whose modulus is longer than 16384 bits
+or whose public exponent is longer than 256 bits, before it computes anything with it. `verify()` returns `false` for
+such a key and `sign()` throws. The **minimum** modulus length is a policy decision and stays opt-in, because some
+deployments have to accept legacy sizes; run it explicitly on a key before handing it to an algorithm:
 
 ```php
 use Cose\Key\RsaKey;
@@ -227,9 +266,21 @@ if (! RsaKeyValidator::create()->isValid($key)) {
 RsaKeyValidator::create(minimumModulusLength: 3072, maximumModulusLength: 8192)->check($key);
 ```
 
-The validator also enforces the public exponent constraints of
-[RFC 8017, section 3.1](https://datatracker.ietf.org/doc/html/rfc8017#section-3.1): an odd integer between 3 and
-`n - 1`.
+`check()` and `isValid()` also cover the public parameter constraints described above. They are available on their
+own, without any modulus length policy:
+
+```php
+// Throws an InvalidArgumentException unless the modulus is odd and 3 <= e < n
+RsaKeyValidator::checkPublicParameters($key);
+```
+
+## Performance
+
+**ext-gmp** (recommended) or **ext-bcmath** is worth installing, but no longer required for RSA verification to be
+cheap: `RsaKey::asPem()`, `RsaKeyValidator` and the public operation of every RSA algorithm are computed without
+`brick/math`. Signing with RSASSA-PSS (`PS256`, `PS384`, `PS512`) still uses it for the blinding of the private
+exponentiation, and falls back to a pure PHP calculator when neither extension is loaded — which is the configuration
+of the stock `php` and `php-fpm` Docker images.
 
 ## Testing
 

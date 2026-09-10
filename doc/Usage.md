@@ -17,6 +17,8 @@ This library provides full support for COSE (CBOR Object Signing and Encryption)
   - [COSE_Mac (With Recipients)](#cose_mac-with-recipients)
 - [Supported Algorithms](#supported-algorithms)
   - [Fully-Specified Algorithms](#fully-specified-algorithms)
+  - [Signature Verification Contract](#signature-verification-contract)
+  - [Ed25519 Private Keys](#ed25519-private-keys)
   - [Validating RSA Keys](#validating-rsa-keys)
 
 ## Installation
@@ -100,6 +102,7 @@ use CBOR\Decoder;
 use CBOR\OtherObject\OtherObjectManager;
 use CBOR\StringStream;
 use CBOR\Tag\TagManager;
+use Cose\Algorithm\Signature\ECDSA\ECSignature;
 use Cose\Signature\CoseSign1Tag;
 use Cose\Signature\Signature1;
 
@@ -279,6 +282,14 @@ $coseMac = CoseMacTag::create(
   - PS512 (-39): RSASSA-PSS with SHA-512
   - RS1 (-65535): RSASSA-PKCS1-v1_5 with SHA-1 — **not secure**, kept only for legacy authenticators
 
+PS256, PS384 and PS512 sign with a private key, so the exponentiation is a side-channel target. A two-prime key
+carrying the full CRT quintuple — the shape almost every key store produces — is exponentiated by OpenSSL, which
+blinds the base and runs `BN_mod_exp_mont_consttime`. Its CRT parameters are checked against the modulus first, so an
+inconsistent key is reported rather than silently repaired. Multi-prime keys ([RFC 8230 section 4](https://www.rfc-editor.org/rfc/rfc8230#section-4))
+and keys reduced to `(n, e, d)` have no PEM representation and keep the in-process exponentiation; their base is
+blinded, which hides it from an observer, but `gmp_powm()`, `bcpowmod()` and the native brick/math loop are not
+constant-time, so prefer a full two-prime key when signing with a long-lived key on a shared host.
+
 RS1 relies on SHA-1, which is no longer acceptable for digital signatures (see
 [RFC 6194](https://datatracker.ietf.org/doc/html/rfc6194) and NIST SP 800-131A). Creating the algorithm emits an
 `E_USER_WARNING` unless the risk is explicitly acknowledged:
@@ -328,15 +339,89 @@ Ed448 is not covered by the sodium extension and goes through OpenSSL, which PHP
 PHP 8.4. Call `Ed448::isSupported()` when the platform is not known in advance; the algorithm throws a
 `RuntimeException` on older versions.
 
+Every Ed25519 algorithm — `EdDSA` (-8), `Ed25519` (-8 and -19), `Ed256` (-260) and `Ed512` (-261) — is computed with
+the sodium extension. Sodium ships with PHP and is enabled by default, but a build can leave it out, so it is a
+suggestion of this package rather than a hard requirement: everything else works without it. Creating one of these
+algorithms on a host where sodium is not loaded throws a `RuntimeException`; call `EdDSA::isSupported()` when the
+platform is not known in advance.
+
 The brainpool curves are also available on `Cose\Key\Ec2Key` as `CURVE_BP256`, `CURVE_BP320`, `CURVE_BP384` and
 `CURVE_BP512` (values 256 to 259 of the COSE Elliptic Curves registry).
+
+### Signature Verification Contract
+
+`Cose\Algorithm\Signature\Signature::verify()` is total for every condition the governing specifications define as an
+"invalid signature" outcome. A malformed, truncated, over-long or out-of-range signature, and key material that the
+crypto layer cannot decode — a point that is not on the named curve, a public key that is not a valid group element —
+all return `false`. No PHP warning is raised on the way.
+
+It throws an `InvalidArgumentException` in one case only: the key cannot be used with the algorithm at all, i.e. its
+key type or its curve does not match. Structurally invalid key components — an empty or zero RSA modulus, an `x`, `y`
+or `d` whose length does not fit the curve — are rejected earlier, by the `Key` constructors, so the exception is
+raised when the key is first seen rather than at every verification.
+
+```php
+use Cose\Key\Key;
+use InvalidArgumentException;
+
+try {
+    // Throws only when $key is an RSA key, an EC key on another curve, …
+    $key = Key::createFromData($credentialPublicKey);
+} catch (InvalidArgumentException $e) {
+    // The credential cannot be used with this algorithm: reject it at registration.
+}
+
+// From here on, verification is a plain boolean, whatever the client sent.
+$isValid = $algorithm->verify($data, $key, $signature);
+```
+
+`sign()` throws an `InvalidArgumentException` when the key is public, when the crypto layer cannot load it, or when the
+signature operation itself fails, for instance for an RSA modulus too short for the digest.
+
+### Ed25519 Private Keys
+
+[RFC 8032, section 5.1.5](https://www.rfc-editor.org/rfc/rfc8032#section-5.1.5) defines the Ed25519 public key `A` as a
+function of the private seed, and [section 5.1.6](https://www.rfc-editor.org/rfc/rfc8032#section-5.1.6) puts that `A`
+into the challenge the signature is built on. `sign()` therefore always recomputes the key pair from `d` and never
+signs under a public key handed to it: a `-2` (`x`) that contradicts `d` is refused with an
+`InvalidArgumentException`, because signing under two different `x` values for one seed discloses the private key.
+
+[RFC 9053, section 7.2](https://www.rfc-editor.org/rfc/rfc9053#section-7.2) makes `x` RECOMMENDED, not REQUIRED, for a
+private key — "it can be recomputed from the required elements" — so an `OkpKey` may carry `crv` and `d` alone. That is
+the safest way to build a signing key, since nothing can then hand it an `x` inconsistent with the seed:
+
+```php
+use Cose\Algorithm\Signature\EdDSA\Ed25519;
+use Cose\Key\OkpKey;
+
+$key = OkpKey::create([
+    OkpKey::TYPE => OkpKey::TYPE_OKP,
+    OkpKey::DATA_CURVE => OkpKey::CURVE_ED25519,
+    OkpKey::DATA_D => $seed, // 32 bytes, RFC 8032 section 5.1.5
+]);
+
+$signature = Ed25519::create()->sign($data, $key);
+$publicKey = $key->x();          // recomputed from $seed
+$publicCoseKey = $key->toPublic(); // carries the recomputed x, without d
+```
+
+`x()` recomputes the public key for the curves sodium covers, Ed25519 and X25519. Ed448 and X448 have no derivation
+primitive in PHP, so a key on those curves still has to carry its `x`.
 
 ### Validating RSA Keys
 
 [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) defers to
 [RFC 8230, section 6.1](https://www.rfc-editor.org/rfc/rfc8230#section-6.1), which requires a modulus of 2048 bits or
-larger and expects implementations to handle up to 16K bits. Nothing applies those bounds automatically, so run them
-explicitly before handing a key to an algorithm:
+larger and expects implementations to handle up to 16K bits.
+
+The upper bounds are applied automatically: every RSA algorithm rejects a key whose modulus is longer than
+`RsaKeyValidator::MAXIMUM_MODULUS_LENGTH` (16384) bits or whose public exponent is longer than
+`RsaKeyValidator::MAXIMUM_EXPONENT_LENGTH` (256) bits, before it computes anything with it. `verify()` returns `false`
+for such a key and `sign()` throws an `InvalidArgumentException`. The cost of an RSA operation grows with the size of
+the key it is given, and a verifier takes that key from whoever produced the message.
+
+The **minimum** modulus length is a policy decision and stays opt-in, so run it explicitly before handing a key to an
+algorithm:
 
 ```php
 use Cose\Key\RsaKey;
@@ -353,13 +438,19 @@ $isAcceptable = RsaKeyValidator::create()->isValid($key);
 // The bounds can be tightened
 RsaKeyValidator::create(minimumModulusLength: 3072, maximumModulusLength: 8192)->check($key);
 
-// The modulus length, in bits, is available on its own
-$length = RsaKeyValidator::modulusLength($key);
+// The modulus and exponent lengths, in bits, are available on their own
+$modulusLength = RsaKeyValidator::modulusLength($key);
+$exponentLength = RsaKeyValidator::exponentLength($key);
+
+// The bounds the algorithms apply on their own, should you want to run them earlier
+RsaKeyValidator::checkLengthBounds($key);
 ```
 
 The validator also enforces the public exponent constraints of
 [RFC 8017, section 3.1](https://datatracker.ietf.org/doc/html/rfc8017#section-3.1): an odd integer between 3 and
 `n - 1`.
+
+Every check is performed on the octet strings of the key, so rejecting an oversized key costs no more than reading it.
 
 ### MAC Algorithms
 
