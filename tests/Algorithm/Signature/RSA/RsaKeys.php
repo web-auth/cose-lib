@@ -273,6 +273,33 @@ final class RsaKeys
     }
 
     /**
+     * A 1024 bit key: the size the legacy authenticators that RFC 8230 section 6.1 rules out still use. It is only
+     * ever handed to an algorithm created with an explicit RsaKeyValidator that accepts it.
+     */
+    public static function weakPrivateKey(): RsaKey
+    {
+        return RsaKey::create([
+            RsaKey::TYPE => RsaKey::TYPE_RSA,
+            RsaKey::DATA_N => base64_decode(
+                '4yULtdoMYDuRujvfpXRP4zeCM48BuVSvKxHFI8uDw6WsAf9qGJ1xDez5Y5P1+Kjk+FKo5DiuyUDu6aFjukvGJyAeuRQ0Pi6w' .
+                'jxh4+jJ2oJWSZovNbPC3Yrx5pyy8QiztxnjV1KgoruBcPEZUHeER6Z18cBFwzn6HyWTlBXV/RjM=',
+                true
+            ),
+            RsaKey::DATA_E => base64_decode('AQAB', true),
+            RsaKey::DATA_D => base64_decode(
+                'Jm4OHSZXEbECZs/adtPG8Fpj3PVFBWYefNr0z6mPEXrmLzBXcvKwPfrp9r8BzqBEnP7fND2i1Mn3oe98P/ix/Xr9cCWkil3f' .
+                'PdxtYszvYZ2NVHXdKZcfuNaTuEkzs1RfmWG8bqD7g4xUZHgPTzIjKhEkqNFK7vVUSNGPaHO11oE=',
+                true
+            ),
+            RsaKey::DATA_P => base64_decode('+UBB7ko1wbO7AkJp0RTlfCe6pF09rXPe5gi+je5AtCjRjavmkvQNgGLqh7NxLnLQ7OQhcCOhzj2ovFJr28LALw==', true),
+            RsaKey::DATA_Q => base64_decode('6UuNnGLUSJBSJ69g25sFymM8o237E8OzWI1hHlfgCeEVZU3BEx/Wwg2eS0j1EYFDEoR/n7y656A+E4Lai151PQ==', true),
+            RsaKey::DATA_DP => base64_decode('TEb15k6flN/D4zUf3PRgJlaiL5q5PVOwawVSC21WL8wuFQT+UwqM9zVOQKkRgf1xIo3ODdtZsRv9f2RZza8T0Q==', true),
+            RsaKey::DATA_DQ => base64_decode('wEE7Gj13o7ULfxjQQSmnw/mz5xqjZs5H5hnchxzzzDBpaWqCSjhayuBeKryc+SgFFiWK5yCpBmjPv1R+tYvKIQ==', true),
+            RsaKey::DATA_QI => base64_decode('vWLv8JJCKSiMF0N+31mfDYbTtLfdUSGl+g6WQyKUs62yOsvfBVQgDQ4gR85wl2U/wOctVZhptxI9Hta6XLA4SQ==', true),
+        ]);
+    }
+
+    /**
      * A 1040 bit key: the smallest modulus PS512 can encode (emLen == hLen + sLen + 2). Far below the RFC 8230
      * section 6.1 minimum, and only used to exercise that boundary.
      */

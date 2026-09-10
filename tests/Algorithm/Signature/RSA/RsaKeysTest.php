@@ -124,6 +124,7 @@ final class RsaKeysTest extends TestCase
         yield 'padded modulus' => [RsaKeys::privateKeyWithPaddedModulus(), 2048];
         yield 'not byte aligned' => [RsaKeys::nonByteAlignedPrivateKey(), 2050];
         yield 'multi-prime' => [RsaKeys::multiPrimePrivateKey(), 2048];
+        yield 'weak' => [RsaKeys::weakPrivateKey(), 1024];
         yield 'short' => [RsaKeys::shortPrivateKey(), 1040];
         yield 'too short' => [RsaKeys::tooShortPrivateKey(), 1032];
     }

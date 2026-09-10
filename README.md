@@ -283,10 +283,45 @@ The modulus length is a different matter. [RFC 8812](https://datatracker.ietf.or
 [RFC 8230, section 6.1](https://www.rfc-editor.org/rfc/rfc8230#section-6.1), which requires a modulus of 2048 bits or
 larger and expects implementations to handle up to 16K bits.
 
-The upper bounds are applied automatically: every RSA algorithm rejects a key whose modulus is longer than 16384 bits
-or whose public exponent is longer than 256 bits, before it computes anything with it. `verify()` returns `false` for
-such a key and `sign()` throws. The **minimum** modulus length is a policy decision and stays opt-in, because some
-deployments have to accept legacy sizes; run it explicitly on a key before handing it to an algorithm:
+Both bounds are applied automatically, before the algorithm computes anything with the key.
+
+The **upper** bounds are not negotiable: every RSA algorithm rejects a key whose modulus is longer than 16384 bits or
+whose public exponent is longer than 256 bits. `verify()` returns `false` for such a key and `sign()` throws.
+
+The **minimum** modulus length is applied too, with `RsaKeyValidator::create()`, so that nothing has to be done to
+get the bound RFC 8230 requires. Because legacy authenticators holding 1024 bit keys still exist, a key below it only
+emits an `E_USER_WARNING` for now:
+
+```php
+use Cose\Algorithm\Signature\RSA\RS256;
+
+// Warns: "The RSA key does not satisfy RFC 8230 section 6.1: The modulus of the key is 1024 bits long; …"
+// The signature is still verified, so no deployment breaks on upgrade.
+$isValid = RS256::create()->verify($data, $weakKey, $signature);
+```
+
+As of the next major version, that warning becomes an `InvalidArgumentException` on `sign()` and a `false` on
+`verify()`.
+
+To keep accepting weaker keys, hand the algorithm a validator carrying the bound you actually accept. Writing the
+bound down is the acknowledgement: a key below *it* is still refused, right away and with an exception, because you
+chose that bound.
+
+```php
+use Cose\Algorithm\Signature\RSA\RS256;
+use Cose\Key\RsaKeyValidator;
+
+// 1024 bit keys accepted silently; 512 bit ones still rejected
+$algorithm = RS256::create(RsaKeyValidator::create(minimumModulusLength: 1024));
+
+// The other way round: a stricter policy than the RFC, enforced now rather than in the next major version
+$algorithm = RS256::create(RsaKeyValidator::create(minimumModulusLength: 3072, maximumModulusLength: 8192));
+```
+
+Every RSA algorithm takes it: `RS256`, `RS384`, `RS512`, `PS256`, `PS384` and `PS512` as their only argument, `RS1`
+after its `acknowledgeInsecureAlgorithm` flag — `RS1::create(true, RsaKeyValidator::create(minimumModulusLength: 1024))`.
+
+The validator can also be run on its own, on a key you are about to store:
 
 ```php
 use Cose\Key\RsaKey;
@@ -301,9 +336,6 @@ RsaKeyValidator::create()->check($key);
 if (! RsaKeyValidator::create()->isValid($key)) {
     // reject the key
 }
-
-// The bounds can be tightened
-RsaKeyValidator::create(minimumModulusLength: 3072, maximumModulusLength: 8192)->check($key);
 ```
 
 `check()` and `isValid()` also cover the public parameter constraints described above. They are available on their
