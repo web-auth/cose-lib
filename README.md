@@ -18,7 +18,8 @@ This library implements:
 - `Sig_structure`: `Signature1` (§4.4) and `Signature`, which also covers the signer's own protected header
 - `MAC_structure`: `Mac0Structure` and `MacStructure` (§6.3) — a MAC tag covers this, never the bare payload
 - `Enc_structure`: `Encrypt0Structure`, `EncryptStructure` and `RecipientStructure` (§5.3)
-- Each takes the optional `external_aad`, defaulting to the zero-length byte string the RFC prescribes
+- Each takes the optional `external_aad`, defaulting to the zero-length byte string the RFC prescribes, and writes
+  an empty protected bucket as the zero-length byte string whether the message carries `h''` or `h'a0'` (§3, §4.4)
 
 ✅ **RFC 9052 Header and Structure Rules**
 - `CoseHeaders` reads the two buckets of any COSE message: a label is an integer *or* a text string (§1.5) and the
@@ -388,7 +389,10 @@ shapes. The `Key` classes settle them all at construction time:
 - a key type or a curve given as the numeric string spomky-labs/cbor-php produces when it decodes a CBOR integer
   (`'2'`, `'-1'`) is stored as the integer it denotes, so `Key::type()` always compares equal to `Key::TYPE_EC2` and
   friends, whether the key was decoded from CBOR or built by hand;
-- a key type may also be given by name: `EC`, `OKP`, `RSA` or `oct`;
+- a key type may also be given by name — the names of the IANA
+  [COSE Key Types](https://www.iana.org/assignments/cose/cose.xhtml#key-type) registry, `OKP`, `EC2`, `RSA` and
+  `Symmetric`, or the JOSE spellings `EC` and `oct` a key converted from a JWK carries. `Key::typeIs(Key::TYPE_EC2)`
+  answers for every form, while `type()` keeps returning the form supplied;
 - a curve may be given by name — `P-256`, `P-384`, `P-521`, `secp256k1`, `brainpoolP256r1` and so on. `curve()`
   returns the form the key carries, and `Ec2Key::curveId()` / `OkpKey::curveId()` return the value of the IANA
   [COSE Elliptic Curves](https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves) registry whatever that
@@ -574,6 +578,12 @@ The library includes comprehensive tests including:
 - Integration tests with real cryptographic operations
 - COVID-19 certificate verification examples
 - Test fixtures with actual certificates
+- The interoperability fixtures of the IETF COSE working group, [cose-wg/Examples](https://github.com/cose-wg/Examples),
+  vendored under [`tests/fixtures/cose-wg/`](tests/fixtures/cose-wg/README.md). Every ECDSA, EdDSA, HMAC and
+  RSASSA-PSS fixture is decoded, rebuilt into its `Sig_structure` or `MAC_structure`, compared with the bytes the
+  working group's generator signed, verified, and signed again; the fixtures the generator broke on purpose are
+  asserted to be rejected. Fixtures for algorithms the library does not implement yet are reported as skipped with
+  the identifier, so `phpunit --display-skipped` lists what is left.
 
 ## Requirements
 
