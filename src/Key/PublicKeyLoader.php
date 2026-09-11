@@ -141,15 +141,37 @@ final class PublicKeyLoader
         if (! array_key_exists($namedCurve, self::CURVE_OID_TO_COSE_CURVE)) {
             throw new InvalidArgumentException(sprintf('Unsupported elliptic curve "%s"', $namedCurve));
         }
-        // RFC 5480, section 2.2: the subjectPublicKey is the ECPoint of SEC 1, section 2.3.3. Only its uncompressed
-        // form is read here, as it is the only one Cose\Key\Ec2Key stores; decompressing a point would mean
-        // computing a square root modulo the field prime for every curve this library names.
-        if ($ecPoint === '' || ord($ecPoint[0]) !== 0x04) {
+        // RFC 5480, section 2.2: the subjectPublicKey is the ECPoint of SEC 1, section 2.3.3 - 0x04 followed by both
+        // coordinates, or 0x02 / 0x03 followed by x alone, the octet being the sign bit of y. Both forms are read;
+        // the key produced carries the uncompressed point in either case, as RFC 9679 asks a thumbprint to be
+        // computed over, Ec2Key doing the decompression from the sign bit.
+        if ($ecPoint === '') {
+            throw new InvalidArgumentException('Invalid elliptic curve public key');
+        }
+        $form = ord($ecPoint[0]);
+        $curve = self::CURVE_OID_TO_COSE_CURVE[$namedCurve];
+        $coordinates = substr($ecPoint, 1);
+        if ($form === 0x02 || $form === 0x03) {
+            // Ec2Key rejects an x whose length does not match the curve, and a sign bit that names no point.
+            $compressed = Ec2Key::create([
+                Key::TYPE => Key::TYPE_EC2,
+                Ec2Key::DATA_CURVE => $curve,
+                Ec2Key::DATA_X => $coordinates,
+                Ec2Key::DATA_Y => $form === 0x03,
+            ]);
+
+            return Ec2Key::create([
+                Key::TYPE => Key::TYPE_EC2,
+                Ec2Key::DATA_CURVE => $curve,
+                Ec2Key::DATA_X => $compressed->x(),
+                Ec2Key::DATA_Y => $compressed->y(),
+            ]);
+        }
+        if ($form !== 0x04) {
             throw new InvalidArgumentException(
-                'Unsupported elliptic curve public key: only the uncompressed point format is supported'
+                'Unsupported elliptic curve public key: only the uncompressed and compressed point formats are supported'
             );
         }
-        $coordinates = substr($ecPoint, 1);
         if (strlen($coordinates) === 0 || strlen($coordinates) % 2 !== 0) {
             throw new InvalidArgumentException('Invalid elliptic curve public key');
         }
@@ -158,7 +180,7 @@ final class PublicKeyLoader
         // Ec2Key rejects coordinates whose length does not match the curve.
         return Ec2Key::create([
             Key::TYPE => Key::TYPE_EC2,
-            Ec2Key::DATA_CURVE => self::CURVE_OID_TO_COSE_CURVE[$namedCurve],
+            Ec2Key::DATA_CURVE => $curve,
             Ec2Key::DATA_X => substr($coordinates, 0, $length),
             Ec2Key::DATA_Y => substr($coordinates, $length),
         ]);

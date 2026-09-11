@@ -60,6 +60,25 @@ integers, which `SHAKE128::isSupported()` reports. Two points to know:
   they answer "which digest does OpenSSL sign with", which SHA-256/64 and the SHAKE functions have no answer to. A
   hash identifier resolves through a `Manager`.
 
+**The COSE Key Thumbprint of RFC 9679 is implemented.** `Cose\Key\Thumbprint::of($key, $hash = SHA-256)` computes
+the digest of a `COSE_Key` rebuilt from the required parameters of the key type — OKP, EC2, RSA, Symmetric — in the
+deterministic encoding of RFC 8949 §4.2.1; `kid`, `alg`, `key_ops`, the private parts, the member order, the
+spelling of `kty` and `crv` and the form of an EC2 point leave it unchanged, and a private key has the thumbprint of
+its public half. `value()` is the raw digest, `equals()` compares it in constant time, `toUri()` spells the
+`urn:ietf:params:oauth:ckt:<hash>:<base64url>` URI of §5.7 for SHA-256, SHA-384 and SHA-512 — the hashes the IANA
+Named Information registry names — and `canonicalForm()` exposes the CBOR the digest is computed over. The hash
+parameter is typed `Cose\Algorithm\Hash\Hash`, so the Filter Only SHA-1 and SHA-256/64 are refused. The worked
+example of RFC 9679 §6 is reproduced byte for byte. Two points to know:
+
+- **`Ec2Key` accepts a compressed point.** RFC 9053 §7.1.1 lets a public EC2 key carry `y` as the sign bit of the
+  point, a CBOR boolean; the constructor used to refuse it as an "invalid type". It now decompresses the point on
+  load, for all eight curves, and refuses a sign bit that names no point of the curve. `y()`,
+  `getUncompressedCoordinates()` and `asPEM()` return the coordinate whatever form was supplied; `getData()` keeps
+  the boolean. `PublicKeyLoader` reads a compressed `subjectPublicKey` too, and hands back a key that carries the
+  uncompressed point. A key carrying `y` as a byte string is handled exactly as before.
+- **The thumbprint of a symmetric key is computed over the secret.** RFC 9679 §7 forbids it for passwords and other
+  low-entropy secrets; see [Key Thumbprints](doc/Usage.md#key-thumbprints).
+
 **The interoperability fixtures of the IETF COSE working group are part of the test suite.**
 [cose-wg/Examples](https://github.com/cose-wg/Examples) is vendored under `tests/fixtures/cose-wg/`, with a harness
 (`tests/CoseWg/`) that verifies every fixture this library has an algorithm for and reports the others as skipped

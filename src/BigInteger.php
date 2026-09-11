@@ -120,4 +120,22 @@ final class BigInteger
     {
         return $this->value->compareTo($y->value);
     }
+
+    /**
+     * The quotient of the division by 2^$bits, i.e. the number with its $bits low-order bits dropped.
+     */
+    public function shiftRight(int $bits): self
+    {
+        return new self($this->value->shiftedRight($bits));
+    }
+
+    public function isOdd(): bool
+    {
+        return $this->value->isOdd();
+    }
+
+    public function isZero(): bool
+    {
+        return $this->value->isZero();
+    }
 }

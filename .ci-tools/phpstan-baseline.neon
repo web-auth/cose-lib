@@ -73,12 +73,6 @@ parameters:
 			path: ../src/Key/Ec2Key.php
 
 		-
-			rawMessage: 'Method Cose\Key\Ec2Key::y() should return string but returns mixed.'
-			identifier: return.type
-			count: 1
-			path: ../src/Key/Ec2Key.php
-
-		-
 			rawMessage: 'Method Cose\Key\Key::type() should return int|string but returns mixed.'
 			identifier: return.type
 			count: 1
