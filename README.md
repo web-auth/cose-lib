@@ -220,6 +220,8 @@ $encoded = (string) $coseSign1;
 - **[RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230)** - RSASSA-PSS and RSA keys for COSE
 - **[RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812)** - RSASSA-PKCS1-v1_5 and secp256k1 for COSE
 - **[RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html)** - Fully-Specified Algorithms
+- **[RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html)** - COSE "typ" (type) Header Parameter
+- **[RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html)** - CWT Claims in COSE Headers
 - **[IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)** - The algorithm, key type and curve
   registries every identifier of this library is checked against
 
