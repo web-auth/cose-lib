@@ -11,6 +11,8 @@ This library implements:
 - **[RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052)** - COSE: Structures and Process
 - **[RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053)** - COSE: Initial Algorithms
 - **[RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html)** - COSE: Fully-Specified Algorithms
+- **[RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html)** - COSE "typ" (type) Header Parameter
+- **[RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html)** - CWT Claims in COSE Headers
 
 ## Features
 
@@ -27,6 +29,12 @@ This library implements:
   protected bucket are not, and the protected value wins a combined lookup
 - `CoseSignature` and `CoseRecipient` are the checked views over the `signatures` and `recipients` lists (`[+ ...]`)
 - Works on the COSE message classes of spomky-labs/cbor-php 3.4.0
+
+✅ **Header Parameters** ([RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html), [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html))
+- `typ` (16): `getTyp()` reads the type of the COSE object as a CoAP Content-Format number or a media type name,
+  from the protected bucket only, and rejects a message carrying it in the unprotected one (RFC 9596 §2)
+- `CWT Claims` (15): `getCwtClaims()` reads the claims map carried in the header, and rejects it when it appears in
+  both buckets (RFC 9597 §2); see [`typ` and `CWT Claims`](doc/Usage.md#typ-and-cwt-claims)
 
 ✅ **COSE Tag Support** (via [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0)
 - `CBOR\Tag\CoseSign1Tag` (18), `CoseSignTag` (98), `CoseEncrypt0Tag` (16), `CoseEncryptTag` (96),

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Cose\Tests\Structure;
 
 use CBOR\ByteStringObject;
+use CBOR\CBORObject;
 use CBOR\IndefiniteLengthByteStringObject;
+use CBOR\IndefiniteLengthMapObject;
 use CBOR\ListObject;
 use CBOR\MapItem;
 use CBOR\MapObject;
@@ -181,6 +183,72 @@ final class HeaderMapHelperTest extends TestCase
             MapItem::create(UnsignedIntegerObject::create(1), NegativeIntegerObject::create(-8)),
         ]);
         HeaderMapHelper::encodeProtected($duplicate);
+    }
+
+    /**
+     * RFC 9597 section 2: "Claim-Label = int / text". The claims map is rebuilt as a definite-length one with its
+     * values untouched, and the message names the claims, not the header.
+     */
+    #[Test]
+    public function claimLabelsAreCheckedTheWayHeaderLabelsAre(): void
+    {
+        // Given: {_ 1: "coap://as.example.com", "custom": [1]}
+        $list = ListObject::create([UnsignedIntegerObject::create(1)]);
+        $claims = IndefiniteLengthMapObject::create()
+            ->add(UnsignedIntegerObject::create(1), TextStringObject::create('coap://as.example.com'))
+            ->add(TextStringObject::create('custom'), $list);
+
+        // When
+        $checked = HeaderMapHelper::assertValidClaimLabels($claims);
+
+        // Then
+        static::assertSame(MapObject::class, $checked::class);
+        static::assertCount(2, $checked);
+        static::assertSame('coap://as.example.com', HeaderMapHelper::findLabel($checked, 1)?->normalize());
+        static::assertSame($list, HeaderMapHelper::findLabel($checked, 'custom'));
+
+        // Then: {h'31': "x"} is refused, with the claims rule named
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid CWT claim label. A Claim-Label shall be an integer or a text string, got "CBOR\\ByteStringObject" (RFC 9597 section 2).');
+        HeaderMapHelper::assertValidClaimLabels(MapObject::create([
+            MapItem::create(ByteStringObject::create('1'), TextStringObject::create('x')),
+        ]));
+    }
+
+    /**
+     * RFC 9052 section 3.1 types "content type" as an unsigned integer of the CoAP Content-Formats registry or a
+     * "<type-name>/<subtype-name>" text; RFC 9596 section 2 gives "typ" the same syntax. One primitive serves both,
+     * and the parameter name it is given is the one the error carries.
+     */
+    #[Test]
+    #[DataProvider('getContentTypeValues')]
+    public function aContentTypeShapedValueIsDecoded(CBORObject $value, int|string|null $expected): void
+    {
+        if ($expected === null) {
+            // Then
+            $this->expectException(InvalidArgumentException::class);
+            $this->expectExceptionMessage('Invalid "content type" header parameter.');
+        }
+
+        // When
+        $decoded = HeaderMapHelper::assertContentTypeValue($value, 'content type');
+
+        // Then
+        static::assertSame($expected, $decoded);
+    }
+
+    /**
+     * @return iterable<string, array{CBORObject, int|string|null}>
+     */
+    public static function getContentTypeValues(): iterable
+    {
+        yield 'CoAP Content-Format 50 (application/json)' => [UnsignedIntegerObject::create(50), 50];
+        yield 'the registry bound, 65535' => [UnsignedIntegerObject::create(HeaderMapHelper::COAP_CONTENT_FORMAT_MAX), 65535];
+        yield 'just past the registry bound' => [UnsignedIntegerObject::create(65536), null];
+        yield 'text/plain; charset=utf-8' => [TextStringObject::create('text/plain; charset=utf-8'), 'text/plain; charset=utf-8'];
+        yield 'a name without a slash' => [TextStringObject::create('json'), null];
+        yield 'a negative integer' => [NegativeIntegerObject::create(-1), null];
+        yield 'nil' => [NullObject::create(), null];
     }
 
     /**
