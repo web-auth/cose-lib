@@ -118,6 +118,21 @@ first, and throws when the parameter appears in both buckets (RFC 9597 §2). The
 `HeaderMapHelper::assertValidClaimLabels()`. Nothing existing changes: the raw lookups still hand both labels back
 unchecked. See [doc/Usage.md](doc/Usage.md#typ-and-cwt-claims).
 
+**The X.509 header parameters of RFC 9360 have typed accessors.** `CoseHeaders::getX5Bag()`, `getX5Chain()`,
+`getX5T()` and `getX5U()` read `x5bag` (32), `x5chain` (33), `x5t` (34) and `x5u` (35), protected bucket first, and
+return `null` when absent; the labels are `CoseHeaders::LABEL_X5BAG` and siblings, and the three `*-sender` labels of
+RFC 9360 §3 are declared (`LABEL_X5T_SENDER` -27, `LABEL_X5U_SENDER` -28, `LABEL_X5CHAIN_SENDER` -29) ahead of the
+ECDH-SS algorithms of issue #201. The values are `Cose\Structure\X509\X5Bag`, `X5Chain` and `CoseCertHash`, over the
+wire structure `CoseX509` (`bstr / [ 2*certs: bstr ]`): an array of one certificate is invalid CDDL and is rejected on
+decode, never produced on encode. `X5Chain::toCertificateChain()` and `X5Bag::toCertificateBundle()` hand the
+certificates to spomky-labs/pki-framework; `CoseCertHash::hashAlgorithm(Manager)` resolves the thumbprint's algorithm
+through the RFC 9054 registry (SHA-1 accepted, this being the filtering use) and `matches()` compares with
+`hash_equals()` over the bytes as carried; `CertificateSignatureVerifier::verifyWithX5Chain()` verifies a signature
+with the end-entity certificate of a chain in one call. **The library validates no chain and fetches no URI**: path
+validation, revocation and trust anchors are the application's, as is dereferencing an `x5u`. `getX5U()` returns a
+string. `HeaderMapHelper::assertUriValue()` is the value check behind it (a text string, tagged 32 or not, with a
+scheme). Nothing existing changes. See [doc/Usage.md](doc/Usage.md#x509-header-parameters).
+
 **The Brainpool algorithms of RFC 9864 check their curve up front.** The Brainpool curves are compiled out of some
 OpenSSL builds and of every FIPS provider; `ESB256`, `ESB320`, `ESB384` and `ESB512` used to fail on such a build
 inside `sign()` or `verify()`, with an OpenSSL error string. Each now exposes `isSupported()`, backed by

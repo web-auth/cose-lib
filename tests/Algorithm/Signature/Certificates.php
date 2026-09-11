@@ -230,6 +230,14 @@ final class Certificates
     }
 
     /**
+     * The DER encoding of a PEM certificate: the form a COSE_X509 carries.
+     */
+    public static function der(string $certificate): string
+    {
+        return PEM::fromString($certificate)->data();
+    }
+
+    /**
      * The SubjectPublicKeyInfo of a certificate, as its own PEM structure.
      */
     public static function subjectPublicKeyInfo(string $certificate): string

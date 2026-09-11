@@ -28,6 +28,7 @@ Every CBOR item is printed as hex in full, never truncated, so it can be pasted 
 | [`10-fully-specified-algorithms.php`](10-fully-specified-algorithms.php) | RFC 9864: the fully-specified identifiers next to the polymorphic ones, the curve binding, and the platform gates |
 | [`11-hash-algorithms.php`](11-hash-algorithms.php) | RFC 9054: the eight hash identifiers, a certificate thumbprint as `x5t` carries it, and why *Filter Only* is a type |
 | [`12-key-thumbprint.php`](12-key-thumbprint.php) | RFC 9679: the COSE Key Thumbprint against the worked example of the RFC, one thumbprint for every representation of a key, and a compressed EC2 point |
+| [`13-x509-header-parameters.php`](13-x509-header-parameters.php) | RFC 9360: `x5chain`, `x5bag`, `x5t` and `x5u` on the cose-wg certificates — verify with the chain, select by thumbprint, then validate the path yourself |
 
 ## What the library does and does not do
 

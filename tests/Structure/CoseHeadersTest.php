@@ -21,11 +21,17 @@ use CBOR\Tag\CoseMac0Tag;
 use CBOR\Tag\CoseMacTag;
 use CBOR\Tag\CoseSign1Tag;
 use CBOR\Tag\CoseSignTag;
+use CBOR\Tag\UriTag;
 use CBOR\TextStringObject;
 use CBOR\UnsignedIntegerObject;
+use Cose\Algorithm\Hash\SHA256;
 use Cose\Structure\CoseHeaders;
 use Cose\Structure\HeaderMapHelper;
+use Cose\Structure\X509\CoseCertHash;
+use Cose\Structure\X509\X5Bag;
+use Cose\Structure\X509\X5Chain;
 use Cose\Tests\CoseInnerLists;
+use Cose\Tests\Structure\X509\X509Fixtures;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -37,18 +43,21 @@ use PHPUnit\Framework\TestCase;
  * The point of running one body against all six is that RFC 9052 defines the two header buckets once, for every
  * message type; the reader has to answer the same way whether the message is a COSE_Sign1 or a COSE_Encrypt.
  *
- * The two typed accessors of RFC 9596 ("typ") and RFC 9597 ("CWT Claims") are tested here as well, since both are
- * header parameters and nothing more.
+ * The typed accessors of RFC 9596 ("typ"), RFC 9597 ("CWT Claims") and RFC 9360 ("x5bag", "x5chain", "x5t", "x5u")
+ * are tested here as well, since all of them are header parameters and nothing more.
  *
  * @see https://www.rfc-editor.org/rfc/rfc9052#section-3
  * @see https://www.rfc-editor.org/rfc/rfc9596#section-2
  * @see https://www.rfc-editor.org/rfc/rfc9597#section-2
+ * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
  * @see https://github.com/web-auth/cose-lib/issues/166
  * @see https://github.com/web-auth/cose-lib/issues/198
+ * @see https://github.com/web-auth/cose-lib/issues/196
  */
 final class CoseHeadersTest extends TestCase
 {
     use CoseInnerLists;
+    use X509Fixtures;
 
     /**
      * The six upstream message classes.
@@ -597,6 +606,221 @@ final class CoseHeadersTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Invalid CWT claim label');
         $headers->getCwtClaims();
+    }
+
+    // --- RFC 9360: x5bag, x5chain, x5t, x5u --------------------------------------------------------------------------
+
+    /**
+     * The four X.509 header parameters round-trip through the protected bucket of every message type: written with
+     * the classes, encoded, decoded from bytes, read back with the accessors.
+     *
+     * @param class-string<AbstractCoseTag> $class
+     */
+    #[Test]
+    #[DataProvider('getMessageClasses')]
+    public function theX509ParametersRoundTripThroughTheProtectedBucket(string $class): void
+    {
+        // Given: {1: -7, 32: [ca, alice], 33: [alice, ca], 34: [-16, h'11fa…'], 35: "https://example.com/alice.cer"}
+        $bag = X5Bag::create(self::ca(), self::alice());
+        $chain = X5Chain::create(self::alice(), self::ca());
+        $thumbprint = CoseCertHash::compute(SHA256::create(), self::alice());
+        $protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(1), NegativeIntegerObject::create(-7)),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5BAG), $bag->toCBOR()),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5CHAIN), $chain->toCBOR()),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5T), $thumbprint->toCBOR()),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5U), TextStringObject::create('https://example.com/alice.cer')),
+        ]));
+
+        // When: the message travels as bytes and is decoded again
+        $message = Decoder::create()
+            ->decode(StringStream::create((string) self::message($class, $protectedHeader)));
+        static::assertInstanceOf(AbstractCoseTag::class, $message);
+        $headers = CoseHeaders::fromMessage($message);
+
+        // Then
+        static::assertSame($bag->certificates(), $headers->getX5Bag()?->certificates());
+        static::assertSame($chain->certificates(), $headers->getX5Chain()?->certificates());
+        static::assertSame(self::alice(), $headers->getX5Chain()?->endEntityCertificate());
+        static::assertSame(-16, $headers->getX5T()?->hashAlg());
+        static::assertSame(hex2bin(self::ALICE_SHA256), $headers->getX5T()?->hashValue());
+        static::assertSame('https://example.com/alice.cer', $headers->getX5U());
+        foreach ([CoseHeaders::LABEL_X5BAG, CoseHeaders::LABEL_X5CHAIN, CoseHeaders::LABEL_X5T, CoseHeaders::LABEL_X5U] as $label) {
+            static::assertNull($headers->getUnprotectedHeaderParameter($label));
+        }
+    }
+
+    /**
+     * The same four through the unprotected bucket, which RFC 9360 section 2 allows for each of them: "the header
+     * parameter can be in either the protected or unprotected header bucket". A single certificate travels as a bare
+     * byte string, and the URI may carry CBOR tag 32.
+     *
+     * @param class-string<AbstractCoseTag> $class
+     */
+    #[Test]
+    #[DataProvider('getMessageClasses')]
+    public function theX509ParametersRoundTripThroughTheUnprotectedBucket(string $class): void
+    {
+        // Given: {32: alice, 33: alice, 34: [-16, h'11fa…'], 35: 32("https://example.com/alice.cer")}
+        $unprotected = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5BAG), X5Bag::create(self::alice())->toCBOR()),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5CHAIN), X5Chain::create(self::alice())->toCBOR()),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5T), CoseCertHash::create(-16, hex2bin(self::ALICE_SHA256))->toCBOR()),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5U), UriTag::create(TextStringObject::create('https://example.com/alice.cer'))),
+        ]);
+
+        // When
+        $message = Decoder::create()
+            ->decode(StringStream::create((string) self::message($class, ByteStringObject::create(''), $unprotected)));
+        static::assertInstanceOf(AbstractCoseTag::class, $message);
+        $headers = CoseHeaders::fromMessage($message);
+
+        // Then
+        static::assertSame([self::alice()], $headers->getX5Bag()?->certificates());
+        static::assertSame([self::alice()], $headers->getX5Chain()?->certificates());
+        static::assertTrue($headers->getX5T()?->matches(self::alice(), SHA256::create()));
+        static::assertSame('https://example.com/alice.cer', $headers->getX5U());
+        static::assertCount(0, $headers->getProtectedHeaderAsMap());
+    }
+
+    /**
+     * Protected bucket first, as for every other label: the value the signature commits to wins over an unprotected
+     * copy -- the case RFC 9360 section 2 has in mind when it says the end-entity certificate "MUST be integrity
+     * protected by COSE".
+     */
+    #[Test]
+    public function theProtectedX509ParameterWinsOverAnUnprotectedOne(): void
+    {
+        // Given: {33: alice} protected, {33: ca} unprotected
+        $protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5CHAIN), ByteStringObject::create(self::alice())),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5U), TextStringObject::create('https://example.com/alice.cer')),
+        ]));
+        $unprotected = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5CHAIN), ByteStringObject::create(self::ca())),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5U), TextStringObject::create('https://attacker.example/ca.cer')),
+        ]);
+        $headers = CoseHeaders::fromMessage(self::message(CoseSign1Tag::class, $protectedHeader, $unprotected));
+
+        // Then
+        static::assertSame(self::alice(), $headers->getX5Chain()?->endEntityCertificate());
+        static::assertSame('https://example.com/alice.cer', $headers->getX5U());
+    }
+
+    #[Test]
+    public function absentX509ParametersAreNull(): void
+    {
+        // Given: {1: -7}
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(1), NegativeIntegerObject::create(-7)),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        static::assertNull($headers->getX5Bag());
+        static::assertNull($headers->getX5Chain());
+        static::assertNull($headers->getX5T());
+        static::assertNull($headers->getX5U());
+    }
+
+    /**
+     * The acceptance criterion of the issue, through the reader: a COSE_X509 array of one is rejected with a message
+     * naming the parameter and the rule.
+     */
+    #[Test]
+    public function anX5ChainArrayOfOneIsRejected(): void
+    {
+        // Given: {33: [alice]}
+        $header = MapObject::create([
+            MapItem::create(
+                UnsignedIntegerObject::create(CoseHeaders::LABEL_X5CHAIN),
+                ListObject::create([ByteStringObject::create(self::alice())])
+            ),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then: the raw lookup hands the array back, the typed accessor refuses it
+        static::assertInstanceOf(ListObject::class, $headers->getProtectedHeaderParameter(CoseHeaders::LABEL_X5CHAIN));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(
+            'Invalid "x5chain" header parameter. A COSE_X509 array shall hold two or more certificates ("[ 2*certs: bstr ]", RFC 9360 section 2), got 1'
+        );
+        $headers->getX5Chain();
+    }
+
+    #[Test]
+    public function anX5BagThatIsNotACoseX509IsRejected(): void
+    {
+        // Given: {32: "alice"}
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5BAG), TextStringObject::create('alice')),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "x5bag" header parameter. A COSE_X509 shall be a byte string or an array of byte strings');
+        $headers->getX5Bag();
+    }
+
+    #[Test]
+    public function anX5TThatIsNotACoseCertHashIsRejected(): void
+    {
+        // Given: {34: h'11fa…'} -- the digest alone, without the algorithm
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5T), ByteStringObject::create(hex2bin(self::ALICE_SHA256))),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "x5t" header parameter. A COSE_CertHash shall be an array of two elements');
+        $headers->getX5T();
+    }
+
+    #[Test]
+    #[DataProvider('getInvalidUris')]
+    public function anX5UThatIsNotAUriIsRejected(CBORObject $value, string $message): void
+    {
+        // Given
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_X5U), $value),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "x5u" header parameter. ' . $message);
+        $headers->getX5U();
+    }
+
+    /**
+     * @return iterable<string, array{CBORObject, string}>
+     */
+    public static function getInvalidUris(): iterable
+    {
+        yield 'a byte string' => [
+            ByteStringObject::create('https://example.com/alice.cer'),
+            'The value shall be a text string containing a URI (RFC 9360 section 2), got "CBOR\ByteStringObject".',
+        ];
+        yield 'a relative reference' => [
+            TextStringObject::create('/alice.cer'),
+            'The value shall be a URI, starting with a scheme (RFC 3986 section 3), got "/alice.cer".',
+        ];
+        yield 'an empty text string' => [
+            TextStringObject::create(''),
+            'The value shall be a URI, starting with a scheme (RFC 3986 section 3), got "".',
+        ];
     }
 
     /**

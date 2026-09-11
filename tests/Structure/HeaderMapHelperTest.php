@@ -8,6 +8,7 @@ use CBOR\ByteStringObject;
 use CBOR\CBORObject;
 use CBOR\IndefiniteLengthByteStringObject;
 use CBOR\IndefiniteLengthMapObject;
+use CBOR\IndefiniteLengthTextStringObject;
 use CBOR\ListObject;
 use CBOR\MapItem;
 use CBOR\MapObject;
@@ -15,6 +16,8 @@ use CBOR\NegativeIntegerObject;
 use CBOR\OtherObject\NullObject;
 use CBOR\OtherObject\UndefinedObject;
 use CBOR\Tag;
+use CBOR\Tag\GenericTag;
+use CBOR\Tag\UriTag;
 use CBOR\TextStringObject;
 use CBOR\UnsignedIntegerObject;
 use Cose\Structure\HeaderMapHelper;
@@ -249,6 +252,81 @@ final class HeaderMapHelperTest extends TestCase
         yield 'a name without a slash' => [TextStringObject::create('json'), null];
         yield 'a negative integer' => [NegativeIntegerObject::create(-1), null];
         yield 'nil' => [NullObject::create(), null];
+    }
+
+    /**
+     * RFC 9360 section 2 types "x5u" as "uri" and describes the value as "a CBOR text string"; the CDDL type "uri"
+     * (RFC 8610 section 3.10) is that text string under tag 32. Both are read; the text has to carry a scheme
+     * (RFC 3986 section 3), and nothing else is checked -- the value is never dereferenced.
+     */
+    #[Test]
+    #[DataProvider('getUriValues')]
+    public function aUriValueIsDecoded(CBORObject $value, ?string $expected, ?string $message = null): void
+    {
+        if ($expected === null) {
+            // Then
+            $this->expectException(InvalidArgumentException::class);
+            $this->expectExceptionMessage('Invalid "x5u" header parameter. ' . $message);
+        }
+
+        // When
+        $decoded = HeaderMapHelper::assertUriValue($value, 'x5u');
+
+        // Then
+        static::assertSame($expected, $decoded);
+    }
+
+    /**
+     * @return iterable<string, array{0: CBORObject, 1: string|null, 2?: string}>
+     */
+    public static function getUriValues(): iterable
+    {
+        $uri = 'https://example.com/alice.cer';
+
+        yield 'a bare text string' => [TextStringObject::create($uri), $uri];
+        yield 'an indefinite-length text string' => [IndefiniteLengthTextStringObject::create()->append($uri), $uri];
+        yield 'tag 32, as the default decoder yields it' => [UriTag::create(TextStringObject::create($uri)), $uri];
+        yield 'tag 32, as a decoder without the class yields it' => [
+            GenericTag::createFromLoadedData(Tag::LENGTH_1_BYTE, "\x20", TextStringObject::create($uri)),
+            $uri,
+        ];
+        yield 'a coap URI' => [TextStringObject::create('coap://[2001:db8::1]/alice'), 'coap://[2001:db8::1]/alice'];
+        yield 'a URN' => [TextStringObject::create('urn:example:alice'), 'urn:example:alice'];
+        yield 'another tag' => [
+            GenericTag::createFromLoadedData(Tag::LENGTH_1_BYTE, "\x21", TextStringObject::create($uri)),
+            null,
+            'A URI is a text string, tagged 32 or not (RFC 8610 section 3.10), got CBOR tag 33.',
+        ];
+        yield 'tag 32 around a byte string' => [
+            GenericTag::createFromLoadedData(Tag::LENGTH_1_BYTE, "\x20", ByteStringObject::create($uri)),
+            null,
+            'The value shall be a text string containing a URI (RFC 9360 section 2), got "CBOR\ByteStringObject".',
+        ];
+        yield 'a byte string' => [
+            ByteStringObject::create($uri),
+            null,
+            'The value shall be a text string containing a URI (RFC 9360 section 2), got "CBOR\ByteStringObject".',
+        ];
+        yield 'an integer' => [
+            UnsignedIntegerObject::create(1),
+            null,
+            'The value shall be a text string containing a URI (RFC 9360 section 2), got "CBOR\UnsignedIntegerObject".',
+        ];
+        yield 'a relative reference' => [
+            TextStringObject::create('alice.cer'),
+            null,
+            'The value shall be a URI, starting with a scheme (RFC 3986 section 3), got "alice.cer".',
+        ];
+        yield 'a scheme that starts with a digit' => [
+            TextStringObject::create('1https://example.com'),
+            null,
+            'The value shall be a URI, starting with a scheme (RFC 3986 section 3), got "1https://example.com".',
+        ];
+        yield 'an empty text string' => [
+            TextStringObject::create(''),
+            null,
+            'The value shall be a URI, starting with a scheme (RFC 3986 section 3), got "".',
+        ];
     }
 
     /**
