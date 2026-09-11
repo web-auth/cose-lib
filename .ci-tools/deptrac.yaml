@@ -11,6 +11,7 @@ parameters:
         - { type: 'classLike', value: '^CBOR\\' }
         - { type: 'classLike', value: '^Brick\\' }
         - { type: 'classLike', value: '^SpomkyLabs\\Pki\\' }
+        - { type: 'classLike', value: '^AESKW\\' }
   ruleset:
     CoseLib:
       - Vendors

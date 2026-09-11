@@ -342,6 +342,55 @@ class Ec2Key extends Key
         return "\x04" . $this->x() . $this->y();
     }
 
+    /**
+     * Whether the (x, y) the key carries is a point of its curve: both coordinates are field elements, smaller than
+     * p, and satisfy y^2 = x^3 + a*x + b modulo p.
+     *
+     * The constructor does not check it, so that a key built from arbitrary bytes keeps loading as it always has
+     * and so that the check stays cheap to skip where the coordinates are never used in arithmetic. Anything that
+     * multiplies the point by a secret scalar has to check first: RFC 9053 section 6.3.1.1 names it as the point
+     * validation ECDH needs, and feeding an off-curve point to a scalar multiplication is the invalid-curve attack
+     * of Biehl, Meyer and Muller, which leaks the private key a few bits at a time. {@see assertOnCurve()} is the
+     * throwing form, which {@see \Cose\Algorithm\KeyManagement\EllipticCurveDiffieHellman} calls before any
+     * scalar multiplication.
+     *
+     * A compressed key is on the curve by construction: decompressY() found y as a root of the curve equation.
+     */
+    public function isOnCurve(): bool
+    {
+        [$pHex, $aHex, $bHex] = self::CURVE_PARAMETERS[$this->curveId()];
+        $p = BigInteger::createFromBinaryString((string) hex2bin($pHex));
+        $x = BigInteger::createFromBinaryString($this->x());
+        $y = BigInteger::createFromBinaryString($this->y());
+        if ($x->compare($p) >= 0 || $y->compare($p) >= 0) {
+            return false;
+        }
+        $a = BigInteger::createFromBinaryString((string) hex2bin($aHex));
+        $b = BigInteger::createFromBinaryString((string) hex2bin($bHex));
+        $two = BigInteger::createFromDecimal(2);
+        $left = $y->modPow($two, $p);
+        $right = $x->modPow(BigInteger::createFromDecimal(3), $p)
+            ->add($a->multiply($x))
+            ->add($b)
+            ->mod($p);
+
+        return $left->compare($right) === 0;
+    }
+
+    /**
+     * @throws InvalidArgumentException when the (x, y) the key carries is not a point of its curve
+     *
+     * @see isOnCurve()
+     */
+    public function assertOnCurve(): void
+    {
+        if (! $this->isOnCurve()) {
+            throw new InvalidArgumentException(
+                'Invalid EC2 key. The x and y coordinates do not form a point on the curve (RFC 9053 section 6.3.1.1).'
+            );
+        }
+    }
+
     private function getCurveOid(): string
     {
         return self::NAMED_CURVE_OID[$this->curveId()];
