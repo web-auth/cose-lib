@@ -6,6 +6,8 @@ namespace Cose\Tests\Algorithm;
 
 use function base64_decode;
 use Cose\Algorithm\KeyRestrictionAware;
+use Cose\Algorithm\Mac\AESMAC256_128;
+use Cose\Algorithm\Mac\AESMAC256_64;
 use Cose\Algorithm\Mac\HS256;
 use Cose\Algorithm\Mac\HS256Truncated64;
 use Cose\Algorithm\Mac\HS512;
@@ -39,8 +41,8 @@ use function str_repeat;
 
 /**
  * RFC 9052, section 7.1 restricts a key to one algorithm with "alg" (label 3) and to a set of operations with
- * "key_ops" (label 4). RFC 9053, sections 2.1, 2.2 and 3.1 repeat both as a per-algorithm MUST for ECDSA, EdDSA and
- * HMAC.
+ * "key_ops" (label 4). RFC 9053, sections 2.1, 2.2, 3.1 and 3.2 repeat both as a per-algorithm MUST for ECDSA, EdDSA,
+ * HMAC and AES-MAC.
  *
  * Enforcing them is opt-in: an algorithm ignores both labels until `withKeyRestrictionsEnforced()` is called, so that
  * keys that used to work keep working.
@@ -409,6 +411,38 @@ final class KeyRestrictionEnforcementTest extends TestCase
             Key::OP_MAC_VERIFY,
             'The key does not allow the "MAC verify" operation',
         ];
+        yield 'AES-MAC 256/64 verifies a tag with a key restricted to AES-MAC 256/128' => [
+            AESMAC256_64::create(),
+            self::symmetricKey([
+                Key::ALG => AESMAC256_128::ID,
+            ]),
+            Key::OP_MAC_VERIFY,
+            'The key is restricted to the algorithm 26 and cannot be used with the algorithm 15',
+        ];
+        yield 'AES-MAC 256/128 verifies a tag with a key restricted to HS256' => [
+            AESMAC256_128::create(),
+            self::symmetricKey([
+                Key::ALG => HS256::ID,
+            ]),
+            Key::OP_MAC_VERIFY,
+            'The key is restricted to the algorithm 5 and cannot be used with the algorithm 26',
+        ];
+        yield 'AES-MAC 256/128 creates a tag with a MAC verify only key' => [
+            AESMAC256_128::create(),
+            self::symmetricKey([
+                Key::KEY_OPS => [Key::OP_MAC_VERIFY],
+            ]),
+            Key::OP_MAC_CREATE,
+            'The key does not allow the "MAC create" operation',
+        ];
+        yield 'AES-MAC 256/64 verifies a tag with a MAC create only key' => [
+            AESMAC256_64::create(),
+            self::symmetricKey([
+                Key::KEY_OPS => ['MAC create'],
+            ]),
+            Key::OP_MAC_VERIFY,
+            'The key does not allow the "MAC verify" operation',
+        ];
     }
 
     /**
@@ -486,6 +520,21 @@ final class KeyRestrictionEnforcementTest extends TestCase
         ];
         yield 'HS256 creates a tag with a MAC create only key' => [
             HS256::create(),
+            self::symmetricKey([
+                Key::KEY_OPS => [Key::OP_MAC_CREATE],
+            ]),
+            Key::OP_MAC_CREATE,
+        ];
+        yield 'AES-MAC 256/128 with a key restricted to AES-MAC 256/128' => [
+            AESMAC256_128::create(),
+            self::symmetricKey([
+                Key::ALG => AESMAC256_128::ID,
+                Key::KEY_OPS => [Key::OP_MAC_CREATE, Key::OP_MAC_VERIFY],
+            ]),
+            Key::OP_MAC_VERIFY,
+        ];
+        yield 'AES-MAC 256/64 creates a tag with a MAC create only key' => [
+            AESMAC256_64::create(),
             self::symmetricKey([
                 Key::KEY_OPS => [Key::OP_MAC_CREATE],
             ]),

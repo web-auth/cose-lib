@@ -15,8 +15,9 @@ use Throwable;
  *
  * RFC 9053, section 3.1 requires implementations to "validate that the key type, key length, and algorithm are
  * correct and appropriate for the entities involved". The key type and the byte string nature of `k` admit no
- * exception and are therefore applied by the algorithms themselves: Cose\Algorithm\Mac\Hmac rejects a key that is
- * not symmetric, whose `k` is missing, is not a PHP string, or is empty.
+ * exception and are therefore applied by the algorithms themselves: Cose\Algorithm\Mac\Hmac and
+ * Cose\Algorithm\Mac\AesCbcMac reject a key that is not symmetric, whose `k` is missing, is not a PHP string, or is
+ * empty - and AesCbcMac adds the exact length its identifier prescribes, which is not a policy either.
  *
  * The *minimum* key length is the policy choice, and it stays opt-in, exactly like the minimum modulus length of
  * RsaKeyValidator: RFC 2104, section 3 only states that a key shorter than the output of the hash function is
