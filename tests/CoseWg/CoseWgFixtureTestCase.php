@@ -682,7 +682,7 @@ abstract class CoseWgFixtureTestCase extends TestCase
         }
         $recorded = $input->keyEncryptionKey();
         if ($recorded !== null) {
-            static::assertSame(bin2hex($recorded), bin2hex((string) $kek), sprintf(
+            static::assertSame(bin2hex($recorded), bin2hex($kek), sprintf(
                 '%s: the key the nested recipients hand up is not the KEK the generator recorded',
                 $input->name()
             ));
@@ -690,7 +690,7 @@ abstract class CoseWgFixtureTestCase extends TestCase
 
         return SymmetricKey::create([
             Key::TYPE => Key::TYPE_OCT,
-            SymmetricKey::DATA_K => (string) $kek,
+            SymmetricKey::DATA_K => $kek,
         ]);
     }
 
@@ -717,7 +717,8 @@ abstract class CoseWgFixtureTestCase extends TestCase
         if (! $recipientKey instanceof Ec2Key && ! $recipientKey instanceof OkpKey) {
             throw new LogicException(sprintf('%s: the key of an ECDH recipient is neither EC2 nor OKP', $input->name()));
         }
-        $public = $algorithm->isEphemeralStatic() ? $layer->headers()->getEphemeralKey() : $layer->senderKey();
+        $public = $algorithm->isEphemeralStatic() ? $layer->headers()
+            ->getEphemeralKey() : $layer->senderKey();
         if ($public === null) {
             throw new LogicException(sprintf('%s: the sender key of an ECDH recipient is missing', $input->name()));
         }
