@@ -9,8 +9,8 @@
 
 This library implements:
 - **[RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052)** - COSE: Structures and Process
-- **[RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053)** - COSE: Initial Algorithms (signatures, HMAC, AES-CBC-MAC and the
-  key types)
+- **[RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053)** - COSE: Initial Algorithms (signatures, HMAC, AES-CBC-MAC, the
+  AEAD content encryption algorithms and the key types)
 - **[RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230)** - RSASSA-PSS (PS256, PS384, PS512) and the RSA key type
 - **[RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812)** - RSASSA-PKCS1-v1_5 (RS256, RS384, RS512, RS1) and
   ECDSA with secp256k1 (ES256K)
@@ -53,6 +53,9 @@ row, so that a shipped identifier can be traced to its specification without lea
 - **Signatures**: ECDSA (ES256, ES384, ES512, ES256K), EdDSA (Ed25519, Ed448), RSA (RS256/384/512, PS256/384/512)
 - **Fully-specified identifiers** ([RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html)): ESP256/384/512, ESB256/320/384/512, Ed25519, Ed448
 - **MAC**: HMAC with SHA-256/384/512, AES-CBC-MAC with 128/256-bit keys and 64/128-bit tags
+- **Content encryption** ([RFC 9053 §4](https://www.rfc-editor.org/rfc/rfc9053.html#section-4)): AES-GCM (128/192/256),
+  the eight AES-CCM variants, ChaCha20/Poly1305 — through the `Enc_structure`, with the `IV` / `Partial IV` resolution
+  of [RFC 9052 §3.1](https://www.rfc-editor.org/rfc/rfc9052.html#section-3.1)
 - Compatible with WebAuthn, FIDO2, and digital COVID certificates
 
 ✅ **Key Restrictions** ([RFC 9052](https://www.rfc-editor.org/rfc/rfc9052.html#section-7.1) §7.1)
@@ -401,6 +404,71 @@ The key must be symmetric, and its `k` must be a byte string of **exactly** the 
 for AES-MAC 128/64 and 128/128, 32 bytes for AES-MAC 256/64 and 256/128. A key of any other length is refused with
 an `InvalidArgumentException` before OpenSSL is reached — RFC 9053 §3.2 ties the key length to the identifier, so it
 is the wrong key rather than a weak one. `AesCbcMac::keyLength()` and `tagLength()` give the lengths in bytes.
+
+### Content Encryption Algorithms
+
+The AEAD algorithms of [RFC 9053 §4](https://www.rfc-editor.org/rfc/rfc9053.html#section-4), in
+`Cose\Algorithm\ContentEncryption`. The ciphertext is the encrypted content followed by the tag, as COSE carries it.
+
+| Algorithm | Identifier | Class | Key | Nonce | Tag | Reference |
+|-----------|------------|-------|-----|-------|-----|-----------|
+| A128GCM | 1 | `A128GCM` | 128 bits | 12 bytes | 128 bits | [RFC 9053 §4.1](https://www.rfc-editor.org/rfc/rfc9053#section-4.1) |
+| A192GCM | 2 | `A192GCM` | 192 bits | 12 bytes | 128 bits | [RFC 9053 §4.1](https://www.rfc-editor.org/rfc/rfc9053#section-4.1) |
+| A256GCM | 3 | `A256GCM` | 256 bits | 12 bytes | 128 bits | [RFC 9053 §4.1](https://www.rfc-editor.org/rfc/rfc9053#section-4.1) |
+| AES-CCM-16-64-128 | 10 | `A128CCM_16_64` | 128 bits | 13 bytes | 64 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| AES-CCM-16-64-256 | 11 | `A256CCM_16_64` | 256 bits | 13 bytes | 64 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| AES-CCM-64-64-128 | 12 | `A128CCM_64_64` | 128 bits | 7 bytes | 64 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| AES-CCM-64-64-256 | 13 | `A256CCM_64_64` | 256 bits | 7 bytes | 64 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| ChaCha20/Poly1305 | 24 | `ChaCha20Poly1305` | 256 bits | 12 bytes | 128 bits | [RFC 9053 §4.3](https://www.rfc-editor.org/rfc/rfc9053#section-4.3) |
+| AES-CCM-16-128-128 | 30 | `A128CCM_16_128` | 128 bits | 13 bytes | 128 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| AES-CCM-16-128-256 | 31 | `A256CCM_16_128` | 256 bits | 13 bytes | 128 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| AES-CCM-64-128-128 | 32 | `A128CCM_64_128` | 128 bits | 7 bytes | 128 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| AES-CCM-64-128-256 | 33 | `A256CCM_64_128` | 256 bits | 7 bytes | 128 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+
+```php
+use CBOR\ByteStringObject;
+use CBOR\ListObject;
+use CBOR\MapItem;
+use CBOR\MapObject;
+use CBOR\Tag\CoseEncrypt0Tag;
+use CBOR\UnsignedIntegerObject;
+use Cose\Algorithm\ContentEncryption\A128GCM;
+use Cose\Encryption\Encrypt0Structure;
+use Cose\Encryption\InitializationVector;
+use Cose\Key\SymmetricKey;
+use Cose\Structure\CoseHeaders;
+use Cose\Structure\HeaderMapHelper;
+
+$algorithm = A128GCM::create();
+$key = SymmetricKey::create([SymmetricKey::TYPE => SymmetricKey::TYPE_OCT, SymmetricKey::DATA_K => $sharedSecret]);
+$nonce = random_bytes($algorithm->nonceLength()); // unique per message under this key, RFC 9053 §4.1.1
+
+$protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+    MapItem::create(UnsignedIntegerObject::create(1), UnsignedIntegerObject::create($algorithm::identifier())),
+]));
+// The AEAD authenticates the Enc_structure ["Encrypt0", protected, external_aad], RFC 9052 §5.3
+$ciphertext = Encrypt0Structure::create($protectedHeader)->encrypt($algorithm, $key, $plaintext, $nonce);
+$message = CoseEncrypt0Tag::create(ListObject::create([
+    $protectedHeader,
+    MapObject::create([MapItem::create(UnsignedIntegerObject::create(InitializationVector::IV), ByteStringObject::create($nonce))]),
+    ByteStringObject::create($ciphertext),
+]));
+
+// Decrypting: the nonce comes from the "IV", or from a "Partial IV" and the Base IV of the key (RFC 9052 §3.1)
+$nonce = InitializationVector::resolve(CoseHeaders::fromMessage($message), $algorithm->nonceLength(), $key);
+$plaintext = Encrypt0Structure::create($message->getProtectedHeader())
+    ->decrypt($algorithm, $key, $message->getCiphertext()->getValue(), $nonce); // InvalidArgumentException if it does not authenticate
+```
+
+Every algorithm checks the key length and the nonce length before the primitive runs, and enforces the `alg` and
+`key_ops` restrictions of the key by default (RFC 9053 §4.1–4.3). AES-CCM and ChaCha20/Poly1305 depend on the
+platform: `A128CCM_16_64::isSupported()` and `ChaCha20Poly1305::isSupported()` say. See
+[Encryption Operations](doc/Usage.md#encryption-operations) and [`examples/04-encrypt0.php`](examples/04-encrypt0.php).
+
+> [!WARNING]
+> A nonce reused under the same key breaks every one of these algorithms: AES-GCM and ChaCha20/Poly1305 give up
+> their authentication key, AES-CCM the XOR of the plaintexts. Use `random_bytes()` per message, or a strictly
+> increasing counter sent as the `Partial IV`.
 
 #### The HMAC Key
 

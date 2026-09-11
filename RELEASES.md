@@ -26,6 +26,22 @@ This matrix is the single source of truth for the branches under support; [SECUR
 
 ### 4.8.x to 4.9.x
 
+**Content encryption is implemented.** The AEAD algorithms of RFC 9053 §4 ship in `Cose\Algorithm\ContentEncryption`:
+`A128GCM`, `A192GCM`, `A256GCM` (§4.1), the eight AES-CCM variants `A128CCM_16_64` … `A256CCM_64_128` (§4.2) and
+`ChaCha20Poly1305` (§4.3), behind the `ContentEncryption` interface. `Encrypt0Structure` and `EncryptStructure` gain
+`encrypt()` and `decrypt()`, which hand the `Enc_structure` of RFC 9052 §5.3 to the algorithm as additional
+authenticated data, and `Cose\Encryption\InitializationVector` resolves the nonce from the `IV` or the `Partial IV`
+header parameter and the `Base IV` of the key (RFC 9052 §3.1). `examples/04-encrypt0.php` and
+`examples/05-encrypt-recipients.php` no longer call OpenSSL by hand. Two points to know:
+
+- **These algorithms enforce the `alg` and `key_ops` restrictions of the key by default.** RFC 9053 §4 makes the
+  check a MUST and the classes are new, so there is no key to keep working. `withKeyRestrictionsEnforced(false)`
+  turns it off; the signature and MAC algorithms keep their opt-in default.
+- **`Key::assertUsableWithAny()`** is the form of `assertUsableWith()` that accepts an operation under several names:
+  RFC 9053 §4 lets a content encryption key carry `encrypt` or `wrap key`, `decrypt` or `unwrap key`.
+
+The key management algorithms of RFC 9053 §5–6 are not part of this release; see issue #201.
+
 **The interoperability fixtures of the IETF COSE working group are part of the test suite.**
 [cose-wg/Examples](https://github.com/cose-wg/Examples) is vendored under `tests/fixtures/cose-wg/`, with a harness
 (`tests/CoseWg/`) that verifies every fixture this library has an algorithm for and reports the others as skipped

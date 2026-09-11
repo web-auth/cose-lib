@@ -19,8 +19,8 @@ Every CBOR item is printed as hex in full, never truncated, so it can be pasted 
 | [`01-sign1.php`](01-sign1.php) | COSE_Sign1: sign, encode, decode, verify — and what a swapped payload does |
 | [`02-sign-multiple-signers.php`](02-sign-multiple-signers.php) | COSE_Sign: several signers, and why `Signature` carries `sign_protected` |
 | [`03-mac0.php`](03-mac0.php) | COSE_Mac0: the tag covers the MAC_structure, never the bare payload — with HMAC, then AES-CBC-MAC |
-| [`04-encrypt0.php`](04-encrypt0.php) | COSE_Encrypt0: `Enc_structure` as the AEAD's additional authenticated data |
-| [`05-encrypt-recipients.php`](05-encrypt-recipients.php) | COSE_Encrypt: key wrapping per recipient, nested recipients, detached ciphertext |
+| [`04-encrypt0.php`](04-encrypt0.php) | COSE_Encrypt0: A128GCM through `Encrypt0Structure`, the `IV` and the `Partial IV` |
+| [`05-encrypt-recipients.php`](05-encrypt-recipients.php) | COSE_Encrypt: one ciphertext, the content key wrapped per recipient, nested recipients |
 | [`06-headers.php`](06-headers.php) | The RFC 9052 header rules, each shown against what the raw CBOR map answers |
 | [`07-detached-and-external-aad.php`](07-detached-and-external-aad.php) | Detached content, and binding context that never travels |
 | [`08-cwt.php`](08-cwt.php) | CBOR Web Tokens: verify first, then read the claims; `typ` and `CWT Claims` in the header |
@@ -34,8 +34,9 @@ The COSE **message types** come from [spomky-labs/cbor-php](https://github.com/S
 into them: the header rules, the checked views over the signature and recipient lists, and the cryptographic
 structures a signature or a MAC is actually computed over.
 
-**Content encryption is not implemented.** Examples 04 and 05 use AES-GCM through OpenSSL and take the
-`Enc_structure` from here as the additional authenticated data, which is the intended split.
+The content encryption algorithms of RFC 9053 §4 are implemented (`Cose\Algorithm\ContentEncryption`); the key
+management algorithms of §5–6 are not yet (issue #201), which is why example 05 wraps the content key with an AES Key
+Wrap written out by hand.
 
 ## A note on the keys
 

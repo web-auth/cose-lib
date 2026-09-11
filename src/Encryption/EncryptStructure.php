@@ -6,7 +6,10 @@ namespace Cose\Encryption;
 
 use CBOR\ByteStringObject;
 use CBOR\IndefiniteLengthByteStringObject;
+use Cose\Algorithm\ContentEncryption\ContentEncryption;
+use Cose\Key\SymmetricKey;
 use Cose\Structure\CoseStructure;
+use InvalidArgumentException;
 
 /**
  * The Enc_structure of a COSE_Encrypt (RFC 9052 section 5.3).
@@ -52,6 +55,36 @@ final class EncryptStructure extends CoseStructure
     public function getExternalAad(): ByteStringObject
     {
         return $this->externalAad;
+    }
+
+    /**
+     * Encrypts the content with this structure as the additional authenticated data (RFC 9052 section 5.3): what
+     * the ciphertext field of the COSE_Encrypt carries.
+     *
+     * @param string $nonce the "IV" of the message, or the nonce a "Partial IV" resolves to, see
+     *                      {@see InitializationVector}; a key and nonce pair MUST be unique for every message
+     *
+     * @throws InvalidArgumentException when the key or the nonce cannot be used with the algorithm
+     * @return string the ciphertext followed by the authentication tag
+     */
+    public function encrypt(ContentEncryption $algorithm, SymmetricKey $key, string $plaintext, string $nonce): string
+    {
+        return $algorithm->encrypt($key, $plaintext, $nonce, (string) $this);
+    }
+
+    /**
+     * Decrypts the ciphertext field of a COSE_Encrypt with this structure as the additional authenticated data.
+     *
+     * Build the structure from the protected header the message carries, byte for byte, and from the external AAD
+     * the application agreed on: a protected header that was re-encoded, or an external AAD that differs, is a
+     * message that does not authenticate.
+     *
+     * @throws InvalidArgumentException when the key or the nonce cannot be used with the algorithm, or when the
+     *                                  content does not authenticate
+     */
+    public function decrypt(ContentEncryption $algorithm, SymmetricKey $key, string $ciphertext, string $nonce): string
+    {
+        return $algorithm->decrypt($key, $ciphertext, $nonce, (string) $this);
     }
 
     protected function context(): string

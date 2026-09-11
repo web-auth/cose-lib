@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cose\Tests\Key;
 
+use Cose\Algorithm\ContentEncryption\A128GCM;
 use Cose\Algorithm\Mac\HS256;
 use Cose\Algorithm\Signature\ECDSA\ES256;
 use Cose\Algorithm\Signature\EdDSA\Ed25519;
@@ -237,6 +238,51 @@ final class KeyRestrictionsTest extends TestCase
         // Then
         static::assertFalse($key->isUsableWith(ES256::ID, Key::OP_SIGN));
         static::assertFalse($key->isUsableWith(ES256::ID, Key::OP_VERIFY));
+    }
+
+    /**
+     * RFC 9053 section 4: a content encryption key may list "encrypt" or "wrap key" for the same use. The check
+     * passes on either and fails naming both.
+     */
+    #[Test]
+    public function anOperationListedUnderOneOfSeveralNamesIsAllowed(): void
+    {
+        // Given
+        $wrapOnly = self::key([
+            Key::KEY_OPS => [Key::OP_WRAP_KEY],
+        ]);
+        $encryptOnly = self::key([
+            Key::KEY_OPS => ['encrypt'],
+        ]);
+        $signOnly = self::key([
+            Key::KEY_OPS => [Key::OP_SIGN],
+        ]);
+
+        // When / Then
+        $wrapOnly->assertUsableWithAny(A128GCM::ID, Key::OP_ENCRYPT, Key::OP_WRAP_KEY);
+        $encryptOnly->assertUsableWithAny(A128GCM::ID, Key::OP_ENCRYPT, Key::OP_WRAP_KEY);
+        static::assertFalse($wrapOnly->isUsableWith(A128GCM::ID, Key::OP_ENCRYPT));
+        static::assertFalse($encryptOnly->isUsableWith(A128GCM::ID, Key::OP_WRAP_KEY));
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The key does not allow the "encrypt" nor the "wrap key" operation');
+        $signOnly->assertUsableWithAny(A128GCM::ID, Key::OP_ENCRYPT, Key::OP_WRAP_KEY);
+    }
+
+    #[Test]
+    public function theAlgorithmRestrictionAppliesWhateverTheOperations(): void
+    {
+        // Given
+        $key = self::key([
+            Key::ALG => ES256::ID,
+        ]);
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The key is restricted to the algorithm -7 and cannot be used with the algorithm 1');
+
+        // When
+        $key->assertUsableWithAny(A128GCM::ID, Key::OP_ENCRYPT, Key::OP_WRAP_KEY);
     }
 
     #[Test]
