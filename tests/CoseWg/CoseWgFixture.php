@@ -309,8 +309,9 @@ final class CoseWgFixture
 
     /**
      * Every algorithm identifier the fixture needs answered to be verified end to end: the content algorithm, the one
-     * of each signer and the one of each recipient, nested recipients included. "direct" is left out: it is not an
-     * algorithm class, the harness resolves it.
+     * of each signer and the one of each recipient, nested recipients included. "direct" is left out for a COSE_Mac0
+     * and a COSE_Encrypt0, whose fixtures name it for a recipient that is not on the wire; on a COSE_Mac and a
+     * COSE_Encrypt the recipient is on the wire and "direct" is required like any other algorithm.
      *
      * A name the {@see CoseWgAlgorithms} table does not know is returned as is, so that the skip message names it.
      *
@@ -336,10 +337,14 @@ final class CoseWgFixture
             }
         }
 
-        return array_values(array_unique(array_filter(
-            $required,
-            static fn (int|string $algorithm): bool => $algorithm !== CoseWgAlgorithms::DIRECT
-        )));
+        if ($this->messageType === self::MAC0 || $this->messageType === self::ENCRYPT0) {
+            $required = array_filter(
+                $required,
+                static fn (int|string $algorithm): bool => $algorithm !== CoseWgAlgorithms::DIRECT
+            );
+        }
+
+        return array_values(array_unique($required));
     }
 
     // --- intermediates ----------------------------------------------------------------------------------------------

@@ -20,7 +20,13 @@ use CBOR\Tag\CoseMacTag;
 use CBOR\Tag\CoseSign1Tag;
 use CBOR\Tag\CoseSignTag;
 use CBOR\UnsignedIntegerObject;
+use Cose\Algorithm\Algorithm;
 use Cose\Algorithm\ContentEncryption\ContentEncryption;
+use Cose\Algorithm\KeyManagement\DirectHkdf;
+use Cose\Algorithm\KeyManagement\EllipticCurveDiffieHellman;
+use Cose\Algorithm\KeyManagement\KeyAgreement;
+use Cose\Algorithm\KeyManagement\KeyManagement;
+use Cose\Algorithm\KeyManagement\RecipientLayer;
 use Cose\Algorithm\Mac\Mac;
 use Cose\Algorithm\Manager;
 use Cose\Algorithm\Signature\EdDSA\EdDSA;
@@ -28,7 +34,9 @@ use Cose\Algorithm\Signature\Signature as SignatureAlgorithm;
 use Cose\Encryption\Encrypt0Structure;
 use Cose\Encryption\EncryptStructure;
 use Cose\Encryption\InitializationVector;
+use Cose\Key\Ec2Key;
 use Cose\Key\Key;
+use Cose\Key\OkpKey;
 use Cose\Key\SymmetricKey;
 use Cose\Mac\Mac0Structure;
 use Cose\Mac\MacStructure;
@@ -71,6 +79,15 @@ use function strlen;
  *    ciphertext decrypts, with the fixture key, to the plaintext of the input;
  * 4. the plaintext is encrypted again with the same key and nonce: an AEAD is deterministic, so the bytes are the
  *    fixture's, and the message rebuilt around them is output.cbor.
+ *
+ * The key of a MACed or encrypted message comes from its recipients, and those are walked the way a receiver
+ * walks them (RFC 9052 section 5.1): each COSE_recipient on the wire is handed, with the fixture key of the party it
+ * belongs to, to the key management algorithm its headers announce, and the key it hands back has to be the CEK the
+ * generator recorded. A recipient that carries recipients of its own gets its key-encryption key from them, one level
+ * at a time. On the way, every intermediate the generator recorded for the recipient is compared: the COSE_KDF_Context,
+ * the ECDH shared secret, the KEK of a key agreement with key wrap. And where the algorithm is deterministic on the
+ * sending side -- an AES Key Wrap, a static-static agreement, a direct derivation -- the recipient is produced again
+ * with the same inputs and has to come out byte for byte.
  *
  * A fixture flagged "fail" goes through the same path, minus the intermediates, and has to be rejected somewhere
  * along it: an unexpected tag, an unknown algorithm, a signature that does not verify, a content that does not
@@ -293,14 +310,13 @@ abstract class CoseWgFixtureTestCase extends TestCase
 
     private function assertMacedFixture(CoseWgFixture $fixture): void
     {
-        $key = $this->contentKey($fixture);
-
         if ($fixture->mustFail()) {
-            $this->assertRejected($fixture, fn (): bool => $this->verifyMac($fixture, $key));
+            $this->assertRejected($fixture, fn (): bool => $this->verifyMac($fixture, $this->contentKey($fixture)));
 
             return;
         }
 
+        $key = $this->contentKey($fixture);
         static::assertTrue($this->verifyMac($fixture, $key), $fixture->name() . ': the message must verify');
 
         [$algorithm, $structure, $tag] = $this->macEntry($fixture);
@@ -370,14 +386,16 @@ abstract class CoseWgFixtureTestCase extends TestCase
 
     private function assertEncryptedFixture(CoseWgFixture $fixture): void
     {
-        $key = $this->contentKey($fixture);
-
         if ($fixture->mustFail()) {
-            $this->assertRejected($fixture, fn (): bool => $this->decryptContent($fixture, $key) === $fixture->plaintext());
+            $this->assertRejected(
+                $fixture,
+                fn (): bool => $this->decryptContent($fixture, $this->contentKey($fixture)) === $fixture->plaintext()
+            );
 
             return;
         }
 
+        $key = $this->contentKey($fixture);
         static::assertSame(
             bin2hex($fixture->plaintext()),
             bin2hex($this->decryptContent($fixture, $key)),
@@ -521,37 +539,263 @@ abstract class CoseWgFixtureTestCase extends TestCase
         return CoseEncrypt0Tag::create(ListObject::create($items));
     }
 
+    // --- recipients -------------------------------------------------------------------------------------------------
+
     /**
-     * The key the content is MACed or encrypted with: the one of the "direct" recipient (RFC 9053 section 6.1),
-     * which is the only key management this harness resolves. The fixture records the CEK it used, and the key has
-     * to be that CEK.
+     * The key the content is MACed or encrypted with, resolved through the recipients of the message.
+     *
+     * A COSE_Mac0 or a COSE_Encrypt0 carries no recipient: the fixture lists the "direct" one whose key is the
+     * content key, and that key is read. A COSE_Mac or a COSE_Encrypt carries one or more, each of which is
+     * processed by its key management algorithm and has to hand back the same key -- the CEK the generator
+     * recorded, when it recorded one.
+     *
+     * @throws InvalidArgumentException when the message is rejected before any recipient is processed, or when a
+     *                                  recipient is rejected by its algorithm
      */
     private function contentKey(CoseWgFixture $fixture): SymmetricKey
     {
-        foreach ($fixture->recipients() as $recipient) {
-            if ($recipient->algorithmIdentifier() !== CoseWgAlgorithms::DIRECT) {
-                continue;
+        $message = $this->decode($fixture);
+        $inputs = $fixture->recipients();
+        if (! $message instanceof CoseMacTag && ! $message instanceof CoseEncryptTag) {
+            $direct = $inputs[0] ?? throw new LogicException(sprintf('%s: no recipient', $fixture->name()));
+            if ($direct->algorithmIdentifier() !== CoseWgAlgorithms::DIRECT) {
+                throw new LogicException(sprintf('%s: the recipient of a message without recipients is not "direct"', $direct->name()));
             }
-            $key = $recipient->key();
+            $key = $direct->key();
             if (! $key instanceof SymmetricKey) {
-                throw new LogicException(sprintf('%s: the direct key is not a symmetric key', $recipient->name()));
-            }
-            $cek = $fixture->cek();
-            if ($cek !== null) {
-                static::assertSame(
-                    bin2hex($cek),
-                    bin2hex($key->k()),
-                    sprintf('%s: the direct key is not the CEK the generator recorded', $recipient->name())
-                );
+                throw new LogicException(sprintf('%s: the direct key is not a symmetric key', $direct->name()));
             }
 
-            return $key;
+            return $this->assertIsTheRecordedCek($fixture, $key->k());
         }
 
-        throw new LogicException(sprintf(
-            '%s: no "direct" recipient; the content key comes from a key management algorithm this harness does not resolve yet',
-            $fixture->name()
+        $contentAlgorithm = $this->algorithm(
+            CoseHeaders::fromMessage($message),
+            $message instanceof CoseMacTag ? Mac::class : ContentEncryption::class
+        );
+        $wire = CoseRecipient::all($message->getRecipients());
+        if (count($wire) !== count($inputs)) {
+            throw new LogicException(sprintf(
+                '%s: %d recipients on the wire, %d in the input',
+                $fixture->name(),
+                count($wire),
+                count($inputs)
+            ));
+        }
+
+        $cek = null;
+        foreach ($wire as $index => $recipient) {
+            $key = $this->recoverKey($recipient, $inputs[$index], $contentAlgorithm, null, count($wire));
+            if ($cek !== null) {
+                static::assertSame(bin2hex($cek), bin2hex($key), sprintf(
+                    '%s: the recipients of the message do not agree on the content key',
+                    $inputs[$index]->name()
+                ));
+            }
+            $cek = $key;
+        }
+
+        return $this->assertIsTheRecordedCek($fixture, (string) $cek);
+    }
+
+    /**
+     * The key a recipient layer hands to the layer below -- the CEK, or the KEK of the recipient above -- recovered
+     * by the algorithm its headers announce, with every intermediate the generator recorded checked on the way, and
+     * the recipient produced again where the algorithm is deterministic on the sending side.
+     *
+     * @param Algorithm|int $for the algorithm the recovered key is for: the content algorithm, or the key wrap of
+     *                           the recipient above
+     * @param int $count the number of recipients at this level
+     *
+     * @throws InvalidArgumentException when the algorithm rejects the recipient
+     */
+    private function recoverKey(CoseRecipient $recipient, CoseWgParty $input, Algorithm|int $for, ?int $keyLength, int $count): string
+    {
+        $algorithm = $this->algorithm($recipient->headers(), KeyManagement::class);
+        $layer = $this->layerOf($recipient, $input, $for, $keyLength, $count);
+        $recipientKey = $input->hasKey()
+            ? $input->key()
+            : $this->keyEncryptionKeyOf($recipient, $input, $algorithm);
+
+        if (! $input->mustFail()) {
+            $this->assertIntermediates($input, $algorithm, $layer, $recipientKey);
+        }
+        $recovered = $algorithm->recoverKey($layer, $recipientKey);
+        if (! $input->mustFail()) {
+            $this->assertRecipientReproduced($recipient, $input, $algorithm, $layer, $recipientKey, $recovered);
+        }
+
+        return $recovered;
+    }
+
+    /**
+     * The layer the algorithm runs against: the COSE_recipient as decoded, and what the fixture knows that the
+     * message does not carry -- the sender's static key of an ECDH-SS recipient, the party information and the
+     * supplementary information the generator used without sending them.
+     */
+    private function layerOf(CoseRecipient $recipient, CoseWgParty $input, Algorithm|int $for, ?int $keyLength, int $count): RecipientLayer
+    {
+        $layer = RecipientLayer::fromRecipient($recipient, $for, $keyLength, $count)
+            ->withPartyU($input->unsentPartyU())
+            ->withPartyV($input->unsentPartyV())
+            ->withSuppPubInfoOther($input->suppPubInfoOther())
+            ->withSuppPrivInfo($input->suppPrivInfo());
+        $sender = $input->senderKey();
+        if ($sender !== null) {
+            if (! $sender instanceof Ec2Key && ! $sender instanceof OkpKey) {
+                throw new LogicException(sprintf('%s: the sender key is neither an EC2 nor an OKP key', $input->name()));
+            }
+            // The receiver holds the sender's public key only: the fixture writes the whole pair, the private half
+            // being what the sending side of the round trip uses.
+            $layer = $layer->withSenderKey($sender->toPublic());
+        }
+
+        return $layer;
+    }
+
+    /**
+     * The key-encryption key of a recipient that carries recipients instead of a key (RFC 9052 Appendix B): what
+     * the nested level hands up, for the key wrap algorithm of this level.
+     */
+    private function keyEncryptionKeyOf(CoseRecipient $recipient, CoseWgParty $input, KeyManagement $algorithm): SymmetricKey
+    {
+        $nested = $recipient->getRecipients();
+        $nestedInputs = $input->recipients();
+        if ($nested === [] || count($nested) !== count($nestedInputs)) {
+            throw new LogicException(sprintf(
+                '%s: the recipient has no key and %d nested recipients on the wire for %d in the input',
+                $input->name(),
+                count($nested),
+                count($nestedInputs)
+            ));
+        }
+        $kek = null;
+        foreach ($nested as $index => $entry) {
+            $key = $this->recoverKey($entry, $nestedInputs[$index], $algorithm, null, count($nested));
+            if ($kek !== null) {
+                static::assertSame(bin2hex($kek), bin2hex($key), sprintf(
+                    '%s: the nested recipients do not agree on the key-encryption key',
+                    $nestedInputs[$index]->name()
+                ));
+            }
+            $kek = $key;
+        }
+        $recorded = $input->keyEncryptionKey();
+        if ($recorded !== null) {
+            static::assertSame(bin2hex($recorded), bin2hex((string) $kek), sprintf(
+                '%s: the key the nested recipients hand up is not the KEK the generator recorded',
+                $input->name()
+            ));
+        }
+
+        return SymmetricKey::create([
+            Key::TYPE => Key::TYPE_OCT,
+            SymmetricKey::DATA_K => (string) $kek,
+        ]);
+    }
+
+    /**
+     * The intermediates of a recipient, each compared where the generator recorded it: the COSE_KDF_Context this
+     * library builds for the layer, the ECDH shared secret of the key pair, and the KEK a key agreement with key wrap
+     * derives. A mismatch names what diverged -- the context, the agreement or the KDF -- before recoverKey() runs
+     * and can only report that the key is wrong.
+     */
+    private function assertIntermediates(CoseWgParty $input, KeyManagement $algorithm, RecipientLayer $layer, Key $recipientKey): void
+    {
+        $context = $input->kdfContext();
+        if ($context !== null) {
+            $wrap = $algorithm instanceof KeyAgreement ? $algorithm->keyWrap() : null;
+            $built = $wrap === null ? $layer->kdfContext() : $layer->kdfContext($wrap::identifier(), $wrap->keyLength());
+            static::assertSame(bin2hex($context), bin2hex((string) $built), sprintf(
+                '%s: the COSE_KDF_Context this library builds is not the one the generator recorded',
+                $input->name()
+            ));
+        }
+        if (! $algorithm instanceof KeyAgreement) {
+            return;
+        }
+        if (! $recipientKey instanceof Ec2Key && ! $recipientKey instanceof OkpKey) {
+            throw new LogicException(sprintf('%s: the key of an ECDH recipient is neither EC2 nor OKP', $input->name()));
+        }
+        $public = $algorithm->isEphemeralStatic() ? $layer->headers()->getEphemeralKey() : $layer->senderKey();
+        if ($public === null) {
+            throw new LogicException(sprintf('%s: the sender key of an ECDH recipient is missing', $input->name()));
+        }
+        $secret = $input->sharedSecret();
+        if ($secret !== null) {
+            static::assertSame(
+                bin2hex($secret),
+                bin2hex(EllipticCurveDiffieHellman::sharedSecret($recipientKey, $public)),
+                sprintf('%s: the ECDH shared secret is not the one the generator recorded', $input->name())
+            );
+        }
+        $kek = $input->keyEncryptionKey();
+        if ($kek !== null && $algorithm->keyWrap() !== null) {
+            static::assertSame(bin2hex($kek), bin2hex($algorithm->agree($layer, $recipientKey, $public)), sprintf(
+                '%s: the key the agreement derives is not the KEK the generator recorded',
+                $input->name()
+            ));
+        }
+    }
+
+    /**
+     * The sending side of the round trip, where it can be run with the fixture's inputs: the AES Key Wrap and the
+     * direct derivations are deterministic, and so is a Static-Static agreement with the sender's private key the
+     * fixture writes; each has to reproduce the ciphertext of the recipient on the wire. An Ephemeral-Static
+     * agreement draws a fresh key and cannot be reproduced; and a direct derivation whose recipient carries neither
+     * a salt nor a PartyU nonce is one the sending side of this library refuses to produce (RFC 9053 sections 6.1.2
+     * and 6.3.1), so the fixtures that omit both are verified on the receiving side only.
+     */
+    private function assertRecipientReproduced(
+        CoseRecipient $recipient,
+        CoseWgParty $input,
+        KeyManagement $algorithm,
+        RecipientLayer $layer,
+        Key $recipientKey,
+        string $recovered
+    ): void {
+        if ($algorithm instanceof KeyAgreement && $algorithm->isEphemeralStatic()) {
+            return;
+        }
+        $headers = $layer->headers();
+        if (($algorithm instanceof DirectHkdf || $algorithm instanceof KeyAgreement)
+            && $headers->getSalt() === null && $headers->getPartyUNonce() === null) {
+            return;
+        }
+        $sender = $input->senderKey();
+        if ($sender !== null) {
+            if (! $sender instanceof Ec2Key && ! $sender instanceof OkpKey) {
+                throw new LogicException(sprintf('%s: the sender key is neither an EC2 nor an OKP key', $input->name()));
+            }
+            $layer = $layer->withSenderKey($sender);
+        }
+
+        $protected = $algorithm->protectKey($layer, $recipientKey, $algorithm->isDirect() ? null : $recovered);
+        static::assertSame(bin2hex($recovered), bin2hex($protected->key()), sprintf(
+            '%s: the key the sending side derives is not the one the receiving side recovers',
+            $input->name()
         ));
+        static::assertSame(
+            bin2hex($recipient->getCiphertext()->getValue()),
+            bin2hex($protected->ciphertext()),
+            sprintf('%s: the recipient ciphertext this library produces is not the one of the fixture', $input->name())
+        );
+    }
+
+    private function assertIsTheRecordedCek(CoseWgFixture $fixture, string $cek): SymmetricKey
+    {
+        $recorded = $fixture->cek();
+        if ($recorded !== null && ! $fixture->mustFail()) {
+            static::assertSame(bin2hex($recorded), bin2hex($cek), sprintf(
+                '%s: the key the recipients hand back is not the CEK the generator recorded',
+                $fixture->name()
+            ));
+        }
+
+        return SymmetricKey::create([
+            Key::TYPE => Key::TYPE_OCT,
+            SymmetricKey::DATA_K => $cek,
+        ]);
     }
 
     // --- shared -----------------------------------------------------------------------------------------------------
@@ -630,7 +874,7 @@ abstract class CoseWgFixtureTestCase extends TestCase
     /**
      * The algorithm the headers announce, from the registry.
      *
-     * @template T of SignatureAlgorithm|Mac|ContentEncryption
+     * @template T of SignatureAlgorithm|Mac|ContentEncryption|KeyManagement
      *
      * @param class-string<T> $interface
      *
@@ -639,7 +883,7 @@ abstract class CoseWgFixtureTestCase extends TestCase
      *                                  integers), or one the manager does not know or that is not of the expected kind
      * @return T
      */
-    private function algorithm(CoseHeaders $headers, string $interface): SignatureAlgorithm|Mac|ContentEncryption
+    private function algorithm(CoseHeaders $headers, string $interface): SignatureAlgorithm|Mac|ContentEncryption|KeyManagement
     {
         $alg = $headers->getHeaderParameter(1);
         if ($alg === null) {
