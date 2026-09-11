@@ -279,6 +279,24 @@ class Key
      */
     public function assertUsableWith(int $algorithmIdentifier, int $operation): void
     {
+        $this->assertUsableWithAny($algorithmIdentifier, $operation);
+    }
+
+    /**
+     * As assertUsableWith(), for an operation a key may be allowed under more than one name.
+     *
+     * RFC 9053 sections 4.1, 4.2 and 4.3 let a content encryption key carry either "encrypt" or "wrap key" to
+     * encrypt - "If the 'key_ops' field is present, it MUST include 'encrypt' or 'wrap key' when encrypting" - and
+     * either "decrypt" or "unwrap key" to decrypt, because the same algorithms encrypt content and wrap keys. The
+     * check passes as soon as the key lists one of the operations; it fails naming all of them.
+     *
+     * @param int $operation the Key::OP_* constant of the operation, and the one an error names first
+     * @param int ...$alternatives the Key::OP_* constants of the other names the key may carry it under
+     *
+     * @throws InvalidArgumentException when the key forbids the combination
+     */
+    public function assertUsableWithAny(int $algorithmIdentifier, int $operation, int ...$alternatives): void
+    {
         if ($this->has(self::ALG) && $this->alg() !== $algorithmIdentifier) {
             throw new InvalidArgumentException(sprintf(
                 'The key is restricted to the algorithm %d and cannot be used with the algorithm %d',
@@ -291,14 +309,24 @@ class Key
         if ($keyOps === null) {
             return;
         }
-        $name = self::OP_NAMES[$operation] ?? throw new InvalidArgumentException(sprintf(
-            'Unknown key operation %d. Expected one of: %s',
-            $operation,
-            implode(', ', self::OP_NAMES)
-        ));
-        if (! in_array($operation, $keyOps, true) && ! in_array($name, $keyOps, true)) {
-            throw new InvalidArgumentException(sprintf('The key does not allow the "%s" operation', $name));
+        $names = [];
+        foreach ([$operation, ...$alternatives] as $candidate) {
+            $name = self::OP_NAMES[$candidate] ?? throw new InvalidArgumentException(sprintf(
+                'Unknown key operation %d. Expected one of: %s',
+                $candidate,
+                implode(', ', self::OP_NAMES)
+            ));
+            if (in_array($candidate, $keyOps, true) || in_array($name, $keyOps, true)) {
+                return;
+            }
+            $names[] = $name;
         }
+
+        throw new InvalidArgumentException(
+            $alternatives === []
+                ? sprintf('The key does not allow the "%s" operation', $names[0])
+                : sprintf('The key does not allow the "%s" operation', implode('" nor the "', $names))
+        );
     }
 
     /**

@@ -1,10 +1,10 @@
 # How to Use COSE Library
 
-This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature and MAC algorithms, the cryptographic structures a signature or a MAC is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, and the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`) and [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims). Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
+This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature, MAC and content encryption algorithms, the cryptographic structures a signature, a MAC or an encryption is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, and the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`) and [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims). Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
 
 The six COSE message types themselves come from [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0 or later, as `CBOR\Tag\CoseSign1Tag` and its siblings. The `Cose\...Tag` classes this library used to ship are deprecated since 4.8.0 and removed in 5.0.0 — see [Upgrading from the Cose\...Tag classes](#upgrading-from-the-cosetag-classes).
 
-Content encryption itself is not implemented: the encryption tags carry a ciphertext the application produced, and `Enc_structure` gives that application the additional authenticated data to feed its AEAD.
+The key management algorithms of RFC 9053 §5–6 (HKDF, AES Key Wrap, ECDH) are not implemented yet: a recipient carrying a wrapped or derived content key is the application's to open, see [issue #201](https://github.com/web-auth/cose-lib/issues/201).
 
 ## Table of Contents
 
@@ -19,6 +19,7 @@ Content encryption itself is not implemented: the encryption tags carry a cipher
 - [Encryption Operations](#encryption-operations)
   - [COSE_Encrypt0 (Single Recipient)](#cose_encrypt0-single-recipient)
   - [COSE_Encrypt (Multiple Recipients)](#cose_encrypt-multiple-recipients)
+  - [The Nonce: IV and Partial IV](#the-nonce-iv-and-partial-iv)
 - [MAC Operations](#mac-operations)
   - [COSE_Mac0 (Without Recipients)](#cose_mac0-without-recipients)
   - [COSE_Mac (With Recipients)](#cose_mac-with-recipients)
@@ -37,6 +38,7 @@ Content encryption itself is not implemented: the encryption tags carry a cipher
   - [Registering Algorithms](#registering-algorithms)
   - [Verifying a Signature Made by a Certificate](#verifying-a-signature-made-by-a-certificate)
   - [Validating Symmetric Keys](#validating-symmetric-keys)
+  - [Content Encryption Algorithms](#content-encryption-algorithms)
 
 ## Installation
 
@@ -446,42 +448,95 @@ foreach (CoseSignature::all($coseSign->getSignatures()) as $signer) {
 
 ## Encryption Operations
 
+The content encryption algorithms of [RFC 9053 §4](https://datatracker.ietf.org/doc/html/rfc9053#section-4) live in
+`Cose\Algorithm\ContentEncryption`: `A128GCM`, `A192GCM`, `A256GCM`, the eight AES-CCM variants and
+`ChaCha20Poly1305`, see [Content Encryption Algorithms](#content-encryption-algorithms). Every one of them encrypts
+with a symmetric key, a nonce whose length the algorithm fixes, and the `Enc_structure` of
+[RFC 9052 §5.3](https://datatracker.ietf.org/doc/html/rfc9052#section-5.3) as additional authenticated data — never
+the protected header on its own. `Encrypt0Structure` and `EncryptStructure` build that structure and hand it to the
+algorithm through `encrypt()` and `decrypt()`.
+
 ### COSE_Encrypt0 (Single Recipient)
 
 ```php
 use CBOR\ByteStringObject;
+use CBOR\ListObject;
+use CBOR\MapItem;
 use CBOR\MapObject;
 use CBOR\Tag\CoseEncrypt0Tag;
+use CBOR\UnsignedIntegerObject;
+use Cose\Algorithm\ContentEncryption\A128GCM;
+use Cose\Encryption\Encrypt0Structure;
+use Cose\Encryption\InitializationVector;
+use Cose\Key\SymmetricKey;
+use Cose\Structure\HeaderMapHelper;
 
-$protectedHeader = MapObject::create([/* algorithm, etc. */]);
-$unprotectedHeader = MapObject::create([/* IV, kid, etc. */]);
-$ciphertext = ByteStringObject::create($encryptedData);
+$algorithm = A128GCM::create();
+$key = SymmetricKey::create([
+    SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
+    SymmetricKey::DATA_K => $sharedSecret, // 16 bytes for A128GCM
+]);
+// The key and nonce pair MUST be unique for every message (RFC 9053 §4.1.1)
+$nonce = random_bytes($algorithm->nonceLength());
 
-$coseEncrypt0 = CoseEncrypt0Tag::createFromComponents(
+// Encode the protected bucket once: the bytes the AEAD authenticates are the bytes the message carries
+$protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+    MapItem::create(UnsignedIntegerObject::create(1), UnsignedIntegerObject::create($algorithm::identifier())),
+]));
+$unprotectedHeader = MapObject::create([
+    MapItem::create(UnsignedIntegerObject::create(InitializationVector::IV), ByteStringObject::create($nonce)),
+]);
+
+// ["Encrypt0", protected, external_aad] is the AAD; the result is the ciphertext followed by the tag
+$ciphertext = Encrypt0Structure::create($protectedHeader)->encrypt($algorithm, $key, $plaintext, $nonce);
+
+$coseEncrypt0 = CoseEncrypt0Tag::create(ListObject::create([
     $protectedHeader,
     $unprotectedHeader,
-    $ciphertext
-);
+    ByteStringObject::create($ciphertext),
+]));
 ```
 
+Decrypting rebuilds the structure from the bytes the message carries, and resolves the nonce from its headers:
+
+```php
+use Cose\Structure\CoseHeaders;
+
+$headers = CoseHeaders::fromMessage($coseEncrypt0);
+$nonce = InitializationVector::resolve($headers, $algorithm->nonceLength(), $key);
+$plaintext = Encrypt0Structure::create($coseEncrypt0->getProtectedHeader())
+    ->decrypt($algorithm, $key, $coseEncrypt0->getCiphertext()->getValue(), $nonce);
+```
+
+`decrypt()` throws an `InvalidArgumentException` when the content does not authenticate. A wrong key, a wrong nonce,
+a rewritten protected header, an external AAD the sender did not use, a tag that was tampered with, replaced or
+truncated: the primitive cannot tell them apart, and the library reports all of them with the same message
+(`Aead::DECRYPTION_FAILED`).
+
 ### COSE_Encrypt (Multiple Recipients)
+
+The content layer is the same, under the `"Encrypt"` context, with a content encryption key (CEK) drawn at random
+and wrapped for each recipient:
 
 ```php
 use CBOR\ListObject;
 use CBOR\Tag\CoseEncryptTag;
+use Cose\Encryption\EncryptStructure;
 use Cose\Structure\CoseRecipient;
 
+$ciphertext = EncryptStructure::create($protectedHeader)->encrypt($algorithm, $contentEncryptionKey, $plaintext, $nonce);
+
 $recipients = ListObject::create([
-    ListObject::create([/* recipient 1 structure */]),
-    ListObject::create([/* recipient 2 structure */]),
+    ListObject::create([/* recipient 1: protected, unprotected, wrapped CEK */]),
+    ListObject::create([/* recipient 2 */]),
 ]);
 
-$coseEncrypt = CoseEncryptTag::createFromComponents(
+$coseEncrypt = CoseEncryptTag::create(ListObject::create([
     $protectedHeader,
     $unprotectedHeader,
-    $ciphertext,
-    $recipients
-);
+    ByteStringObject::create($ciphertext),
+    $recipients,
+]));
 
 // Reading them back as checked views; a recipient may carry recipients of its own
 foreach (CoseRecipient::all($coseEncrypt->getRecipients()) as $recipient) {
@@ -493,7 +548,10 @@ foreach (CoseRecipient::all($coseEncrypt->getRecipients()) as $recipient) {
 
 > [!IMPORTANT]
 > The additional authenticated data of the content encryption is the `Enc_structure` of
-> [RFC 9052 §5.3](https://datatracker.ietf.org/doc/html/rfc9052#section-5.3), not the protected header on its own:
+> [RFC 9052 §5.3](https://datatracker.ietf.org/doc/html/rfc9052#section-5.3), not the protected header on its own.
+> `Encrypt0Structure` and `EncryptStructure` differ by their context string only, and that difference is
+> authenticated: a ciphertext produced for a `COSE_Encrypt` does not open as a `COSE_Encrypt0`. For a recipient
+> layer, the structure is `RecipientStructure::forEncryptRecipient()` (`"Enc_Recipient"`):
 >
 > ```php
 > use Cose\Encryption\Encrypt0Structure;
@@ -508,6 +566,47 @@ foreach (CoseRecipient::all($coseEncrypt->getRecipients()) as $recipient) {
 > RFC 9052 §5.1 writes the list as `[+COSE_recipient]`: at least one entry, each a
 > `[bstr, map, bstr / nil, ? [+ COSE_recipient]]` array. `CoseRecipient::all()` applies that rule, nested levels
 > included.
+
+The key wrap and key agreement algorithms that fill the recipient entries (RFC 9053 §5–6) are not implemented yet,
+see [issue #201](https://github.com/web-auth/cose-lib/issues/201); [`examples/05-encrypt-recipients.php`](../examples/05-encrypt-recipients.php)
+wraps the CEK with AES Key Wrap written out by hand in the meantime.
+
+### The Nonce: IV and Partial IV
+
+[RFC 9052 §3.1](https://datatracker.ietf.org/doc/html/rfc9052#section-3.1) gives a message two ways to carry its
+nonce: the `IV` header parameter (label 5) holds it whole; the `Partial IV` (label 6) holds only the part that
+changes from one message to the next, and the recipient completes it with the `Base IV` of the key (label 5 of the
+key map, [§7.1](https://datatracker.ietf.org/doc/html/rfc9052#section-7.1)):
+
+1. left-pad the Partial IV with zeros to the nonce length of the algorithm;
+2. XOR it with the Base IV, itself a prefix of the nonce.
+
+`InitializationVector::resolve()` does both, and rejects a layer carrying the two parameters at once — the RFC says
+they "MUST NOT both be present in the same security layer" — as well as an `IV` of the wrong length:
+
+```php
+use Cose\Encryption\InitializationVector;
+use Cose\Key\SymmetricKey;
+
+$key = SymmetricKey::create([
+    SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
+    SymmetricKey::DATA_K => $sharedSecret,
+    SymmetricKey::BASE_IV => $baseIv, // h'89F52F65A1C58093' in RFC 9052 Appendix C.4.2
+]);
+
+// The recipient: from the message headers
+$nonce = InitializationVector::resolve(CoseHeaders::fromMessage($message), $algorithm->nonceLength(), $key);
+
+// The sender: from the counter it is about to send as Partial IV
+$nonce = InitializationVector::fromPartialIv($counter, $baseIv, $algorithm->nonceLength());
+```
+
+> [!WARNING]
+> **A nonce reused under the same key is catastrophic for every algorithm here.** AES-GCM and ChaCha20/Poly1305 leak
+> their authentication key, after which any message under that key can be forged; AES-CCM leaks the XOR of the two
+> plaintexts. Draw the nonce with `random_bytes()` for each message, or send a strictly increasing counter as the
+> `Partial IV`. The 7-byte nonce of the AES-CCM-64-* variants is too short for random draws to stay unique for long
+> (a collision is expected after about 2^28 messages): use a counter with those.
 
 ## MAC Operations
 
@@ -935,13 +1034,16 @@ signature operation itself fails, for instance for an RSA modulus too short for 
 A COSE key may restrict itself. [RFC 9052, section 7.1](https://www.rfc-editor.org/rfc/rfc9052.html#section-7.1) gives
 it two parameters for that: `alg` (label 3) pins it to one algorithm — "If the algorithms do not match, then this key
 object MUST NOT be used to perform the cryptographic operation" — and `key_ops` (label 4) pins it to a set of
-operations, whose values are those of Table 5: `sign` (1), `verify` (2), `MAC create` (9) and `MAC verify` (10) for
-the algorithms this library implements. [RFC 9053](https://www.rfc-editor.org/rfc/rfc9053.html#section-2.1) repeats
-both as a per-algorithm requirement for ECDSA (§2.1), EdDSA (§2.2), HMAC (§3.1) and AES-CBC-MAC (§3.2).
+operations, whose values are those of Table 5: `sign` (1), `verify` (2), `encrypt` (3), `decrypt` (4), `wrap key`
+(5), `unwrap key` (6), `MAC create` (9) and `MAC verify` (10) for the algorithms this library implements.
+[RFC 9053](https://www.rfc-editor.org/rfc/rfc9053.html#section-2.1) repeats both as a per-algorithm requirement
+for ECDSA (§2.1), EdDSA (§2.2), HMAC (§3.1), AES-CBC-MAC (§3.2) and the content encryption algorithms (§4.1–4.3).
 
-Enforcing them is **opt-in**, so that a key which used to work keeps working. Ask an algorithm — or a whole
-`Manager` — to enforce the restrictions, and it refuses the key with an `InvalidArgumentException` whenever the key
-forbids what is being done with it:
+For the signature and MAC algorithms, enforcing them is **opt-in**, so that a key which used to work keeps working.
+Ask an algorithm — or a whole `Manager` — to enforce the restrictions, and it refuses the key with an
+`InvalidArgumentException` whenever the key forbids what is being done with it. The
+[content encryption algorithms](#content-encryption-algorithms), which have no such history, enforce them from the
+start and take `withKeyRestrictionsEnforced(false)` to stop:
 
 ```php
 use Cose\Algorithm\Manager;
@@ -994,6 +1096,9 @@ Two details are worth knowing:
   A key meant to serve both carries no `alg` at all.
 - **`key_ops` accepts both spellings.** COSE writes the operations as the integers of Table 5; a key converted from a
   JWK may carry the text names JOSE uses (`"sign"`, `"verify"`, `"MAC create"`, `"MAC verify"`). Both are recognised.
+- **An operation may go by two names.** RFC 9053 §4 lets a content encryption key list `encrypt` *or* `wrap key` to
+  encrypt, and `decrypt` *or* `unwrap key` to decrypt. `Key::assertUsableWithAny($alg, Key::OP_ENCRYPT, Key::OP_WRAP_KEY)`
+  passes on either and fails naming both; `assertUsableWith()` is its single-operation form.
 
 `Key::alg()` is strict about the value it reads: an `alg` that is not an integer — the text `'RS256'`, for instance —
 throws instead of being cast to `0`, an identifier no algorithm is registered under. An integer written as a string
@@ -1366,6 +1471,74 @@ SymmetricKeyValidator::checkKeyValue($key);
 `SymmetricKeyValidator` accepts any `Key`, not only a `SymmetricKey`: `Key::create()` and `Key::createFromData()` with
 an integer `kty` build a generic `Key` that never goes through the `SymmetricKey` constructor.
 
+### Content Encryption Algorithms
+
+The AEAD algorithms of [RFC 9053 §4](https://datatracker.ietf.org/doc/html/rfc9053#section-4), in
+`Cose\Algorithm\ContentEncryption`. Each implements `ContentEncryption` — `encrypt()`, `decrypt()`, `keyLength()`,
+`nonceLength()` and `tagLength()` — and is used through the `Enc_structure` classes, see
+[Encryption Operations](#encryption-operations).
+
+| Algorithm | Identifier | Class | Key | Nonce | Tag | Reference |
+|-----------|------------|-------|-----|-------|-----|-----------|
+| A128GCM | 1 | `A128GCM` | 128 bits | 12 bytes | 128 bits | [RFC 9053 §4.1](https://www.rfc-editor.org/rfc/rfc9053#section-4.1) |
+| A192GCM | 2 | `A192GCM` | 192 bits | 12 bytes | 128 bits | [RFC 9053 §4.1](https://www.rfc-editor.org/rfc/rfc9053#section-4.1) |
+| A256GCM | 3 | `A256GCM` | 256 bits | 12 bytes | 128 bits | [RFC 9053 §4.1](https://www.rfc-editor.org/rfc/rfc9053#section-4.1) |
+| AES-CCM-16-64-128 | 10 | `A128CCM_16_64` | 128 bits | 13 bytes | 64 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| AES-CCM-16-64-256 | 11 | `A256CCM_16_64` | 256 bits | 13 bytes | 64 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| AES-CCM-64-64-128 | 12 | `A128CCM_64_64` | 128 bits | 7 bytes | 64 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| AES-CCM-64-64-256 | 13 | `A256CCM_64_64` | 256 bits | 7 bytes | 64 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| ChaCha20/Poly1305 | 24 | `ChaCha20Poly1305` | 256 bits | 12 bytes | 128 bits | [RFC 9053 §4.3](https://www.rfc-editor.org/rfc/rfc9053#section-4.3) |
+| AES-CCM-16-128-128 | 30 | `A128CCM_16_128` | 128 bits | 13 bytes | 128 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| AES-CCM-16-128-256 | 31 | `A256CCM_16_128` | 256 bits | 13 bytes | 128 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| AES-CCM-64-128-128 | 32 | `A128CCM_64_128` | 128 bits | 7 bytes | 128 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+| AES-CCM-64-128-256 | 33 | `A256CCM_64_128` | 256 bits | 7 bytes | 128 bits | [RFC 9053 §4.2](https://www.rfc-editor.org/rfc/rfc9053#section-4.2) |
+
+The *Algorithm* column is the IANA name. The AES-CCM class names follow the JOSE convention of the
+[web-token](https://github.com/web-token/jwt-framework) libraries: `A<key>CCM_<L>_<tag>`, where L is the size of the
+length field in bits, which fixes the nonce length at 15 − L/8 bytes; the IANA name orders the same three numbers as
+AES-CCM-L-tag-key.
+
+What every algorithm checks, per RFC 9053 §4.1–4.3, before any primitive runs:
+
+- the key is a `SymmetricKey` whose `k` is exactly `keyLength()` bytes long — a key of another length is rejected
+  with an `InvalidArgumentException`;
+- the nonce is exactly `nonceLength()` bytes long. This matters most for AES-CCM: OpenSSL accepts any nonce between
+  7 and 13 bytes and derives L from it, so a 12-byte nonce handed to AES-CCM-16-64-128 would be encrypted with a
+  different L and no conforming recipient could open the result. It is refused before OpenSSL sees it;
+- the `alg` and `key_ops` restrictions of the key, see below.
+
+The ciphertext is laid out as COSE carries it: the encrypted content followed by the `tagLength()` bytes of the
+authentication tag. `decrypt()` hands the tag to the primitive, which verifies it in constant time; the library never
+compares a tag itself.
+
+**Key restrictions are enforced by default for these algorithms**, unlike the signature and MAC algorithms for which
+enforcement is [opt-in](#key-restrictions-alg-and-key_ops) so that existing keys keep working. RFC 9053 §4 makes the
+checks a MUST — "If the 'alg' field is present, it MUST match the … algorithm being used", "If the 'key_ops' field
+is present, it MUST include 'encrypt' or 'wrap key' when encrypting" and "'decrypt' or 'unwrap key' when
+decrypting" — and these algorithms have no caller to keep compatible. `withKeyRestrictionsEnforced(false)` turns it
+off, on one algorithm or through `Manager::withKeyRestrictionsEnforced(false)`. `Key::assertUsableWithAny()` is the
+form of the check that accepts either name of an operation.
+
+**Platform support.** AES-GCM is in every OpenSSL build PHP links against. AES-CCM is not: `AesCcm::isSupported()`
+(on any of the eight classes) says whether the build implements it. ChaCha20/Poly1305 goes through the sodium
+extension when it is loaded and through OpenSSL's `chacha20-poly1305` otherwise; `ChaCha20Poly1305::isSupported()`
+answers for both. An algorithm used on a platform that lacks it throws a `RuntimeException` naming the cipher.
+
+```php
+use Cose\Algorithm\ContentEncryption\A128CCM_16_64;
+use Cose\Algorithm\ContentEncryption\A256GCM;
+use Cose\Algorithm\ContentEncryption\ChaCha20Poly1305;
+use Cose\Algorithm\Manager;
+
+$manager = Manager::create()->add(A256GCM::create());
+if (A128CCM_16_64::isSupported()) {
+    $manager->add(A128CCM_16_64::create());
+}
+if (ChaCha20Poly1305::isSupported()) {
+    $manager->add(ChaCha20Poly1305::create());
+}
+```
+
 ## Common Header Parameters
 
 The following header parameters are commonly used in COSE structures:
@@ -1394,8 +1567,8 @@ php examples/01-sign1.php
 | `examples/01-sign1.php` | COSE_Sign1: sign, encode, decode, verify |
 | `examples/02-sign-multiple-signers.php` | COSE_Sign, and why `Signature` carries `sign_protected` |
 | `examples/03-mac0.php` | COSE_Mac0 over the MAC_structure, with HMAC and AES-CBC-MAC |
-| `examples/04-encrypt0.php` | COSE_Encrypt0 with `Enc_structure` as the AEAD's AAD |
-| `examples/05-encrypt-recipients.php` | COSE_Encrypt: key wrapping, nested recipients, detached ciphertext |
+| `examples/04-encrypt0.php` | COSE_Encrypt0: A128GCM through `Encrypt0Structure`, IV and Partial IV |
+| `examples/05-encrypt-recipients.php` | COSE_Encrypt: one ciphertext, the CEK wrapped per recipient, nested recipients |
 | `examples/06-headers.php` | The header rules, against what the raw CBOR map answers |
 | `examples/07-detached-and-external-aad.php` | Detached content and `external_aad` |
 | `examples/08-cwt.php` | CBOR Web Tokens |
@@ -1410,6 +1583,9 @@ The test suite is the rest of the examples, and every one of them is executed on
 | `tests/Structure/CoseHeadersTest.php` | The header rules, on all six message types |
 | `tests/Structure/CoseSignatureTest.php` | Per-signer views of a `COSE_Sign` |
 | `tests/Structure/CoseRecipientTest.php` | Per-recipient views, nested recipients and detached ciphertext |
+| `tests/Encryption/EncryptStructureRoundTripTest.php` | Encrypting and decrypting through the `Enc_structure`, against RFC 9052 Appendix C.4 |
+| `tests/Algorithm/ContentEncryption/AeadTest.php` | The AEAD algorithms against the published vectors of their primitives |
+| `tests/CoseWg/CoseWgFixtureTest.php` | Every fixture of cose-wg/Examples, encrypted ones included |
 | `tests/Signature/CoseSign1CreateAndVerifyTest.php` | EU digital COVID certificate verification |
 | `tests/Structure/DeprecatedTagClassesTest.php` | The deprecation and the upstream replacements |
 

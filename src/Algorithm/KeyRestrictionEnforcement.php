@@ -33,11 +33,13 @@ trait KeyRestrictionEnforcement
 
     /**
      * @param int $operation one of the `Key::OP_*` constants
+     * @param int ...$alternatives the other `Key::OP_*` constants the key may list the operation under, see
+     *                             Key::assertUsableWithAny()
      *
      * @throws InvalidArgumentException when enforcement is on and the key is restricted to another algorithm, or
      *                                  does not allow the operation
      */
-    private function checkKeyRestrictions(Key $key, int $operation): void
+    private function checkKeyRestrictions(Key $key, int $operation, int ...$alternatives): void
     {
         if (! $this->enforceKeyRestrictions) {
             return;
@@ -45,6 +47,6 @@ trait KeyRestrictionEnforcement
 
         // static::identifier() is the identifier of the concrete algorithm, so ES256 and ESP256, or EdDSA (-8) and
         // the fully-specified Ed25519 (-19), each enforce their own value.
-        $key->assertUsableWith(static::identifier(), $operation);
+        $key->assertUsableWithAny(static::identifier(), $operation, ...$alternatives);
     }
 }

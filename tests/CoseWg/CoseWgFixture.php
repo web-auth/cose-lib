@@ -259,6 +259,16 @@ final class CoseWgFixture
     }
 
     /**
+     * The full IV the generator encrypted the content with but did not send, when the message carries a "Partial IV"
+     * instead; null when the fixture records none.
+     */
+    public function unsentIv(): ?string
+    {
+        return $this->body()
+            ->unsentIv();
+    }
+
+    /**
      * The external_aad of the body structure -- the MAC_structure or the Enc_structure -- or the empty string RFC
      * 9052 defaults to. The Sig_structure of a COSE_Sign carries one per signer, see CoseWgParty::externalAad().
      */

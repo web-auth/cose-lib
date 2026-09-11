@@ -10,8 +10,9 @@ use PHPUnit\Framework\Attributes\Test;
 /**
  * Every fixture of cose-wg/Examples, verified with this library or reported as skipped with the reason.
  *
- * The encrypted fixtures are listed too. Every one of them names an algorithm this library does not implement yet,
- * so they are reported as skipped with that identifier; the decryption path is for the issue that lands them.
+ * The encrypted fixtures run through the decryption path since the content encryption algorithms of RFC 9053
+ * section 4 landed (#199); those whose content key comes from a key management algorithm this library does not
+ * implement yet are reported as skipped with that identifier.
  *
  * @see https://github.com/cose-wg/Examples
  * @see https://github.com/web-auth/cose-lib/issues/192

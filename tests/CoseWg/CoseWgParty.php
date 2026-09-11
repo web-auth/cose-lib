@@ -124,6 +124,15 @@ final class CoseWgParty
     }
 
     /**
+     * The full IV the generator encrypted with but did not send, when the message carries a "Partial IV" (RFC 9052
+     * section 3.1) instead; null when the fixture records none.
+     */
+    public function unsentIv(): ?string
+    {
+        return $this->bytesOf($this->unsentHeader(), 'IV_hex');
+    }
+
+    /**
      * The external_aad this party's structure carries, or the empty string RFC 9052 section 4.4 defaults to.
      */
     public function externalAad(): string

@@ -6,16 +6,19 @@ namespace Cose\Tests\CoseWg;
 
 use function array_keys;
 use function bin2hex;
+use CBOR\ByteStringObject;
 use CBOR\Tag\CoseSign1Tag;
 use Cose\Algorithm\Mac\HS256;
 use Cose\Algorithm\Manager;
 use Cose\Algorithms;
+use Cose\Encryption\Encrypt0Structure;
 use Cose\Key\Ec2Key;
 use Cose\Key\Key;
 use Cose\Key\OkpKey;
 use Cose\Key\RsaKey;
 use Cose\Key\SymmetricKey;
 use function file_get_contents;
+use function hex2bin;
 use function is_string;
 use LogicException;
 use PHPUnit\Framework\AssertionFailedError;
@@ -222,6 +225,28 @@ final class CoseWgHarnessTest extends CoseWgFixtureTestCase
     }
 
     /**
+     * An encrypted fixture records the Enc_structure it used as AAD and its CEK; one that carries a "Partial IV"
+     * also records the full IV the generator did not send.
+     */
+    #[Test]
+    public function anEncryptedFixtureExposesItsAadAndItsUnsentIv(): void
+    {
+        // When
+        $fixture = CoseWgFixture::load(self::fixtureRoot() . '/RFC8152/Appendix_C_4_2.json');
+
+        // Then
+        static::assertSame(CoseWgFixture::ENCRYPT0, $fixture->messageType());
+        static::assertSame(Algorithms::COSE_ALGORITHM_AES_CCM_16_64_128, $fixture->algorithmIdentifier());
+        static::assertSame('8368456e63727970743043a1010a40', bin2hex((string) $fixture->aad()));
+        static::assertSame('849b5786457c1491be3a76dcea6c4271', bin2hex((string) $fixture->cek()));
+        static::assertSame('89f52f65a1c5809300000061a7', bin2hex((string) $fixture->unsentIv()));
+        static::assertSame([
+            'partialIV_hex' => '61A7',
+        ], $fixture->unprotectedHeader());
+        static::assertNull(CoseWgFixture::load(self::fixtureRoot() . '/encrypted-tests/enc-pass-01.json')->unsentIv());
+    }
+
+    /**
      * RFC 9052 Appendix B layers a recipient under a recipient; every algorithm of the tree is required.
      */
     #[Test]
@@ -402,6 +427,51 @@ final class CoseWgHarnessTest extends CoseWgFixtureTestCase
             'hmac-examples/HMac-04',
             'the tag does not verify with Cose\Algorithm\Mac\HS256 although the MAC_structure is the one the generator authenticated (the primitive diverged, not the structure)',
         ];
+        // The generator recorded the Enc_structure it encrypted with, then added a protected attribute: the AAD this
+        // library rebuilds from the wire is not the one recorded.
+        yield 'encrypt0 with a protected attribute added' => [
+            'encrypted-tests/enc-fail-06',
+            'the Enc_structure this library builds is not the one the generator authenticated (the structure diverged, not the primitive)',
+        ];
+        // The generator flipped the last byte of the ciphertext, i.e. of the tag: the AEAD is what refuses it.
+        yield 'encrypt0 with a changed tag' => [
+            'encrypted-tests/enc-fail-02',
+            'the content does not decrypt with Cose\Algorithm\ContentEncryption\A128GCM although the Enc_structure is the one the generator authenticated (the primitive diverged, not the structure)',
+        ];
+        yield 'encrypt with a changed tag' => [
+            'enveloped-tests/env-fail-02',
+            'the content does not decrypt with Cose\Algorithm\ContentEncryption\A128GCM although the Enc_structure is the one the generator authenticated (the primitive diverged, not the structure)',
+        ];
+    }
+
+    /**
+     * A fixture listed as an erratum still decrypts: the list documents a wrong intermediate, not a wrong message,
+     * and the day upstream fixes the file the entry has to go, so that the intermediate is compared again.
+     */
+    #[Test]
+    #[DataProvider('knownErrata')]
+    public function aKnownErratumStillVerifies(string $name): void
+    {
+        // Given
+        $fixture = CoseWgFixture::load(sprintf('%s/%s.json', self::fixtureRoot(), $name));
+        static::assertNotSame(
+            bin2hex((string) $fixture->aad()),
+            bin2hex((string) Encrypt0Structure::create(ByteStringObject::create(hex2bin('a1011818')))),
+            $name . ': the recorded AAD_hex is the Enc_structure after all, drop the erratum'
+        );
+
+        // When / Then: the message verifies although the intermediate does not match
+        $this->assertFixture($fixture);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function knownErrata(): iterable
+    {
+        foreach (array_keys(self::KNOWN_ERRATA) as $name) {
+            yield $name => [$name];
+        }
     }
 
     /**

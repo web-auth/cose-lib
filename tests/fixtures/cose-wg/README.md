@@ -12,7 +12,9 @@ The interoperability fixtures of the IETF COSE working group, vendored from
 The files are copied as they are: nothing in them is edited, reformatted or renamed, so that a diff against upstream
 stays meaningful. A fixture that this library cannot load or verify is either a gap in the library or a policy of
 the library, never a reason to touch the fixture — see `KNOWN_DIVERGENCES` in
-[`tests/CoseWg/CoseWgFixtureTestCase.php`](../../CoseWg/CoseWgFixtureTestCase.php) for the policies.
+[`tests/CoseWg/CoseWgFixtureTestCase.php`](../../CoseWg/CoseWgFixtureTestCase.php) for the policies. An intermediate
+the generator recorded wrongly is listed in `KNOWN_ERRATA` of the same file, and only the comparison with that
+intermediate is left out: the message itself is still verified.
 
 ## How they are used
 

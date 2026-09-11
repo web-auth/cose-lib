@@ -5,6 +5,18 @@ declare(strict_types=1);
 namespace Cose\Tests\CoseWg;
 
 use function array_search;
+use Cose\Algorithm\ContentEncryption\A128CCM_16_128;
+use Cose\Algorithm\ContentEncryption\A128CCM_16_64;
+use Cose\Algorithm\ContentEncryption\A128CCM_64_128;
+use Cose\Algorithm\ContentEncryption\A128CCM_64_64;
+use Cose\Algorithm\ContentEncryption\A128GCM;
+use Cose\Algorithm\ContentEncryption\A192GCM;
+use Cose\Algorithm\ContentEncryption\A256CCM_16_128;
+use Cose\Algorithm\ContentEncryption\A256CCM_16_64;
+use Cose\Algorithm\ContentEncryption\A256CCM_64_128;
+use Cose\Algorithm\ContentEncryption\A256CCM_64_64;
+use Cose\Algorithm\ContentEncryption\A256GCM;
+use Cose\Algorithm\ContentEncryption\ChaCha20Poly1305;
 use Cose\Algorithm\Mac\AESMAC128_128;
 use Cose\Algorithm\Mac\AESMAC128_64;
 use Cose\Algorithm\Mac\AESMAC256_128;
@@ -150,7 +162,8 @@ final class CoseWgAlgorithms
      * Every algorithm this library implements, under its own identifier.
      *
      * RS1, Ed256 and Ed512 are left out on purpose: each needs an explicit acknowledgement to be built, and no fixture
-     * uses them. Ed448 and the Brainpool ESB* algorithms are added only where the platform can compute them.
+     * uses them. Ed448, the Brainpool ESB* algorithms, AES-CCM and ChaCha20/Poly1305 are added only where the
+     * platform can compute them.
      */
     public static function manager(): Manager
     {
@@ -178,6 +191,9 @@ final class CoseWgAlgorithms
             AESMAC256_64::create(),
             AESMAC128_128::create(),
             AESMAC256_128::create(),
+            A128GCM::create(),
+            A192GCM::create(),
+            A256GCM::create(),
         );
         if (Ed448::isSupported()) {
             $manager->add(Ed448::create());
@@ -186,6 +202,25 @@ final class CoseWgAlgorithms
             if ($brainpool::isSupported()) {
                 $manager->add($brainpool::create());
             }
+        }
+        if (A128CCM_16_64::isSupported()) {
+            $manager->add(
+                A128CCM_16_64::create(),
+                A128CCM_64_64::create(),
+                A128CCM_16_128::create(),
+                A128CCM_64_128::create(),
+            );
+        }
+        if (A256CCM_16_64::isSupported()) {
+            $manager->add(
+                A256CCM_16_64::create(),
+                A256CCM_64_64::create(),
+                A256CCM_16_128::create(),
+                A256CCM_64_128::create(),
+            );
+        }
+        if (ChaCha20Poly1305::isSupported()) {
+            $manager->add(ChaCha20Poly1305::create());
         }
 
         return $manager;

@@ -13,16 +13,21 @@ use CBOR\ListObject;
 use CBOR\NegativeIntegerObject;
 use CBOR\OtherObject\NullObject;
 use CBOR\Tag\AbstractCoseTag;
+use CBOR\Tag\CoseEncrypt0Tag;
 use CBOR\Tag\CoseEncryptTag;
 use CBOR\Tag\CoseMac0Tag;
 use CBOR\Tag\CoseMacTag;
 use CBOR\Tag\CoseSign1Tag;
 use CBOR\Tag\CoseSignTag;
 use CBOR\UnsignedIntegerObject;
+use Cose\Algorithm\ContentEncryption\ContentEncryption;
 use Cose\Algorithm\Mac\Mac;
 use Cose\Algorithm\Manager;
 use Cose\Algorithm\Signature\EdDSA\EdDSA;
 use Cose\Algorithm\Signature\Signature as SignatureAlgorithm;
+use Cose\Encryption\Encrypt0Structure;
+use Cose\Encryption\EncryptStructure;
+use Cose\Encryption\InitializationVector;
 use Cose\Key\Key;
 use Cose\Key\SymmetricKey;
 use Cose\Mac\Mac0Structure;
@@ -38,7 +43,11 @@ use function get_debug_type;
 use InvalidArgumentException;
 use LogicException;
 use PHPUnit\Framework\TestCase;
+use function rtrim;
 use function sprintf;
+use function str_pad;
+use const STR_PAD_LEFT;
+use function strlen;
 
 /**
  * The verification a cose-wg/Examples fixture is put through, for the message types this library can process.
@@ -53,8 +62,19 @@ use function sprintf;
  * 4. the message is signed or MACed again with the private key, and that verifies too; for a deterministic
  *    algorithm the bytes are the fixture's.
  *
+ * For an encrypted message the round trip is the same in substance:
+ *
+ * 1. the output is decoded and has to be the COSE structure the fixture announces;
+ * 2. the Enc_structure is rebuilt from the decoded message and compared, byte for byte, with the AAD the generator
+ *    recorded;
+ * 3. the nonce is resolved from the headers -- the "IV", or the "Partial IV" and the Base IV of the key -- and the
+ *    ciphertext decrypts, with the fixture key, to the plaintext of the input;
+ * 4. the plaintext is encrypted again with the same key and nonce: an AEAD is deterministic, so the bytes are the
+ *    fixture's, and the message rebuilt around them is output.cbor.
+ *
  * A fixture flagged "fail" goes through the same path, minus the intermediates, and has to be rejected somewhere
- * along it: an unexpected tag, an unknown algorithm, a signature that does not verify.
+ * along it: an unexpected tag, an unknown algorithm, a signature that does not verify, a content that does not
+ * decrypt.
  *
  * The algorithms come from {@see CoseWgAlgorithms::manager()}; a fixture needing one that is not registered there is
  * reported as skipped with the identifier, see {@see CoseWgFixtureProvider::skipUnlessSupported()}.
@@ -78,6 +98,17 @@ abstract class CoseWgFixtureTestCase extends TestCase
         'ecdsa-examples/ecdsa-sig-04' => 'ES512 with a P-256 key: this library binds ES512 to P-521, the pairing RFC 9053 section 2.1 suggests, and rejects the key',
         'eddsa-examples/eddsa-02' => 'EdDSA (-8) with an Ed448 key: Cose\Algorithm\Signature\EdDSA\EdDSA computes Ed25519 only; Ed448 is reached through the fully-specified -53 of RFC 9864',
         'eddsa-examples/eddsa-sig-02' => 'EdDSA (-8) with an Ed448 key: Cose\Algorithm\Signature\EdDSA\EdDSA computes Ed25519 only; Ed448 is reached through the fully-specified -53 of RFC 9864',
+    ];
+
+    /**
+     * The intermediates the generator recorded wrongly, each with what is wrong. The message of such a fixture is
+     * verified in full; only the comparison with that intermediate is left out, so that the fixture keeps testing
+     * the primitive and the file stays what upstream ships.
+     *
+     * @var array<string, string>
+     */
+    public const KNOWN_ERRATA = [
+        'chacha-poly-examples/chacha-poly-enc-01' => 'the recorded AAD_hex spells the context "Encrypt1"; the ciphertext was computed over the Enc_structure of RFC 9052 section 5.3, whose context is "Encrypt0", and decrypts with it',
     ];
 
     private Manager $manager;
@@ -109,10 +140,8 @@ abstract class CoseWgFixtureTestCase extends TestCase
         match ($fixture->messageType()) {
             CoseWgFixture::SIGN, CoseWgFixture::SIGN1 => $this->assertSignedFixture($fixture),
             CoseWgFixture::MAC, CoseWgFixture::MAC0 => $this->assertMacedFixture($fixture),
-            default => static::markTestSkipped(sprintf(
-                '%s: the harness has no decryption path yet, see issue #199',
-                $fixture->name()
-            )),
+            CoseWgFixture::ENCRYPT, CoseWgFixture::ENCRYPT0 => $this->assertEncryptedFixture($fixture),
+            default => throw new LogicException(sprintf('%s: unknown message type', $fixture->name())),
         };
     }
 
@@ -337,11 +366,167 @@ abstract class CoseWgFixtureTestCase extends TestCase
         ];
     }
 
+    // --- encryption -------------------------------------------------------------------------------------------------
+
+    private function assertEncryptedFixture(CoseWgFixture $fixture): void
+    {
+        $key = $this->contentKey($fixture);
+
+        if ($fixture->mustFail()) {
+            $this->assertRejected($fixture, fn (): bool => $this->decryptContent($fixture, $key) === $fixture->plaintext());
+
+            return;
+        }
+
+        static::assertSame(
+            bin2hex($fixture->plaintext()),
+            bin2hex($this->decryptContent($fixture, $key)),
+            $fixture->name() . ': the content does not decrypt to the plaintext of the input'
+        );
+
+        // The round trip: an AEAD is deterministic, so encrypting with the fixture nonce and key has to give back the
+        // ciphertext on the wire -- and the message rebuilt around it, the fixture output.
+        [$message, $algorithm, $structure, $ciphertext, $nonce] = $this->encryptionEntry($fixture, $key);
+        $encrypted = $structure->encrypt($algorithm, $key, $fixture->plaintext(), $nonce);
+        static::assertSame(
+            bin2hex($ciphertext),
+            bin2hex($encrypted),
+            sprintf('%s: the ciphertext this library produces is not the one of the fixture', $fixture->name())
+        );
+        if ($fixture->decodeOutput() instanceof $message) {
+            static::assertSame(
+                bin2hex($fixture->outputCbor()),
+                bin2hex((string) $this->rebuild($message, $encrypted)),
+                sprintf('%s: the message rebuilt around that ciphertext is not output.cbor', $fixture->name())
+            );
+        }
+    }
+
     /**
-     * The key the content is MACed with: the one of the "direct" recipient (RFC 9053 section 6.1), which is the only
-     * key management this harness resolves. The fixture records the CEK it used, and the key has to be that CEK.
+     * @throws InvalidArgumentException when the message is rejected before the content is looked at, or when the
+     *                                  content does not authenticate
+     * @return string the plaintext
      */
-    private function contentKey(CoseWgFixture $fixture): Key
+    private function decryptContent(CoseWgFixture $fixture, SymmetricKey $key): string
+    {
+        [, $algorithm, $structure, $ciphertext, $nonce] = $this->encryptionEntry($fixture, $key);
+        $expected = $fixture->aad();
+        if (! $fixture->mustFail() && $expected !== null && ! array_key_exists($fixture->name(), self::KNOWN_ERRATA)) {
+            static::assertSame(bin2hex($expected), bin2hex((string) $structure), sprintf(
+                '%s: the Enc_structure this library builds is not the one the generator authenticated (the structure diverged, not the primitive)',
+                $fixture->name()
+            ));
+        }
+        try {
+            return $structure->decrypt($algorithm, $key, $ciphertext, $nonce);
+        } catch (InvalidArgumentException $e) {
+            if ($fixture->mustFail()) {
+                throw $e;
+            }
+            static::fail(sprintf(
+                '%s: the content does not decrypt with %s although the Enc_structure is the one the generator authenticated (the primitive diverged, not the structure): %s',
+                $fixture->name(),
+                $algorithm::class,
+                $e->getMessage()
+            ));
+        }
+    }
+
+    /**
+     * The decoded message, the algorithm its headers announce, the Enc_structure it authenticates, the ciphertext it
+     * carries and the nonce it was encrypted with.
+     *
+     * @throws InvalidArgumentException when the output is not the announced COSE structure, when the message
+     *                                  announces no algorithm, an algorithm that is not an integer identifier, or one
+     *                                  the manager does not know, or when its IV cannot be resolved
+     * @return array{CoseEncrypt0Tag|CoseEncryptTag, ContentEncryption, Encrypt0Structure|EncryptStructure, string, string}
+     */
+    private function encryptionEntry(CoseWgFixture $fixture, SymmetricKey $key): array
+    {
+        $message = $this->decode($fixture);
+        $externalAad = ByteStringObject::create($fixture->externalAad());
+
+        if ($message instanceof CoseEncrypt0Tag) {
+            $structure = Encrypt0Structure::create($message->getProtectedHeader(), $externalAad);
+        } elseif ($message instanceof CoseEncryptTag) {
+            $structure = EncryptStructure::create($message->getProtectedHeader(), $externalAad);
+        } else {
+            throw new LogicException(sprintf('%s is not an encrypted message', $fixture->name()));
+        }
+
+        $carried = $message->getCiphertext();
+        if ($carried instanceof NullObject) {
+            $ciphertext = $fixture->detachedContent() ?? throw new LogicException(
+                sprintf('%s: the ciphertext is detached and the fixture carries no content', $fixture->name())
+            );
+        } else {
+            $ciphertext = $carried->getValue();
+        }
+
+        $algorithm = $this->algorithm(CoseHeaders::fromMessage($message), ContentEncryption::class);
+        $nonce = InitializationVector::resolve(
+            CoseHeaders::fromMessage($message),
+            $algorithm->nonceLength(),
+            $this->keyWithBaseIv($fixture, $key, $algorithm)
+        );
+        $unsent = $fixture->unsentIv();
+        if ($unsent !== null) {
+            static::assertSame(
+                bin2hex($unsent),
+                bin2hex($nonce),
+                sprintf('%s: the nonce resolved from the Partial IV is not the IV the generator used', $fixture->name())
+            );
+        }
+
+        return [$message, $algorithm, $structure, $ciphertext, $nonce];
+    }
+
+    /**
+     * The content key, completed with the Base IV the generator started from when the message carries a "Partial IV".
+     *
+     * The fixtures do not write the Base IV into the key; they record the full IV the generator did not send. The
+     * Base IV is what that IV XORs to with the left-padded Partial IV (RFC 9052 section 3.1), without the trailing
+     * zeros the generator padded it with: h'89F52F65A1C58093' for both fixtures, the prefix RFC 9052 Appendix C.4.2
+     * names. Handing the key that prefix, rather than the full-length value, is what makes the resolution run the
+     * padding of both operands.
+     */
+    private function keyWithBaseIv(CoseWgFixture $fixture, SymmetricKey $key, ContentEncryption $algorithm): SymmetricKey
+    {
+        $unsent = $fixture->unsentIv();
+        $partialIv = CoseHeaders::fromMessage($this->decode($fixture))->getHeaderParameter(InitializationVector::PARTIAL_IV);
+        if ($unsent === null || ! $partialIv instanceof ByteStringObject) {
+            return $key;
+        }
+        $length = $algorithm->nonceLength();
+        if (strlen($unsent) !== $length) {
+            throw new LogicException(sprintf('%s: the unsent IV is not %d bytes long', $fixture->name(), $length));
+        }
+        $baseIv = rtrim($unsent ^ str_pad($partialIv->getValue(), $length, "\0", STR_PAD_LEFT), "\0");
+
+        return SymmetricKey::create($key->getData() + [
+            Key::BASE_IV => $baseIv,
+        ]);
+    }
+
+    /**
+     * The same message around another ciphertext: the headers and the recipients are kept as decoded.
+     */
+    private function rebuild(CoseEncrypt0Tag|CoseEncryptTag $message, string $ciphertext): CoseEncrypt0Tag|CoseEncryptTag
+    {
+        $items = [$message->getProtectedHeader(), $message->getUnprotectedHeader(), ByteStringObject::create($ciphertext)];
+        if ($message instanceof CoseEncryptTag) {
+            return CoseEncryptTag::create(ListObject::create([...$items, $message->getRecipients()]));
+        }
+
+        return CoseEncrypt0Tag::create(ListObject::create($items));
+    }
+
+    /**
+     * The key the content is MACed or encrypted with: the one of the "direct" recipient (RFC 9053 section 6.1),
+     * which is the only key management this harness resolves. The fixture records the CEK it used, and the key has
+     * to be that CEK.
+     */
+    private function contentKey(CoseWgFixture $fixture): SymmetricKey
     {
         foreach ($fixture->recipients() as $recipient) {
             if ($recipient->algorithmIdentifier() !== CoseWgAlgorithms::DIRECT) {
@@ -445,7 +630,7 @@ abstract class CoseWgFixtureTestCase extends TestCase
     /**
      * The algorithm the headers announce, from the registry.
      *
-     * @template T of SignatureAlgorithm|Mac
+     * @template T of SignatureAlgorithm|Mac|ContentEncryption
      *
      * @param class-string<T> $interface
      *
@@ -454,7 +639,7 @@ abstract class CoseWgFixtureTestCase extends TestCase
      *                                  integers), or one the manager does not know or that is not of the expected kind
      * @return T
      */
-    private function algorithm(CoseHeaders $headers, string $interface): SignatureAlgorithm|Mac
+    private function algorithm(CoseHeaders $headers, string $interface): SignatureAlgorithm|Mac|ContentEncryption
     {
         $alg = $headers->getHeaderParameter(1);
         if ($alg === null) {
