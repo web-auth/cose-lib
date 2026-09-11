@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Cose\Tests\Algorithm\KeyManagement;
 
-use Cose\Algorithm\KeyManagement\A192KW;
-use Cose\Algorithm\KeyManagement\A256KW;
 use function bin2hex;
 use CBOR\ByteStringObject;
 use CBOR\ListObject;
@@ -16,6 +14,8 @@ use CBOR\UnsignedIntegerObject;
 use Cose\Algorithm\ContentEncryption\A128GCM;
 use Cose\Algorithm\ContentEncryption\A256GCM;
 use Cose\Algorithm\KeyManagement\A128KW;
+use Cose\Algorithm\KeyManagement\A192KW;
+use Cose\Algorithm\KeyManagement\A256KW;
 use Cose\Algorithm\KeyManagement\Ecdh;
 use Cose\Algorithm\KeyManagement\ECDH_ES_A128KW;
 use Cose\Algorithm\KeyManagement\ECDH_ES_A192KW;

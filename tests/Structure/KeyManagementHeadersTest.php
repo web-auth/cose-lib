@@ -18,8 +18,6 @@ use Cose\Key\Key;
 use Cose\Key\OkpKey;
 use Cose\Structure\CoseHeaders;
 use Cose\Structure\HeaderMapHelper;
-use Cose\Structure\X509\CoseCertHash;
-use Cose\Structure\X509\X5Chain;
 use function hex2bin;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\Test;
@@ -312,16 +310,11 @@ final class KeyManagementHeadersTest extends TestCase
             MapItem::create(NegativeIntegerObject::create(-29), ByteStringObject::create($certificate)),
         ]);
 
-        $thumbprint = $headers->getX5TSender();
-        $chain = $headers->getX5ChainSender();
-
-        static::assertInstanceOf(CoseCertHash::class, $thumbprint);
-        $this->assertInstanceOf(CoseCertHash::class, $thumbprint);
-        static::assertSame(-16, $thumbprint->hashAlg());
+        static::assertSame(-16, $headers->getX5TSender()?->hashAlg());
+        static::assertSame(str_repeat("\xab", 32), $headers->getX5TSender()?->hashValue());
         static::assertSame('https://example.com/alice.cer', $headers->getX5USender());
-        static::assertInstanceOf(X5Chain::class, $chain);
-        $this->assertInstanceOf(X5Chain::class, $chain);
-        static::assertSame($certificate, $chain->endEntityCertificate());
+        static::assertSame($certificate, $headers->getX5ChainSender()?->endEntityCertificate());
+        static::assertSame(1, $headers->getX5ChainSender()?->count());
     }
 
     #[Test]

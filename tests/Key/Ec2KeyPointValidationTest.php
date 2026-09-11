@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace Cose\Tests\Key;
 
 use function base64_decode;
+use function chr;
 use Cose\Key\Ec2Key;
 use Cose\Key\Key;
 use function hex2bin;
 use InvalidArgumentException;
+use function ord;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use function str_repeat;
 use function strtr;
+use function substr;
 
 /**
  * Ec2Key::isOnCurve() and assertOnCurve(): the point validation of RFC 9053 section 6.3.1.1, which the constructor
@@ -123,7 +126,7 @@ final class Ec2KeyPointValidationTest extends TestCase
     public function aTamperedCoordinateIsNotOnTheCurve(): void
     {
         $y = self::base64url('HlLtdXARY_f55A3fnzQbPcm6hgr34Mp8p-nuzQCE0Zw');
-        $y[31] ^= "\x01";
+        $y = substr($y, 0, 31) . chr(ord($y[31]) ^ 1);
         $key = Ec2Key::create([
             Key::TYPE => Key::TYPE_EC2,
             Ec2Key::DATA_CURVE => Ec2Key::CURVE_P256,

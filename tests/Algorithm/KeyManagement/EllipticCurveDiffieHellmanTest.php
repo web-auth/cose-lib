@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Cose\Tests\Algorithm\KeyManagement;
 
-use Brick\Math\BigInteger;
 use function base64_decode;
 use function bin2hex;
+use Brick\Math\BigInteger;
 use Cose\Algorithm\KeyManagement\EllipticCurveDiffieHellman;
 use Cose\Key\Ec2Key;
 use Cose\Key\Key;
