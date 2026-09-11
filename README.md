@@ -37,7 +37,7 @@ This library implements:
 ✅ **Cryptographic Algorithms**
 - **Signatures**: ECDSA (ES256, ES384, ES512, ES256K), EdDSA (Ed25519, Ed448), RSA (RS256/384/512, PS256/384/512)
 - **Fully-specified identifiers** ([RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html)): ESP256/384/512, ESB256/320/384/512, Ed25519, Ed448
-- **MAC**: HMAC with SHA-256/384/512
+- **MAC**: HMAC with SHA-256/384/512, AES-CBC-MAC with 128/256-bit keys and 64/128-bit tags
 - Compatible with WebAuthn, FIDO2, and digital COVID certificates
 
 ✅ **Key Restrictions** ([RFC 9052](https://www.rfc-editor.org/rfc/rfc9052.html#section-7.1) §7.1)
@@ -310,6 +310,53 @@ the key. They live in the `Cose\Algorithm\Signature\FullySpecified` namespace.
 | HS384 | 6 | HMAC with SHA-384 |
 | HS512 | 7 | HMAC with SHA-512 |
 | HS256/64 | 4 | HMAC with SHA-256 truncated to 64 bits |
+| AES-MAC 128/64 | 14 | AES-CBC-MAC with a 128-bit key, 64-bit tag |
+| AES-MAC 256/64 | 15 | AES-CBC-MAC with a 256-bit key, 64-bit tag |
+| AES-MAC 128/128 | 25 | AES-CBC-MAC with a 128-bit key, 128-bit tag |
+| AES-MAC 256/128 | 26 | AES-CBC-MAC with a 256-bit key, 128-bit tag |
+
+The HMAC algorithms live in `Cose\Algorithm\Mac\HS256` and its siblings, the AES-CBC-MAC ones in
+`Cose\Algorithm\Mac\AESMAC128_64`, `AESMAC256_64`, `AESMAC128_128` and `AESMAC256_128`. All of them implement
+`Cose\Algorithm\Mac\Mac` and are used the same way:
+
+```php
+use Cose\Algorithm\Mac\AESMAC256_64;
+use Cose\Mac\Mac0Structure;
+
+$algorithm = AESMAC256_64::create();
+$toBeMaced = Mac0Structure::create($protectedHeaderAsBytes, $payload);
+
+$tag = $algorithm->hash((string) $toBeMaced, $symmetricKey);           // 8 bytes
+$isValid = $algorithm->verify((string) $toBeMaced, $symmetricKey, $tag); // compared with hash_equals()
+```
+
+> [!WARNING]
+> **AES-CBC-MAC is a MAC for structured messages, not for arbitrary bytes.**
+> [RFC 9053, section 3.2.1](https://www.rfc-editor.org/rfc/rfc9053#section-3.2.1) states two conditions the
+> algorithm classes cannot check for you:
+>
+> - *"A single key must only be used for messages of a fixed or known length."* Otherwise, given two message and
+>   tag pairs, an attacker forges a third. Computing the tag over a `Mac0Structure` or `MacStructure`, as above, is
+>   the mitigation: the `MAC_structure` of [RFC 9052 §6.3](https://www.rfc-editor.org/rfc/rfc9052#section-6.3) is
+>   CBOR, and CBOR encodes the length of every field it holds. A tag computed over `$payload->getValue()` directly
+>   has no such protection — on top of being interoperable with nothing.
+> - *"Cipher Block Chaining (CBC) encryption and CBC-MAC MUST use different keys."* A key that also encrypts
+>   anything in CBC mode turns the last ciphertext block into a valid tag.
+>
+> The construction is AES in CBC mode with an all-zero IV, padding method 1 of ISO/IEC 9797-1 (zero bytes up to
+> the block boundary, none when the message already is a multiple of 16 bytes — the padding the
+> [cose-wg/Examples](https://github.com/cose-wg/Examples/tree/master/cbc-mac-examples) vectors use), and the last
+> block truncated to the tag length. It is **not** AES-CMAC ([RFC 4493](https://www.rfc-editor.org/rfc/rfc4493)).
+>
+> The 64-bit tag variants are the ones constrained devices use; all four identifiers are marked *Recommended: Yes* at
+> IANA and none of them needs an acknowledgement.
+
+#### The AES-CBC-MAC Key
+
+The key must be symmetric, and its `k` must be a byte string of **exactly** the length of the identifier: 16 bytes
+for AES-MAC 128/64 and 128/128, 32 bytes for AES-MAC 256/64 and 256/128. A key of any other length is refused with
+an `InvalidArgumentException` before OpenSSL is reached — RFC 9053 §3.2 ties the key length to the identifier, so it
+is the wrong key rather than a weak one. `AesCbcMac::keyLength()` and `tagLength()` give the lengths in bytes.
 
 #### The HMAC Key
 
@@ -579,11 +626,11 @@ The library includes comprehensive tests including:
 - COVID-19 certificate verification examples
 - Test fixtures with actual certificates
 - The interoperability fixtures of the IETF COSE working group, [cose-wg/Examples](https://github.com/cose-wg/Examples),
-  vendored under [`tests/fixtures/cose-wg/`](tests/fixtures/cose-wg/README.md). Every ECDSA, EdDSA, HMAC and
-  RSASSA-PSS fixture is decoded, rebuilt into its `Sig_structure` or `MAC_structure`, compared with the bytes the
-  working group's generator signed, verified, and signed again; the fixtures the generator broke on purpose are
-  asserted to be rejected. Fixtures for algorithms the library does not implement yet are reported as skipped with
-  the identifier, so `phpunit --display-skipped` lists what is left.
+  vendored under [`tests/fixtures/cose-wg/`](tests/fixtures/cose-wg/README.md). Every ECDSA, EdDSA, HMAC,
+  AES-CBC-MAC and RSASSA-PSS fixture is decoded, rebuilt into its `Sig_structure` or `MAC_structure`, compared with
+  the bytes the working group's generator signed, verified, and signed again; the fixtures the generator broke on
+  purpose are asserted to be rejected. Fixtures for algorithms the library does not implement yet are reported as
+  skipped with the identifier, so `phpunit --display-skipped` lists what is left.
 
 ## Requirements
 

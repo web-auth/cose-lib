@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Cose\Tests\CoseWg;
 
 use function array_search;
+use Cose\Algorithm\Mac\AESMAC128_128;
+use Cose\Algorithm\Mac\AESMAC128_64;
+use Cose\Algorithm\Mac\AESMAC256_128;
+use Cose\Algorithm\Mac\AESMAC256_64;
 use Cose\Algorithm\Mac\HS256;
 use Cose\Algorithm\Mac\HS256Truncated64;
 use Cose\Algorithm\Mac\HS384;
@@ -167,6 +171,10 @@ final class CoseWgAlgorithms
             HS256::create(),
             HS384::create(),
             HS512::create(),
+            AESMAC128_64::create(),
+            AESMAC256_64::create(),
+            AESMAC128_128::create(),
+            AESMAC256_128::create(),
         );
         if (Ed448::isSupported()) {
             $manager->add(Ed448::create());
