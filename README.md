@@ -9,8 +9,15 @@
 
 This library implements:
 - **[RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052)** - COSE: Structures and Process
-- **[RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053)** - COSE: Initial Algorithms
+- **[RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053)** - COSE: Initial Algorithms (signatures, HMAC and the
+  key types)
+- **[RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230)** - RSASSA-PSS (PS256, PS384, PS512) and the RSA key type
+- **[RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812)** - RSASSA-PKCS1-v1_5 (RS256, RS384, RS512, RS1) and
+  ECDSA with secp256k1 (ES256K)
 - **[RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html)** - COSE: Fully-Specified Algorithms
+
+Every algorithm and key type table below carries a *Reference* column naming the RFC and the section that define the
+row, so that a shipped identifier can be traced to its specification without leaving this page.
 
 ## Features
 
@@ -202,6 +209,11 @@ $encoded = (string) $coseSign1;
 - **[Usage Guide](doc/Usage.md)** - Complete documentation with examples
 - **[RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052)** - COSE Structures
 - **[RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053)** - COSE Algorithms
+- **[RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230)** - RSASSA-PSS and RSA keys for COSE
+- **[RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812)** - RSASSA-PKCS1-v1_5 and secp256k1 for COSE
+- **[RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html)** - Fully-Specified Algorithms
+- **[IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)** - The algorithm, key type and curve
+  registries every identifier of this library is checked against
 
 ## Use Cases
 
@@ -217,40 +229,44 @@ This library is perfect for:
 
 ### Signature Algorithms
 
-| Algorithm | Identifier | Description |
-|-----------|------------|-------------|
-| ES256 | -7 | ECDSA with SHA-256 |
-| ES384 | -35 | ECDSA with SHA-384 |
-| ES512 | -36 | ECDSA with SHA-512 |
-| ES256K | -47 | ECDSA with secp256k1 |
-| EdDSA | -8 | EdDSA |
-| Ed25519 | -8 | Alias of EdDSA (Curve25519); see -19 below for the fully-specified form |
-| Ed256 | -260 | Ed25519 over a SHA-256 digest — non-standard, see below |
-| Ed512 | -261 | Ed25519 over a SHA-512 digest — non-standard, see below |
-| RS256 | -257 | RSASSA-PKCS1-v1_5 with SHA-256 |
-| RS384 | -258 | RSASSA-PKCS1-v1_5 with SHA-384 |
-| RS512 | -259 | RSASSA-PKCS1-v1_5 with SHA-512 |
-| PS256 | -37 | RSASSA-PSS with SHA-256 |
-| PS384 | -38 | RSASSA-PSS with SHA-384 |
-| PS512 | -39 | RSASSA-PSS with SHA-512 |
-| RS1 | -65535 | RSASSA-PKCS1-v1_5 with SHA-1 — legacy only, see below |
+| Algorithm | Identifier | Description | Reference |
+|-----------|------------|-------------|-----------|
+| ES256 | -7 | ECDSA with SHA-256 | [RFC 9053 §2.1](https://www.rfc-editor.org/rfc/rfc9053#section-2.1) |
+| ES384 | -35 | ECDSA with SHA-384 | [RFC 9053 §2.1](https://www.rfc-editor.org/rfc/rfc9053#section-2.1) |
+| ES512 | -36 | ECDSA with SHA-512 | [RFC 9053 §2.1](https://www.rfc-editor.org/rfc/rfc9053#section-2.1) |
+| ES256K | -47 | ECDSA with secp256k1 | [RFC 8812 §3.2](https://www.rfc-editor.org/rfc/rfc8812#section-3.2) |
+| EdDSA | -8 | EdDSA | [RFC 9053 §2.2](https://www.rfc-editor.org/rfc/rfc9053#section-2.2) |
+| Ed25519 | -8 | Alias of EdDSA (Curve25519); see -19 below for the fully-specified form | [RFC 9053 §2.2](https://www.rfc-editor.org/rfc/rfc9053#section-2.2) |
+| Ed256 | -260 | Ed25519 over a SHA-256 digest — non-standard, see below | — |
+| Ed512 | -261 | Ed25519 over a SHA-512 digest — non-standard, see below | — |
+| RS256 | -257 | RSASSA-PKCS1-v1_5 with SHA-256 | [RFC 8812 §2](https://www.rfc-editor.org/rfc/rfc8812#section-2) |
+| RS384 | -258 | RSASSA-PKCS1-v1_5 with SHA-384 | [RFC 8812 §2](https://www.rfc-editor.org/rfc/rfc8812#section-2) |
+| RS512 | -259 | RSASSA-PKCS1-v1_5 with SHA-512 | [RFC 8812 §2](https://www.rfc-editor.org/rfc/rfc8812#section-2) |
+| PS256 | -37 | RSASSA-PSS with SHA-256 | [RFC 8230 §2](https://www.rfc-editor.org/rfc/rfc8230#section-2) |
+| PS384 | -38 | RSASSA-PSS with SHA-384 | [RFC 8230 §2](https://www.rfc-editor.org/rfc/rfc8230#section-2) |
+| PS512 | -39 | RSASSA-PSS with SHA-512 | [RFC 8230 §2](https://www.rfc-editor.org/rfc/rfc8230#section-2) |
+| RS1 | -65535 | RSASSA-PKCS1-v1_5 with SHA-1 — legacy only, see below | [RFC 8812 §2](https://www.rfc-editor.org/rfc/rfc8812#section-2) |
+
+The IANA registry marks ES256, ES384, ES512 and EdDSA *Deprecated* since RFC 9864, in favour of the fully-specified
+identifiers below. They stay first-class here: WebAuthn still requires ES256 and EdDSA, and no acknowledgement is
+asked for them. Ed256 and Ed512 are defined by no specification, hence the empty reference; see the warning below.
 
 #### Fully-Specified Algorithms ([RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html))
 
 These identifiers determine the curve and the hash on their own, instead of leaving them to the other parameters of
 the key. They live in the `Cose\Algorithm\Signature\FullySpecified` namespace.
 
-| Algorithm | Identifier | Description |
-|-----------|------------|-------------|
-| ESP256 | -9 | ECDSA with the P-256 curve and SHA-256 |
-| ESP384 | -51 | ECDSA with the P-384 curve and SHA-384 |
-| ESP512 | -52 | ECDSA with the P-521 curve and SHA-512 |
-| ESB256 | -265 | ECDSA with the brainpoolP256r1 curve and SHA-256 |
-| ESB320 | -266 | ECDSA with the brainpoolP320r1 curve and SHA-384 |
-| ESB384 | -267 | ECDSA with the brainpoolP384r1 curve and SHA-384 |
-| ESB512 | -268 | ECDSA with the brainpoolP512r1 curve and SHA-512 |
-| Ed25519 | -19 | EdDSA with the Ed25519 parameter set |
-| Ed448 | -53 | EdDSA with the Ed448 parameter set — requires PHP 8.4 or later |
+| Algorithm | Identifier | Description | Reference |
+|-----------|------------|-------------|-----------|
+| ESP256 | -9 | ECDSA with the P-256 curve and SHA-256 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESP384 | -51 | ECDSA with the P-384 curve and SHA-384 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESP512 | -52 | ECDSA with the P-521 curve and SHA-512 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESB256 | -265 | ECDSA with the brainpoolP256r1 curve and SHA-256 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESB320 | -266 | ECDSA with the brainpoolP320r1 curve and SHA-384 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESB384 | -267 | ECDSA with the brainpoolP384r1 curve and SHA-384 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESB512 | -268 | ECDSA with the brainpoolP512r1 curve and SHA-512 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| Ed25519 | -19 | EdDSA with the Ed25519 parameter set | [RFC 9864 §2.2](https://www.rfc-editor.org/rfc/rfc9864#section-2.2) |
+| Ed448 | -53 | EdDSA with the Ed448 parameter set — requires PHP 8.4 or later | [RFC 9864 §2.2](https://www.rfc-editor.org/rfc/rfc9864#section-2.2) |
 
 > [!NOTE]
 > `Cose\Algorithm\Signature\FullySpecified\Ed25519` (-19) and `Cose\Algorithm\Signature\EdDSA\Ed25519` (-8)
@@ -304,12 +320,12 @@ the key. They live in the `Cose\Algorithm\Signature\FullySpecified` namespace.
 
 ### MAC Algorithms
 
-| Algorithm | Identifier | Description |
-|-----------|------------|-------------|
-| HS256 | 5 | HMAC with SHA-256 |
-| HS384 | 6 | HMAC with SHA-384 |
-| HS512 | 7 | HMAC with SHA-512 |
-| HS256/64 | 4 | HMAC with SHA-256 truncated to 64 bits |
+| Algorithm | Identifier | Description | Reference |
+|-----------|------------|-------------|-----------|
+| HS256 | 5 | HMAC with SHA-256 (IANA name `HMAC 256/256`) | [RFC 9053 §3.1](https://www.rfc-editor.org/rfc/rfc9053#section-3.1) |
+| HS384 | 6 | HMAC with SHA-384 (`HMAC 384/384`) | [RFC 9053 §3.1](https://www.rfc-editor.org/rfc/rfc9053#section-3.1) |
+| HS512 | 7 | HMAC with SHA-512 (`HMAC 512/512`) | [RFC 9053 §3.1](https://www.rfc-editor.org/rfc/rfc9053#section-3.1) |
+| HS256/64 | 4 | HMAC with SHA-256 truncated to 64 bits (`HMAC 256/64`) | [RFC 9053 §3.1](https://www.rfc-editor.org/rfc/rfc9053#section-3.1) |
 
 #### The HMAC Key
 
@@ -350,6 +366,41 @@ if (! SymmetricKeyValidator::create()->isValid($key)) {
     // reject the key
 }
 ```
+
+### Key Types
+
+The `Cose\Key` classes cover the four key types of the IANA
+[COSE Key Types](https://www.iana.org/assignments/cose/cose.xhtml#key-type) registry that the algorithms above use.
+`Key::createFromData()` picks the class from `kty` (label 1); the parameter labels are the `DATA_*` constants of each
+class.
+
+| Key type | `kty` | Class | Parameters | Reference |
+|----------|-------|-------|------------|-----------|
+| OKP | 1 | `Cose\Key\OkpKey` | `crv` (-1), `x` (-2), `d` (-4) | [RFC 9053 §7.2](https://www.rfc-editor.org/rfc/rfc9053#section-7.2) |
+| EC2 | 2 | `Cose\Key\Ec2Key` | `crv` (-1), `x` (-2), `y` (-3), `d` (-4) | [RFC 9053 §7.1.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1.1) |
+| RSA | 3 | `Cose\Key\RsaKey` | `n` (-1), `e` (-2), `d` (-3), `p` (-4), `q` (-5), `dP` (-6), `dQ` (-7), `qInv` (-8), `other` (-9), `r_i` (-10), `d_i` (-11), `t_i` (-12) | [RFC 8230 §4](https://www.rfc-editor.org/rfc/rfc8230#section-4) |
+| Symmetric | 4 | `Cose\Key\SymmetricKey` | `k` (-1) | [RFC 9053 §7.3](https://www.rfc-editor.org/rfc/rfc9053#section-7.3) |
+
+The curves an `OkpKey` or an `Ec2Key` may carry in `crv`, with the `CURVE_*` constant naming each value:
+
+| Curve | `crv` | Key type | Constant | Reference |
+|-------|-------|----------|----------|-----------|
+| P-256 | 1 | EC2 | `Ec2Key::CURVE_P256` | [RFC 9053 §7.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1) |
+| P-384 | 2 | EC2 | `Ec2Key::CURVE_P384` | [RFC 9053 §7.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1) |
+| P-521 | 3 | EC2 | `Ec2Key::CURVE_P521` | [RFC 9053 §7.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1) |
+| X25519 | 4 | OKP | `OkpKey::CURVE_X25519` | [RFC 9053 §7.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1) |
+| X448 | 5 | OKP | `OkpKey::CURVE_X448` | [RFC 9053 §7.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1) |
+| Ed25519 | 6 | OKP | `OkpKey::CURVE_ED25519` | [RFC 9053 §7.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1) |
+| Ed448 | 7 | OKP | `OkpKey::CURVE_ED448` | [RFC 9053 §7.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1) |
+| secp256k1 | 8 | EC2 | `Ec2Key::CURVE_P256K` | [RFC 8812 §4.2](https://www.rfc-editor.org/rfc/rfc8812#section-4.2) |
+| brainpoolP256r1 | 256 | EC2 | `Ec2Key::CURVE_BP256` | [ISO/IEC 18013-5:2021 §9.1.5.2](https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves) |
+| brainpoolP320r1 | 257 | EC2 | `Ec2Key::CURVE_BP320` | [ISO/IEC 18013-5:2021 §9.1.5.2](https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves) |
+| brainpoolP384r1 | 258 | EC2 | `Ec2Key::CURVE_BP384` | [ISO/IEC 18013-5:2021 §9.1.5.2](https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves) |
+| brainpoolP512r1 | 259 | EC2 | `Ec2Key::CURVE_BP512` | [ISO/IEC 18013-5:2021 §9.1.5.2](https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves) |
+
+X25519 and X448 are registered "for use w/ ECDH only": an `OkpKey` accepts them, but no algorithm of this library
+uses them yet. The brainpool curves are registered at IANA by ISO/IEC 18013-5 rather than by an RFC; the link goes to
+the registry entry.
 
 ## Signature Verification Contract
 
