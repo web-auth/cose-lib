@@ -19,8 +19,10 @@ use Cose\Structure\CoseStructure;
  *
  *
  * The fields a decoded message supplies are typed to accept the indefinite-length byte strings the cbor-php
- * accessors can hand back, and are kept exactly as they were given: a cryptographic structure has to embed the
- * protected bucket byte for byte, or the signature the sender computed over it no longer verifies.
+ * accessors can hand back, and are kept as they were given: a cryptographic structure has to embed the protected
+ * bucket byte for byte, or the signature the sender computed over it no longer verifies. The one exception is the
+ * empty map wrapped in a byte string (h'a0'), which RFC 9052 section 3 allows on the wire but which the structures
+ * of sections 4.4, 5.3 and 6.3 write as a zero-length byte string, see {@see CoseStructure::emptyOrSerializedMap()}.
  * @see https://www.rfc-editor.org/rfc/rfc9052#section-5.3
  * @see \Cose\Tests\Structure\CoseStructureTest
  */
@@ -59,6 +61,6 @@ final class EncryptStructure extends CoseStructure
 
     protected function items(): array
     {
-        return [$this->protectedHeader, $this->externalAad];
+        return [self::emptyOrSerializedMap($this->protectedHeader), $this->externalAad];
     }
 }

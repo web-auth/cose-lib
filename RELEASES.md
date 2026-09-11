@@ -24,6 +24,25 @@ This matrix is the single source of truth for the branches under support; [SECUR
 
 ## Upgrading
 
+### 4.8.x to 4.9.x
+
+**The interoperability fixtures of the IETF COSE working group are part of the test suite.**
+[cose-wg/Examples](https://github.com/cose-wg/Examples) is vendored under `tests/fixtures/cose-wg/`, with a harness
+(`tests/CoseWg/`) that verifies every fixture this library has an algorithm for and reports the others as skipped
+with the missing identifier. Two behaviours changed on the way, both additive:
+
+- **An empty protected bucket written as `h'a0'` is verified.** RFC 9052 §3 lets a sender encode an empty protected
+  header either as the zero-length byte string or as an empty map wrapped in a byte string, and §§4.4, 5.3 and 6.3
+  write the corresponding field of every cryptographic structure as the zero-length byte string. The structure
+  classes (`Signature1`, `Signature`, `Mac0Structure`, `MacStructure`, `Encrypt0Structure`, `EncryptStructure`,
+  `RecipientStructure`) now apply that rule through `CoseStructure::emptyOrSerializedMap()`: a message carrying
+  `h'a0'` used to be verified over `h'a0'` and fail against every conforming sender; it now verifies. A non-empty
+  bucket is embedded byte for byte, as before.
+- **The IANA names of the key types are accepted.** RFC 9053 registers key type 2 as `EC2` and key type 4 as
+  `Symmetric`; only the JOSE spellings `EC` and `oct` were accepted. `Key::TYPE_NAME_EC2_IANA` and
+  `Key::TYPE_NAME_OCT_IANA` name the new forms, `Key::createFromData()` dispatches them, and the new
+  `Key::typeIs(Key::TYPE_*)` answers for every form of a key type. `Key::type()` still returns the form supplied.
+
 ### 4.7.x to 4.8.x
 
 **The six COSE message classes are deprecated.** `Cose\Signature\CoseSign1Tag`, `Cose\Signature\CoseSignTag`,

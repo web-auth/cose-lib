@@ -17,6 +17,7 @@ use CBOR\NegativeIntegerObject;
 use CBOR\Tag\CoseSign1Tag;
 use CBOR\TextStringObject;
 use CBOR\UnsignedIntegerObject;
+use Cose\Signature\Signature1;
 use Cose\Structure\CoseHeaders;
 use Cose\Structure\HeaderMapHelper;
 
@@ -75,6 +76,16 @@ foreach (['' => "h''", "\xa0" => "h'a0'"] as $bytes => $description) {
     example_assert(count($headers->getProtectedHeaderAsMap()) === 0, $description . ' is an empty header');
 }
 example_line('encodeProtected([])', "h'" . bin2hex(HeaderMapHelper::encodeProtected(MapObject::create())->getValue()) . "'");
+
+// Sections 4.4, 5.3 and 6.3 write the protected field of every cryptographic structure as the zero-length byte string
+// when there are no protected attributes, so the two spellings yield the same Sig_structure: a signer that sent h'a0' after
+// computing over h'' -- the "Redo protected" case of the cose-wg/Examples fixtures -- still verifies.
+$payload = ByteStringObject::create('payload');
+example_assert(
+    (string) Signature1::create(ByteStringObject::create(''), $payload)
+        === (string) Signature1::create(ByteStringObject::create("\xa0"), $payload),
+    "h'' and h'a0' give the same Sig_structure"
+);
 echo PHP_EOL;
 
 // --- 4. the protected bucket holds exactly one CBOR item -----------------------

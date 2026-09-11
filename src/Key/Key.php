@@ -31,11 +31,29 @@ class Key
 
     public const TYPE_NAME_OKP = 'OKP';
 
+    /**
+     * The JOSE spelling of the EC2 key type, which a key converted from a JWK carries. RFC 9053 section 7.1 registers
+     * the type under the name of TYPE_NAME_EC2_IANA; both are accepted.
+     */
     public const TYPE_NAME_EC2 = 'EC';
 
     public const TYPE_NAME_RSA = 'RSA';
 
+    /**
+     * The JOSE spelling of the symmetric key type, which a key converted from a JWK carries. RFC 9053 section 7.3
+     * registers the type under the name of TYPE_NAME_OCT_IANA; both are accepted.
+     */
     public const TYPE_NAME_OCT = 'oct';
+
+    /**
+     * The name of key type 2 in the IANA "COSE Key Types" registry (RFC 9053, section 7.1, table 19).
+     */
+    public const TYPE_NAME_EC2_IANA = 'EC2';
+
+    /**
+     * The name of key type 4 in the IANA "COSE Key Types" registry (RFC 9053, section 7.3, table 21).
+     */
+    public const TYPE_NAME_OCT_IANA = 'Symmetric';
 
     public const KID = 2;
 
@@ -88,6 +106,19 @@ class Key
     ];
 
     /**
+     * The names each registered key type may be given under (RFC 9052 section 7.1 types "kty" as "tstr / int"):
+     * the IANA name, and the JOSE spelling where the two differ.
+     *
+     * @var array<int, list<string>>
+     */
+    private const TYPE_NAMES = [
+        self::TYPE_OKP => [self::TYPE_NAME_OKP],
+        self::TYPE_EC2 => [self::TYPE_NAME_EC2_IANA, self::TYPE_NAME_EC2],
+        self::TYPE_RSA => [self::TYPE_NAME_RSA],
+        self::TYPE_OCT => [self::TYPE_NAME_OCT_IANA, self::TYPE_NAME_OCT],
+    ];
+
+    /**
      * @var array<int|string, mixed>
      */
     private readonly array $data;
@@ -132,16 +163,33 @@ class Key
 
         return match ($data[self::TYPE]) {
             self::TYPE_OKP, '1', self::TYPE_NAME_OKP => new OkpKey($data),
-            self::TYPE_EC2, '2', self::TYPE_NAME_EC2 => new Ec2Key($data),
+            self::TYPE_EC2, '2', self::TYPE_NAME_EC2, self::TYPE_NAME_EC2_IANA => new Ec2Key($data),
             self::TYPE_RSA, '3', self::TYPE_NAME_RSA => new RsaKey($data),
-            self::TYPE_OCT, '4', self::TYPE_NAME_OCT => new SymmetricKey($data),
+            self::TYPE_OCT, '4', self::TYPE_NAME_OCT, self::TYPE_NAME_OCT_IANA => new SymmetricKey($data),
             default => self::create($data),
         };
     }
 
+    /**
+     * The key type as the key carries it: the value of the IANA "COSE Key Types" registry, or one of its names.
+     */
     public function type(): int|string
     {
         return $this->data[self::TYPE];
+    }
+
+    /**
+     * Whether the key is of the given registry type, whichever of the forms of TYPE_NAMES it carries it under.
+     *
+     * @param int $type one of the TYPE_* constants
+     */
+    public function typeIs(int $type): bool
+    {
+        // Read raw rather than through type(): the value comes from the wire, and a "kty" that is neither an
+        // integer nor a string has to be answered with false, not with the TypeError of type()'s return type.
+        $actual = $this->data[self::TYPE];
+
+        return $actual === $type || in_array($actual, self::TYPE_NAMES[$type] ?? [], true);
     }
 
     /**

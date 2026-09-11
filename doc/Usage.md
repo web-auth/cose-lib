@@ -116,6 +116,13 @@ The protected header is passed as the **byte string the message carries**, not a
 it verbatim, or the signature no longer verifies. `HeaderMapHelper::encodeProtected()` produces those bytes from a
 map, applying the RFC 9052 §3 rules on the way out.
 
+There is one exception, and the structures apply it themselves. §3 lets a sender write an empty protected bucket
+either as the zero-length byte string `h''` or as an empty map wrapped in a byte string, `h'a0'`, and requires
+recipients to accept both; §§4.4, 5.3 and 6.3 then define the protected field of every structure with "If there are
+no protected attributes, a zero-length byte string is used". A message carrying `h'a0'` is therefore verified over
+`h''` — the bytes its sender computed — whichever form travels on the wire. `CoseStructure::emptyOrSerializedMap()`
+is that rule, and only `h'a0'` is affected: a non-empty bucket is never re-encoded.
+
 Every structure takes the optional `external_aad` of §4.4 as its last argument, defaulting to the zero-length byte
 string the RFC prescribes:
 
@@ -899,7 +906,10 @@ shapes. The `Key` classes settle them all at construction time:
 - a key type or a curve given as the numeric string spomky-labs/cbor-php produces when it decodes a CBOR integer
   (`'2'`, `'-1'`) is stored as the integer it denotes, so `Key::type()` always compares equal to `Key::TYPE_EC2` and
   friends, whether the key was decoded from CBOR or built by hand;
-- a key type may also be given by name: `EC`, `OKP`, `RSA` or `oct`;
+- a key type may also be given by name — the names of the IANA
+  [COSE Key Types](https://www.iana.org/assignments/cose/cose.xhtml#key-type) registry, `OKP`, `EC2`, `RSA` and
+  `Symmetric`, or the JOSE spellings `EC` and `oct` a key converted from a JWK carries. `Key::typeIs(Key::TYPE_EC2)`
+  answers for every form, while `type()` keeps returning the form supplied;
 - a curve may be given by name — `P-256`, `P-384`, `P-521`, `secp256k1`, `brainpoolP256r1` and so on. `curve()`
   returns the form the key carries, and `Ec2Key::curveId()` / `OkpKey::curveId()` return the value of the IANA
   [COSE Elliptic Curves](https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves) registry whatever that

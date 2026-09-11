@@ -89,7 +89,7 @@ abstract class Hmac implements Mac, KeyRestrictionAware
      */
     private function checKey(Key $key, int $operation): string
     {
-        if ($key->type() !== Key::TYPE_OCT && $key->type() !== Key::TYPE_NAME_OCT) {
+        if (! $key->typeIs(Key::TYPE_OCT)) {
             throw new InvalidArgumentException('Invalid key. Must be of type symmetric');
         }
 

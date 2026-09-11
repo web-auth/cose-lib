@@ -25,6 +25,7 @@ use Cose\Mac\MacStructure;
 use Cose\Signature\CoseSignature;
 use Cose\Signature\Signature;
 use Cose\Signature\Signature1;
+use Cose\Structure\CoseStructure;
 use Cose\Structure\HeaderMapHelper;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -229,6 +230,70 @@ final class CoseStructureTest extends TestCase
             static::assertStringContainsString('external', (string) $withAad[$index]);
             static::assertNotSame((string) $structure, (string) $withAad[$index]);
         }
+    }
+
+    /**
+     * RFC 9052 section 3: "Senders SHOULD encode a zero-length map as a zero-length byte string rather than as a
+     * zero-length map (encoded as h'a0') [...] Recipients MUST accept both a zero-length byte string and a zero-length
+     * map encoded in a byte string." Sections 4.4, 5.3 and 6.3 then define the protected field of every structure
+     * with "If there are no protected attributes, a zero-length byte string is used": a message carrying h'a0' is verified
+     * over the very bytes its sender computed, which is what the "Redo protected" fixtures of cose-wg/Examples check.
+     */
+    #[Test]
+    public function anEmptyMapProtectedBucketIsTheZeroLengthByteStringInEveryStructure(): void
+    {
+        // Given
+        $empty = ByteStringObject::create('');
+        $emptyMap = ByteStringObject::create("\xa0");
+        $payload = ByteStringObject::create('This is the content.');
+        $build = static fn (ByteStringObject $header): array => [
+            (string) Signature1::create($header, $payload),
+            (string) Signature::create($header, $header, $payload),
+            (string) Mac0Structure::create($header, $payload),
+            (string) MacStructure::create($header, $payload),
+            (string) Encrypt0Structure::create($header),
+            (string) EncryptStructure::create($header),
+            (string) RecipientStructure::forEncryptRecipient($header),
+            (string) RecipientStructure::forMacRecipient($header),
+            (string) RecipientStructure::forNestedRecipient($header),
+        ];
+
+        // When / Then: the two forms of an empty bucket yield the same bytes, and neither carries the map
+        static::assertSame($build($empty), $build($emptyMap));
+        foreach ($build($emptyMap) as $bytes) {
+            static::assertStringNotContainsString("\x41\xa0", $bytes);
+        }
+        // A non-empty bucket is embedded as it is: h'a1 01 26' is not re-encoded, and a map that merely starts with
+        // a0 is not an empty map.
+        static::assertSame("\x43\xa1\x01\x26", (string) CoseStructure::emptyOrSerializedMap(ByteStringObject::create("\xa1\x01\x26")));
+        static::assertSame("\x42\xa0\x00", (string) CoseStructure::emptyOrSerializedMap(ByteStringObject::create("\xa0\x00")));
+        static::assertSame('', CoseStructure::emptyOrSerializedMap($emptyMap)->getValue());
+    }
+
+    /**
+     * The "Redo protected" case of the cose-wg/Examples sign1-tests, end to end: the signer computed over a
+     * zero-length body_protected and sent h'a0' in its place, and the message verifies.
+     */
+    #[Test]
+    public function aSign1CarryingAnEmptyMapProtectedBucketVerifies(): void
+    {
+        // Given: sign1-tests/sign-pass-01, whose protected bucket is h'a0' and whose "alg" sits unprotected
+        $message = self::decode(
+            'd28441a0a201260442313154546869732069732074686520636f6e74656e742e584087db0d2e5571843b78ac33ecb2830df7b6e0a4d5'
+            . 'b7376de336b23c591c90c425317e56127fbe04370097ce347087b233bf722b64072beb4486bda4031d27244f'
+        );
+        static::assertInstanceOf(CoseSign1Tag::class, $message);
+        static::assertSame("\xa0", $message->getProtectedHeader()->getValue());
+
+        // When
+        $toBeSigned = Signature1::create($message->getProtectedHeader(), $message->getPayload());
+
+        // Then: the Sig_structure the fixture records, and a signature that verifies over it
+        static::assertSame(
+            '846a5369676e617475726531404054546869732069732074686520636f6e74656e742e',
+            bin2hex((string) $toBeSigned)
+        );
+        static::assertTrue(ES256::create()->verify((string) $toBeSigned, self::ecKey(), $message->getSignature()->getValue()));
     }
 
     /**
