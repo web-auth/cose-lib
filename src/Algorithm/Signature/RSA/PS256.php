@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cose\Algorithm\Signature\RSA;
 
-use Cose\Hash;
+use Cose\Algorithm\Hash\Hash;
+use Cose\Algorithm\Hash\SHA256;
 use Cose\Key\RsaKeyValidator;
 
 final class PS256 extends PSSRSA
@@ -23,6 +24,6 @@ final class PS256 extends PSSRSA
 
     protected function getHashAlgorithm(): Hash
     {
-        return Hash::sha256();
+        return SHA256::create();
     }
 }

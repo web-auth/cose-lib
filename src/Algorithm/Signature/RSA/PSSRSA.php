@@ -6,11 +6,11 @@ namespace Cose\Algorithm\Signature\RSA;
 
 use Brick\Math\Exception\MathException;
 use function chr;
+use Cose\Algorithm\Hash\Hash;
 use Cose\Algorithm\KeyRestrictionAware;
 use Cose\Algorithm\KeyRestrictionEnforcement;
 use Cose\Algorithm\Signature\Signature;
 use Cose\BigInteger;
-use Cose\Hash;
 use Cose\Key\Key;
 use Cose\Key\RsaKey;
 use Cose\Key\RsaKeyValidator;
@@ -445,7 +445,7 @@ abstract class PSSRSA implements Signature, KeyRestrictionAware
     private function getMGF1(string $mgfSeed, int $maskLen, Hash $mgfHash): string
     {
         $t = '';
-        $count = intdiv($maskLen + $mgfHash->getLength() - 1, $mgfHash->getLength());
+        $count = intdiv($maskLen + $mgfHash->length() - 1, $mgfHash->length());
         for ($i = 0; $i < $count; ++$i) {
             $c = pack('N', $i);
             $t .= $mgfHash->hash($mgfSeed . $c);
@@ -472,7 +472,7 @@ abstract class PSSRSA implements Signature, KeyRestrictionAware
     private function encodeEMSAPSS(string $message, int $emBits, Hash $hash): string
     {
         $emLen = intdiv($emBits + 7, 8);
-        $hLen = $hash->getLength();
+        $hLen = $hash->length();
         $sLen = $hLen;
         $mHash = $hash->hash($message);
         if ($emLen < $hLen + $sLen + 2) {
@@ -498,7 +498,7 @@ abstract class PSSRSA implements Signature, KeyRestrictionAware
     private function verifyEMSAPSS(string $m, string $em, int $emBits, Hash $hash): bool
     {
         $emLen = intdiv($emBits + 7, 8);
-        $hLen = $hash->getLength();
+        $hLen = $hash->length();
         $sLen = $hLen;
         $mHash = $hash->hash($m);
         // Every check below is a step whose failure RFC 8017, section 9.1.2 defines as "output 'inconsistent' and
@@ -518,7 +518,7 @@ abstract class PSSRSA implements Signature, KeyRestrictionAware
         if (($maskedDB[0] & $mask) !== chr(0)) {
             return false;
         }
-        $dbMask = $this->getMGF1($h, $emLen - $hLen - 1, $hash/* MGF */);
+        $dbMask = $this->getMGF1($h, $emLen - $hLen - 1, $hash);
         $db = $maskedDB ^ $dbMask;
         $db[0] = ~$mask & $db[0];
         $temp = $emLen - $hLen - $sLen - 2;

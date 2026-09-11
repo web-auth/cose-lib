@@ -60,7 +60,7 @@ final class RfcReferencesTest extends TestCase
     /**
      * The RFCs the library implements, as the README and composer.json have to declare them.
      */
-    private const IMPLEMENTED_RFCS = [9052, 9053, 8230, 8812, 9864, 9596, 9597];
+    private const IMPLEMENTED_RFCS = [9052, 9053, 8230, 8812, 9864, 9596, 9597, 9054];
 
     /**
      * Identifier => [documented name, RFC number, section]. The section is the one the RFC itself defines the
@@ -111,6 +111,14 @@ final class RfcReferencesTest extends TestCase
         32 => ['AES-CCM-64-128-128', 9053, '4.2'],
         33 => ['AES-CCM-64-128-256', 9053, '4.2'],
         24 => ['ChaCha20/Poly1305', 9053, '4.3'],
+        -14 => ['SHA-1', 9054, '3.1'],
+        -15 => ['SHA-256/64', 9054, '3.2'],
+        -16 => ['SHA-256', 9054, '3.2'],
+        -17 => ['SHA-512/256', 9054, '3.2'],
+        -18 => ['SHAKE128', 9054, '3.3'],
+        -43 => ['SHA-384', 9054, '3.2'],
+        -44 => ['SHA-512', 9054, '3.2'],
+        -45 => ['SHAKE256', 9054, '3.3'],
     ];
 
     /**
@@ -139,6 +147,12 @@ final class RfcReferencesTest extends TestCase
         'A128CCM_64_128' => 'AES-CCM-64-128-128',
         'A256CCM_64_128' => 'AES-CCM-64-128-256',
         'ChaCha20Poly1305' => 'ChaCha20/Poly1305',
+        'SHA1' => 'SHA-1',
+        'SHA256_64' => 'SHA-256/64',
+        'SHA256' => 'SHA-256',
+        'SHA512_256' => 'SHA-512/256',
+        'SHA384' => 'SHA-384',
+        'SHA512' => 'SHA-512',
     ];
 
     /**

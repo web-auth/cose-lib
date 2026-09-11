@@ -42,6 +42,24 @@ header parameter and the `Base IV` of the key (RFC 9052 §3.1). `examples/04-enc
 
 The key management algorithms of RFC 9053 §5–6 are not part of this release; see issue #201.
 
+**The hash algorithms of RFC 9054 are implemented.** `Cose\Algorithm\Hash` holds `SHA1` (-14), `SHA256_64` (-15),
+`SHA256` (-16), `SHA512_256` (-17), `SHAKE128` (-18), `SHA384` (-43), `SHA512` (-44) and `SHAKE256` (-45), with the
+matching `Algorithms::COSE_ALGORITHM_SHA_*` and `COSE_ALGORITHM_SHAKE*` constants. Each has `hash()` and `length()`
+and registers in a `Manager` like any other algorithm. The IANA recommendation *Filter Only* of SHA-1 and SHA-256/64
+is a type: all eight implement `FilterOnlyHash`, only the six recommended ones implement `Hash`, so a parameter typed
+`Hash` refuses the two — under PHPStan and Psalm, and with a `TypeError` at runtime. SHAKE128 and SHAKE256 are
+computed by a pure PHP Keccak sponge (`Keccak`, internal), PHP having no primitive for them; it needs 64-bit
+integers, which `SHAKE128::isSupported()` reports. Two points to know:
+
+- **`Cose\Hash` is gone.** The class was `@internal`, served the RSASSA-PSS code only, and its name would have named
+  two different things once the RFC 9054 classes existed. `PS256`, `PS384` and `PS512` now take their digest from
+  `Cose\Algorithm\Hash\SHA256`, `SHA384` and `SHA512`; the signatures they produce and verify are unchanged. Code
+  that used `Cose\Hash` despite the marker replaces `Hash::sha256()` with `SHA256::create()` and `getLength()` with
+  `length()`.
+- The two maps of `Algorithms` (`COSE_ALGORITHM_MAP`, `COSE_HASH_MAP`) still describe signature identifiers only:
+  they answer "which digest does OpenSSL sign with", which SHA-256/64 and the SHAKE functions have no answer to. A
+  hash identifier resolves through a `Manager`.
+
 **The interoperability fixtures of the IETF COSE working group are part of the test suite.**
 [cose-wg/Examples](https://github.com/cose-wg/Examples) is vendored under `tests/fixtures/cose-wg/`, with a harness
 (`tests/CoseWg/`) that verifies every fixture this library has an algorithm for and reports the others as skipped
