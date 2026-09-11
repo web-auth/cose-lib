@@ -162,10 +162,20 @@ final class VerificationContractTest extends TestCase
         yield 'ESP384' => [ESP384::create(), self::ecKey('secp384r1', Ec2Key::CURVE_P384, 48), 96];
         yield 'ESP512' => [ESP512::create(), self::ecKey('secp521r1', Ec2Key::CURVE_P521, 66), 132];
 
-        yield 'ESB256' => [ESB256::create(), self::ecKey('brainpoolP256r1', Ec2Key::CURVE_BP256, 32), 64];
-        yield 'ESB320' => [ESB320::create(), self::ecKey('brainpoolP320r1', Ec2Key::CURVE_BP320, 40), 80];
-        yield 'ESB384' => [ESB384::create(), self::ecKey('brainpoolP384r1', Ec2Key::CURVE_BP384, 48), 96];
-        yield 'ESB512' => [ESB512::create(), self::ecKey('brainpoolP512r1', Ec2Key::CURVE_BP512, 64), 128];
+        // The Brainpool curves are not in every OpenSSL build; on one without them the algorithm cannot be built,
+        // nor the key generated.
+        if (ESB256::isSupported()) {
+            yield 'ESB256' => [ESB256::create(), self::ecKey('brainpoolP256r1', Ec2Key::CURVE_BP256, 32), 64];
+        }
+        if (ESB320::isSupported()) {
+            yield 'ESB320' => [ESB320::create(), self::ecKey('brainpoolP320r1', Ec2Key::CURVE_BP320, 40), 80];
+        }
+        if (ESB384::isSupported()) {
+            yield 'ESB384' => [ESB384::create(), self::ecKey('brainpoolP384r1', Ec2Key::CURVE_BP384, 48), 96];
+        }
+        if (ESB512::isSupported()) {
+            yield 'ESB512' => [ESB512::create(), self::ecKey('brainpoolP512r1', Ec2Key::CURVE_BP512, 64), 128];
+        }
 
         yield 'EdDSA' => [new EdDSA(), self::ed25519Key(), 64];
         yield 'Ed25519 (polymorphic)' => [PolymorphicEd25519::create(), self::ed25519Key(), 64];

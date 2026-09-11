@@ -1,0 +1,37 @@
+{
+   "title": "Ed448-01: Ed448 (-53) - Ed448 - sign",
+   "input": {
+      "plaintext": "This is the content.",
+      "sign": {
+         "protected": {},
+         "signers": [
+            {
+               "key": {
+                  "kty": "OKP",
+                  "kid": "ed448",
+                  "crv": "Ed448",
+                  "x_hex": "5fd7449b59b461fd2ce787ec616ad46a1da1342485a70e1f8a0ea75d80e96778edf124769b46c7061bd6783df1e50f6cd1fa1abeafe8256180",
+                  "d_hex": "6c82a562cb808d10d632be89c8513ebf6c929f34ddfa8c9f63c9960ef6e348a3528c8a3fcc2f044e39a3fc5b94492f8f032e7549a20098f95b"
+               },
+               "unprotected": {
+                  "kid": "ed448"
+               },
+               "protected": {
+                  "alg": "Ed448"
+               }
+            }
+         ]
+      }
+   },
+   "intermediates": {
+      "signers": [
+         {
+            "ToBeSign_hex": "85695369676E61747572654044A10138344054546869732069732074686520636F6E74656E742E"
+         }
+      ]
+   },
+   "output": {
+      "cbor_diag": "98([h'', {}, h'546869732069732074686520636F6E74656E742E', [[h'A1013834', {4: h'6564343438'}, h'1C381DE515B79F8AB360CB657BF07E6C3AAB173F10612269846AF53ED121CB37BB8DC48B92D30304B86FE63AFE65F7D6C32C96042CAD9E650026CA82B235C444C3B5D05EEA0EEE6F73559F34D9062BBD4AC5B521821D2F2014CDAF977898C7B6065EA105AB7B800967CCCDC292214ADC2D00']]])",
+      "cbor": "D8628440A054546869732069732074686520636F6E74656E742E818344A1013834A10445656434343858721C381DE515B79F8AB360CB657BF07E6C3AAB173F10612269846AF53ED121CB37BB8DC48B92D30304B86FE63AFE65F7D6C32C96042CAD9E650026CA82B235C444C3B5D05EEA0EEE6F73559F34D9062BBD4AC5B521821D2F2014CDAF977898C7B6065EA105AB7B800967CCCDC292214ADC2D00"
+   }
+}

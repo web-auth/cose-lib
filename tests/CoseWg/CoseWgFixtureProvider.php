@@ -62,8 +62,19 @@ trait CoseWgFixtureProvider
      */
     public static function fixturesOf(string ...$directories): iterable
     {
+        yield from self::fixturesUnder(self::fixtureRoot(), ...$directories);
+    }
+
+    /**
+     * Every fixture of the given directories of another root written in the cose-wg/Examples schema, such as
+     * tests/fixtures/rfc9864: what a suite over fixtures this project produced itself calls.
+     *
+     * @return iterable<string, array{CoseWgFixture}>
+     */
+    public static function fixturesUnder(string $root, string ...$directories): iterable
+    {
         foreach ($directories as $directory) {
-            $files = glob(sprintf('%s/%s/*.json', self::fixtureRoot(), $directory));
+            $files = glob(sprintf('%s/%s/*.json', $root, $directory));
             if ($files === false || $files === []) {
                 throw new LogicException(sprintf('The fixture directory "%s" is missing or empty', $directory));
             }

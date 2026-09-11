@@ -11,10 +11,15 @@ use const OPENSSL_ALGO_SHA512;
 /**
  * ECDSA using the brainpoolP512r1 curve and SHA-512.
  *
+ * The brainpoolP512r1 curve is not in every OpenSSL build: call `isSupported()` before use when the platform is not
+ * known in advance; create() throws a RuntimeException on a build without it.
+ *
  * @see https://www.rfc-editor.org/rfc/rfc9864.html#section-2.1
  */
 final class ESB512 extends ECDSA
 {
+    use RequiresAnOpenSslCurve;
+
     public const ID = -268;
 
     public static function create(): self
@@ -40,5 +45,15 @@ final class ESB512 extends ECDSA
     protected function getSignaturePartLength(): int
     {
         return 128;
+    }
+
+    protected static function curveName(): string
+    {
+        return Ec2Key::CURVE_NAME_BP512;
+    }
+
+    protected static function algorithmName(): string
+    {
+        return 'ESB512';
     }
 }

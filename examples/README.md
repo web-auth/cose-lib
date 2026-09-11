@@ -25,6 +25,7 @@ Every CBOR item is printed as hex in full, never truncated, so it can be pasted 
 | [`07-detached-and-external-aad.php`](07-detached-and-external-aad.php) | Detached content, and binding context that never travels |
 | [`08-cwt.php`](08-cwt.php) | CBOR Web Tokens: verify first, then read the claims; `typ` and `CWT Claims` in the header |
 | [`09-migration.php`](09-migration.php) | Moving off the deprecated `Cose\...Tag` classes |
+| [`10-fully-specified-algorithms.php`](10-fully-specified-algorithms.php) | RFC 9864: the fully-specified identifiers next to the polymorphic ones, the curve binding, and the platform gates |
 
 ## What the library does and does not do
 
