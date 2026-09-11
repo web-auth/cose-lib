@@ -133,6 +133,12 @@ validation, revocation and trust anchors are the application's, as is dereferenc
 string. `HeaderMapHelper::assertUriValue()` is the value check behind it (a text string, tagged 32 or not, with a
 scheme). Nothing existing changes. See [doc/Usage.md](doc/Usage.md#x509-header-parameters).
 
+- **The spomky-labs/pki-framework floor moves to 1.6.2** (`^1.6.2`, was `^1.0`). Every earlier release verifies a
+  certificate signature over a re-encoded `tbsCertificate`, so a certificate that is not strict DER -- the cose-wg
+  ones, whose `keyUsage` BIT STRING carries a spare byte -- fails path validation; 1.6.2 verifies the bytes as
+  carried. It is also the only supported line: its release notes close 27 security advisories affecting `<= 1.6.1`
+  and declare `1.0.x` through `1.5.x` end of life. The API this library uses is unchanged across the range.
+
 **The Brainpool algorithms of RFC 9864 check their curve up front.** The Brainpool curves are compiled out of some
 OpenSSL builds and of every FIPS provider; `ESB256`, `ESB320`, `ESB384` and `ESB512` used to fail on such a build
 inside `sign()` or `verify()`, with an OpenSSL error string. Each now exposes `isSupported()`, backed by
