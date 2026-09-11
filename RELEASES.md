@@ -42,6 +42,11 @@ with the missing identifier. Two behaviours changed on the way, both additive:
   `Symmetric`; only the JOSE spellings `EC` and `oct` were accepted. `Key::TYPE_NAME_EC2_IANA` and
   `Key::TYPE_NAME_OCT_IANA` name the new forms, `Key::createFromData()` dispatches them, and the new
   `Key::typeIs(Key::TYPE_*)` answers for every form of a key type. `Key::type()` still returns the form supplied.
+- **The documentation names every RFC the library implements.** RFC 8230 (RSASSA-PSS, RSA keys) and RFC 8812
+  (RSASSA-PKCS1-v1_5, secp256k1) join RFC 9052, RFC 9053 and RFC 9864 in the README and in `doc/Usage.md`; every
+  algorithm, key type and curve table carries a *Reference* column pointing at the defining section, and
+  `tests/RfcReferencesTest.php` keeps those tables in step with the classes and with the IANA registry. The
+  `keywords` of `composer.json` replace the obsolete `RFC8152` with the five RFCs implemented. No code changed.
 
 **New: the AES-CBC-MAC algorithms of RFC 9053 §3.2.** `Cose\Algorithm\Mac\AESMAC128_64` (14), `AESMAC256_64` (15),
 `AESMAC128_128` (25) and `AESMAC256_128` (26), on the `AesCbcMac` base, implement the existing `Mac` interface and

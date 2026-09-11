@@ -5,7 +5,12 @@
     "type": "library",
     "keywords": [
         "COSE",
-        "RFC8152"
+        "CBOR",
+        "RFC9052",
+        "RFC9053",
+        "RFC8230",
+        "RFC8812",
+        "RFC9864"
     ],
     "authors": [
         {
