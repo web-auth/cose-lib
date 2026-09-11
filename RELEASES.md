@@ -65,6 +65,19 @@ first, and throws when the parameter appears in both buckets (RFC 9597 §2). The
 `HeaderMapHelper::assertValidClaimLabels()`. Nothing existing changes: the raw lookups still hand both labels back
 unchecked. See [doc/Usage.md](doc/Usage.md#typ-and-cwt-claims).
 
+**The Brainpool algorithms of RFC 9864 check their curve up front.** The Brainpool curves are compiled out of some
+OpenSSL builds and of every FIPS provider; `ESB256`, `ESB320`, `ESB384` and `ESB512` used to fail on such a build
+inside `sign()` or `verify()`, with an OpenSSL error string. Each now exposes `isSupported()`, backed by
+`openssl_get_curve_names()`, and `create()` throws a `RuntimeException` naming the curve when it is absent -- the
+contract `Ed448::isSupported()` already had. On a build with the curves nothing changes. A registry that must work on
+an unknown platform guards the four registrations with `isSupported()`, see
+[doc/Usage.md](doc/Usage.md#fully-specified-algorithms).
+
+**The IANA deprecation of -7, -8, -35 and -36 changes nothing here.** RFC 9864 marks ES256, EdDSA, ES384 and ES512
+as *Deprecated* in the COSE Algorithms registry. WebAuthn and CTAP authenticators emit -7 and -8 and will for years,
+so the four stay first-class: no deprecation notice, no runtime warning, no change to how `EdDSA` (-8) resolves its
+curve. The README says so next to the tables.
+
 ### 4.7.x to 4.8.x
 
 **The six COSE message classes are deprecated.** `Cose\Signature\CoseSign1Tag`, `Cose\Signature\CoseSignTag`,

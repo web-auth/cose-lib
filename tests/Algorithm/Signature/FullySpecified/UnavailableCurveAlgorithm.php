@@ -2,25 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Cose\Algorithm\Signature\FullySpecified;
+namespace Cose\Tests\Algorithm\Signature\FullySpecified;
 
 use Cose\Algorithm\Signature\ECDSA\ECDSA;
+use Cose\Algorithm\Signature\FullySpecified\RequiresAnOpenSslCurve;
 use Cose\Key\Ec2Key;
 use const OPENSSL_ALGO_SHA256;
 
 /**
- * ECDSA using the brainpoolP256r1 curve and SHA-256.
- *
- * The brainpoolP256r1 curve is not in every OpenSSL build: call `isSupported()` before use when the platform is not
- * known in advance; create() throws a RuntimeException on a build without it.
- *
- * @see https://www.rfc-editor.org/rfc/rfc9864.html#section-2.1
+ * An ECDSA algorithm on a curve that does not exist: what an ESB* algorithm is on a build without its curve.
  */
-final class ESB256 extends ECDSA
+final class UnavailableCurveAlgorithm extends ECDSA
 {
     use RequiresAnOpenSslCurve;
-
-    public const ID = -265;
 
     public static function create(): self
     {
@@ -29,7 +23,7 @@ final class ESB256 extends ECDSA
 
     public static function identifier(): int
     {
-        return self::ID;
+        return -65000;
     }
 
     protected function getHashAlgorithm(): int
@@ -49,11 +43,11 @@ final class ESB256 extends ECDSA
 
     protected static function curveName(): string
     {
-        return Ec2Key::CURVE_NAME_BP256;
+        return 'brainpoolP000r1';
     }
 
     protected static function algorithmName(): string
     {
-        return 'ESB256';
+        return 'ESX000';
     }
 }

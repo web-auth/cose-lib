@@ -220,6 +220,8 @@ $encoded = (string) $coseSign1;
 - **[RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230)** - RSASSA-PSS and RSA keys for COSE
 - **[RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812)** - RSASSA-PKCS1-v1_5 and secp256k1 for COSE
 - **[RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html)** - Fully-Specified Algorithms
+- **[RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html)** - COSE "typ" (type) Header Parameter
+- **[RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html)** - CWT Claims in COSE Headers
 - **[IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)** - The algorithm, key type and curve
   registries every identifier of this library is checked against
 
@@ -255,9 +257,15 @@ This library is perfect for:
 | PS512 | -39 | RSASSA-PSS with SHA-512 | [RFC 8230 §2](https://www.rfc-editor.org/rfc/rfc8230#section-2) |
 | RS1 | -65535 | RSASSA-PKCS1-v1_5 with SHA-1 — legacy only, see below | [RFC 8812 §2](https://www.rfc-editor.org/rfc/rfc8812#section-2) |
 
-The IANA registry marks ES256, ES384, ES512 and EdDSA *Deprecated* since RFC 9864, in favour of the fully-specified
-identifiers below. They stay first-class here: WebAuthn still requires ES256 and EdDSA, and no acknowledgement is
-asked for them. Ed256 and Ed512 are defined by no specification, hence the empty reference; see the warning below.
+Ed256 and Ed512 are defined by no specification, hence the empty reference; see the warning below.
+
+> [!NOTE]
+> **ES256 (-7), EdDSA (-8), ES384 (-35) and ES512 (-36) are marked *Deprecated* in the IANA COSE Algorithms registry**
+> by [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html), in favour of the fully-specified identifiers below.
+> **They remain required in practice**: WebAuthn and CTAP authenticators emit -7 and -8, and will for years — an
+> authenticator's algorithm is fixed at manufacture. This library therefore keeps them as first-class algorithms, with
+> no deprecation notice, no runtime warning and no change to how `EdDSA` (-8) resolves its curve; a relying party
+> registers both the polymorphic and the fully-specified identifiers and lets the credential decide.
 
 #### Fully-Specified Algorithms ([RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html))
 
@@ -269,10 +277,10 @@ the key. They live in the `Cose\Algorithm\Signature\FullySpecified` namespace.
 | ESP256 | -9 | ECDSA with the P-256 curve and SHA-256 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
 | ESP384 | -51 | ECDSA with the P-384 curve and SHA-384 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
 | ESP512 | -52 | ECDSA with the P-521 curve and SHA-512 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
-| ESB256 | -265 | ECDSA with the brainpoolP256r1 curve and SHA-256 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
-| ESB320 | -266 | ECDSA with the brainpoolP320r1 curve and SHA-384 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
-| ESB384 | -267 | ECDSA with the brainpoolP384r1 curve and SHA-384 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
-| ESB512 | -268 | ECDSA with the brainpoolP512r1 curve and SHA-512 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESB256 | -265 | ECDSA with the brainpoolP256r1 curve and SHA-256 — requires an OpenSSL build with Brainpool | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESB320 | -266 | ECDSA with the brainpoolP320r1 curve and SHA-384 — requires an OpenSSL build with Brainpool | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESB384 | -267 | ECDSA with the brainpoolP384r1 curve and SHA-384 — requires an OpenSSL build with Brainpool | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESB512 | -268 | ECDSA with the brainpoolP512r1 curve and SHA-512 — requires an OpenSSL build with Brainpool | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
 | Ed25519 | -19 | EdDSA with the Ed25519 parameter set | [RFC 9864 §2.2](https://www.rfc-editor.org/rfc/rfc9864#section-2.2) |
 | Ed448 | -53 | EdDSA with the Ed448 parameter set — requires PHP 8.4 or later | [RFC 9864 §2.2](https://www.rfc-editor.org/rfc/rfc9864#section-2.2) |
 
@@ -282,6 +290,18 @@ the key. They live in the `Cose\Algorithm\Signature\FullySpecified` namespace.
 >
 > Ed448 is not covered by the sodium extension and goes through OpenSSL, which PHP only wires up for Edwards curves
 > as of PHP 8.4. Call `Ed448::isSupported()` when the platform is not known in advance.
+>
+> The Brainpool curves are compiled out of some OpenSSL builds and of every FIPS provider. Each `ESB*` class exposes
+> `isSupported()`, backed by `openssl_get_curve_names()`, and its `create()` throws a `RuntimeException` naming the
+> curve on a build without it. Register them conditionally when the platform is not known in advance:
+>
+> ```php
+> use Cose\Algorithm\Signature\FullySpecified\ESB256;
+>
+> if (ESB256::isSupported()) {
+>     $manager->add(ESB256::create());
+> }
+> ```
 
 > [!WARNING]
 > **`Ed256` (-260) and `Ed512` (-261) are not defined by any specification, and their identifiers are not theirs.**

@@ -103,7 +103,13 @@ final class CertificateSignatureVerifierTest extends TestCase
         yield 'ES256 (-7)' => [ES256::create(), Certificates::P256_CERTIFICATE, Certificates::p256PrivateKey()];
         yield 'ESP256 (-9)' => [ESP256::create(), Certificates::P256_CERTIFICATE, Certificates::p256PrivateKey()];
         yield 'ES256K (-47)' => [ES256K::create(), Certificates::P256K_CERTIFICATE, Certificates::p256kPrivateKey()];
-        yield 'ESB256 (-265)' => [ESB256::create(), Certificates::BP256_CERTIFICATE, Certificates::bp256PrivateKey()];
+        if (ESB256::isSupported()) {
+            yield 'ESB256 (-265)' => [
+                ESB256::create(),
+                Certificates::BP256_CERTIFICATE,
+                Certificates::bp256PrivateKey(),
+            ];
+        }
         yield 'RS256 (-257)' => [RS256::create(), Certificates::RSA_CERTIFICATE, Certificates::rsaPrivateKey()];
         yield 'PS256 (-37)' => [PS256::create(), Certificates::RSA_CERTIFICATE, Certificates::rsaPrivateKey()];
         yield 'PS384 (-38)' => [PS384::create(), Certificates::RSA_CERTIFICATE, Certificates::rsaPrivateKey()];

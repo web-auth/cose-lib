@@ -1,6 +1,6 @@
 # How to Use COSE Library
 
-This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature and MAC algorithms, the cryptographic structures a signature or a MAC is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE. Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
+This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature and MAC algorithms, the cryptographic structures a signature or a MAC is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, and the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`) and [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims). Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
 
 The six COSE message types themselves come from [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0 or later, as `CBOR\Tag\CoseSign1Tag` and its siblings. The `Cose\...Tag` classes this library used to ship are deprecated since 4.8.0 and removed in 5.0.0 — see [Upgrading from the Cose\...Tag classes](#upgrading-from-the-cosetag-classes).
 
@@ -181,8 +181,8 @@ apply:
 
 | Name | Label | Type | Reference | Accessor |
 |---|---|---|---|---|
-| `typ` (type) | 16 (`CoseHeaders::LABEL_TYP`) | `uint / tstr` | [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596) | `getTyp(): int\|string\|null` |
-| `CWT Claims` | 15 (`CoseHeaders::LABEL_CWT_CLAIMS`) | `map` | [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597) | `getCwtClaims(): ?MapObject` |
+| `typ` (type) | 16 (`CoseHeaders::LABEL_TYP`) | `uint / tstr` | [RFC 9596 §2](https://www.rfc-editor.org/rfc/rfc9596#section-2) | `getTyp(): int\|string\|null` |
+| `CWT Claims` | 15 (`CoseHeaders::LABEL_CWT_CLAIMS`) | `map` | [RFC 9597 §2](https://www.rfc-editor.org/rfc/rfc9597#section-2) | `getCwtClaims(): ?MapObject` |
 
 ```php
 use Cose\Structure\CoseHeaders;
@@ -743,7 +743,8 @@ the IANA [COSE Algorithms](https://www.iana.org/assignments/cose/cose.xhtml#algo
 
 The IANA registry marks -8 *Deprecated* in favour of the fully-specified Ed25519 (-19) and Ed448 (-53) of
 [RFC 9864](#fully-specified-algorithms), as it does ES256, ES384 and ES512. All four stay first-class here, without
-any acknowledgement: WebAuthn still requires ES256 and EdDSA.
+any acknowledgement: WebAuthn still requires ES256 and EdDSA — see
+[the note below](#the-polymorphic-identifiers-are-deprecated-at-iana-and-still-required).
 
 Ed256 and Ed512 sign a SHA-256 or SHA-512 digest of the message with Ed25519. They are not EdDSA identifiers and are
 registered nowhere — IANA assigns -260 to WalnutDSA and -261 to TurboSHAKE128 — hence the empty reference, and
@@ -846,6 +847,24 @@ Ed448 is not covered by the sodium extension and goes through OpenSSL, which PHP
 PHP 8.4. Call `Ed448::isSupported()` when the platform is not known in advance; the algorithm throws a
 `RuntimeException` on older versions.
 
+The Brainpool curves are compiled out of some OpenSSL builds (and of every FIPS provider), in which case a key on the
+curve still loads and the failure would only surface inside `openssl_sign()` or `openssl_verify()`. Each `ESB*` class
+therefore exposes `isSupported()`, backed by `openssl_get_curve_names()`, and its `create()` throws a `RuntimeException`
+naming the curve on a build without it. Register them conditionally when the platform is not known in advance:
+
+```php
+use Cose\Algorithm\Signature\FullySpecified\ESB256;
+use Cose\Algorithm\Signature\FullySpecified\ESB320;
+use Cose\Algorithm\Signature\FullySpecified\ESB384;
+use Cose\Algorithm\Signature\FullySpecified\ESB512;
+
+foreach ([ESB256::class, ESB320::class, ESB384::class, ESB512::class] as $brainpool) {
+    if ($brainpool::isSupported()) {
+        $manager->add($brainpool::create());
+    }
+}
+```
+
 Every Ed25519 algorithm — `EdDSA` (-8), `Ed25519` (-8 and -19), `Ed256` (-260) and `Ed512` (-261) — is computed with
 the sodium extension. Sodium ships with PHP and is enabled by default, but a build can leave it out, so it is a
 suggestion of this package rather than a hard requirement: everything else works without it. Creating one of these
@@ -854,6 +873,30 @@ platform is not known in advance.
 
 The brainpool curves are also available on `Cose\Key\Ec2Key` as `CURVE_BP256`, `CURVE_BP320`, `CURVE_BP384` and
 `CURVE_BP512` (values 256 to 259 of the COSE Elliptic Curves registry).
+
+#### The polymorphic identifiers are deprecated at IANA, and still required
+
+RFC 9864 marks ES256 (-7), EdDSA (-8), ES384 (-35) and ES512 (-36) as *Deprecated* in the IANA COSE Algorithms
+registry, in favour of the fully-specified identifiers above. That is a registry status, not an operational one:
+WebAuthn and CTAP authenticators emit -7 and -8, an authenticator's algorithm is fixed at manufacture, and they will
+keep emitting them for years. This library keeps the four identifiers as first-class algorithms — no deprecation
+notice, no runtime warning, and no change to how `EdDSA` (-8) resolves its curve. A relying party registers both
+forms and lets the credential decide:
+
+```php
+use Cose\Algorithm\Manager;
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Algorithm\Signature\EdDSA\EdDSA;
+use Cose\Algorithm\Signature\FullySpecified\Ed25519;
+use Cose\Algorithm\Signature\FullySpecified\ESP256;
+
+$manager = Manager::create()->add(
+    ES256::create(),    // -7, what today's authenticators emit
+    ESP256::create(),   // -9, its fully-specified form
+    new EdDSA(),        // -8
+    Ed25519::create(),  // -19
+);
+```
 
 ### Signature Verification Contract
 
@@ -1377,4 +1420,6 @@ The test suite is the rest of the examples, and every one of them is executed on
 - [RFC 8230 - Using RSA Algorithms with CBOR Object Signing and Encryption (COSE) Messages](https://datatracker.ietf.org/doc/html/rfc8230)
 - [RFC 8812 - CBOR Object Signing and Encryption (COSE) and JSON Object Signing and Encryption (JOSE) Registrations for Web Authentication (WebAuthn) Algorithms](https://datatracker.ietf.org/doc/html/rfc8812)
 - [RFC 9864 - Fully-Specified Algorithms for JOSE and COSE](https://www.rfc-editor.org/rfc/rfc9864.html)
+- [RFC 9596 - CBOR Object Signing and Encryption (COSE) "typ" (type) Header Parameter](https://www.rfc-editor.org/rfc/rfc9596.html)
+- [RFC 9597 - CBOR Web Token (CWT) Claims in COSE Headers](https://www.rfc-editor.org/rfc/rfc9597.html)
 - [IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)

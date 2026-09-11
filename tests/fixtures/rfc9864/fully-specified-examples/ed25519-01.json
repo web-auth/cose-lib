@@ -1,0 +1,37 @@
+{
+   "title": "Ed25519-01: Ed25519 (-19) - Ed25519 - sign",
+   "input": {
+      "plaintext": "This is the content.",
+      "sign": {
+         "protected": {},
+         "signers": [
+            {
+               "key": {
+                  "kty": "OKP",
+                  "kid": "11",
+                  "crv": "Ed25519",
+                  "x_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+                  "d_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+               },
+               "unprotected": {
+                  "kid": "11"
+               },
+               "protected": {
+                  "alg": "Ed25519"
+               }
+            }
+         ]
+      }
+   },
+   "intermediates": {
+      "signers": [
+         {
+            "ToBeSign_hex": "85695369676E61747572654043A101324054546869732069732074686520636F6E74656E742E"
+         }
+      ]
+   },
+   "output": {
+      "cbor_diag": "98([h'', {}, h'546869732069732074686520636F6E74656E742E', [[h'A10132', {4: h'3131'}, h'498A2BCDFA9F74B6CE8A86511BBFFBA39ACF94DF5597E8FC1F8D05EFDE5A70598C2671977E8FCDF7F3A3CBC6A3295FC84FDEF96C19346A517FF5759BF076370E']]])",
+      "cbor": "D8628440A054546869732069732074686520636F6E74656E742E818343A10132A1044231315840498A2BCDFA9F74B6CE8A86511BBFFBA39ACF94DF5597E8FC1F8D05EFDE5A70598C2671977E8FCDF7F3A3CBC6A3295FC84FDEF96C19346A517FF5759BF076370E"
+   }
+}

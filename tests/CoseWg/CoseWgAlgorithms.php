@@ -67,6 +67,13 @@ final class CoseWgAlgorithms
         'ES384' => Algorithms::COSE_ALGORITHM_ES384,
         'ES512' => Algorithms::COSE_ALGORITHM_ES512,
         'EdDSA' => Algorithms::COSE_ALGORITHM_EDDSA,
+        // The fully-specified identifiers of RFC 9864, named as tests/fixtures/rfc9864 writes them; upstream has no
+        // fixture for them yet.
+        'ESP256' => Algorithms::COSE_ALGORITHM_ESP256,
+        'ESP384' => Algorithms::COSE_ALGORITHM_ESP384,
+        'ESP512' => Algorithms::COSE_ALGORITHM_ESP512,
+        'Ed25519' => Algorithms::COSE_ALGORITHM_ED25519,
+        'Ed448' => Algorithms::COSE_ALGORITHM_ED448,
         'RSA-PSS-256' => Algorithms::COSE_ALGORITHM_PS256,
         'RSA-PSS-384' => Algorithms::COSE_ALGORITHM_PS384,
         'RSA-PSS-512' => Algorithms::COSE_ALGORITHM_PS512,
@@ -143,7 +150,7 @@ final class CoseWgAlgorithms
      * Every algorithm this library implements, under its own identifier.
      *
      * RS1, Ed256 and Ed512 are left out on purpose: each needs an explicit acknowledgement to be built, and no fixture
-     * uses them. Ed448 is added only where the platform can compute it.
+     * uses them. Ed448 and the Brainpool ESB* algorithms are added only where the platform can compute them.
      */
     public static function manager(): Manager
     {
@@ -155,10 +162,6 @@ final class CoseWgAlgorithms
             ESP256::create(),
             ESP384::create(),
             ESP512::create(),
-            ESB256::create(),
-            ESB320::create(),
-            ESB384::create(),
-            ESB512::create(),
             new EdDSA(),
             Ed25519::create(),
             RS256::create(),
@@ -178,6 +181,11 @@ final class CoseWgAlgorithms
         );
         if (Ed448::isSupported()) {
             $manager->add(Ed448::create());
+        }
+        foreach ([ESB256::class, ESB320::class, ESB384::class, ESB512::class] as $brainpool) {
+            if ($brainpool::isSupported()) {
+                $manager->add($brainpool::create());
+            }
         }
 
         return $manager;

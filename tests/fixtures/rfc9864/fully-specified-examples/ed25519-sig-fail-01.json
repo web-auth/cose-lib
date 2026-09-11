@@ -1,0 +1,27 @@
+{
+   "title": "Ed25519-fail-01: Ed25519 (-19) - sign0 - signature changed",
+   "input": {
+      "plaintext": "This is the content.",
+      "sign0": {
+         "key": {
+            "kty": "OKP",
+            "kid": "11",
+            "crv": "Ed25519",
+            "x_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+            "d_hex": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+         },
+         "unprotected": {
+            "kid": "11"
+         },
+         "protected": {
+            "alg": "Ed25519"
+         },
+         "alg": "Ed25519"
+      }
+   },
+   "output": {
+      "cbor_diag": "18([h'A10132', {4: h'3131'}, h'546869732069732074686520636F6E74656E742E', h'D492F52368492EEFDE152B706CCED7C257BADE0D041020909154F68B9B375CCC058A5EBF6DA9E526A7E56ABDFDEFCE6F73DC08FB4BD7667E471986C12F81C704'])",
+      "cbor": "D28443A10132A10442313154546869732069732074686520636F6E74656E742E5840D492F52368492EEFDE152B706CCED7C257BADE0D041020909154F68B9B375CCC058A5EBF6DA9E526A7E56ABDFDEFCE6F73DC08FB4BD7667E471986C12F81C704"
+   },
+   "fail": true
+}
