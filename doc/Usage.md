@@ -1,6 +1,6 @@
 # How to Use COSE Library
 
-This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature and MAC algorithms, the cryptographic structures a signature or a MAC is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE. Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
+This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature and MAC algorithms, the cryptographic structures a signature or a MAC is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, and the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`) and [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims). Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
 
 The six COSE message types themselves come from [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0 or later, as `CBOR\Tag\CoseSign1Tag` and its siblings. The `Cose\...Tag` classes this library used to ship are deprecated since 4.8.0 and removed in 5.0.0 — see [Upgrading from the Cose\...Tag classes](#upgrading-from-the-cosetag-classes).
 
@@ -181,8 +181,8 @@ apply:
 
 | Name | Label | Type | Reference | Accessor |
 |---|---|---|---|---|
-| `typ` (type) | 16 (`CoseHeaders::LABEL_TYP`) | `uint / tstr` | [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596) | `getTyp(): int\|string\|null` |
-| `CWT Claims` | 15 (`CoseHeaders::LABEL_CWT_CLAIMS`) | `map` | [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597) | `getCwtClaims(): ?MapObject` |
+| `typ` (type) | 16 (`CoseHeaders::LABEL_TYP`) | `uint / tstr` | [RFC 9596 §2](https://www.rfc-editor.org/rfc/rfc9596#section-2) | `getTyp(): int\|string\|null` |
+| `CWT Claims` | 15 (`CoseHeaders::LABEL_CWT_CLAIMS`) | `map` | [RFC 9597 §2](https://www.rfc-editor.org/rfc/rfc9597#section-2) | `getCwtClaims(): ?MapObject` |
 
 ```php
 use Cose\Structure\CoseHeaders;
@@ -1377,4 +1377,6 @@ The test suite is the rest of the examples, and every one of them is executed on
 - [RFC 8230 - Using RSA Algorithms with CBOR Object Signing and Encryption (COSE) Messages](https://datatracker.ietf.org/doc/html/rfc8230)
 - [RFC 8812 - CBOR Object Signing and Encryption (COSE) and JSON Object Signing and Encryption (JOSE) Registrations for Web Authentication (WebAuthn) Algorithms](https://datatracker.ietf.org/doc/html/rfc8812)
 - [RFC 9864 - Fully-Specified Algorithms for JOSE and COSE](https://www.rfc-editor.org/rfc/rfc9864.html)
+- [RFC 9596 - CBOR Object Signing and Encryption (COSE) "typ" (type) Header Parameter](https://www.rfc-editor.org/rfc/rfc9596.html)
+- [RFC 9597 - CBOR Web Token (CWT) Claims in COSE Headers](https://www.rfc-editor.org/rfc/rfc9597.html)
 - [IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)
