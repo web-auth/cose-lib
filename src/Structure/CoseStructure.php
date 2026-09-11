@@ -6,6 +6,7 @@ namespace Cose\Structure;
 
 use CBOR\ByteStringObject;
 use CBOR\CBORObject;
+use CBOR\IndefiniteLengthByteStringObject;
 use CBOR\ListObject;
 use CBOR\TextStringObject;
 use Stringable;
@@ -30,6 +31,24 @@ abstract class CoseStructure implements Stringable
     public static function emptyExternalAad(): ByteStringObject
     {
         return ByteStringObject::create('');
+    }
+
+    /**
+     * A protected bucket as the structure embeds it: the bytes the message carries, except that an empty map wrapped
+     * in a byte string (h'a0') becomes the zero-length byte string.
+     *
+     * RFC 9052 section 3 lets a sender write an empty protected bucket either way -- "Senders SHOULD encode a
+     * zero-length map as a zero-length byte string rather than as a zero-length map (encoded as h'a0') [...]
+     * Recipients MUST accept both" -- and sections 4.4, 5.3 and 6.3 define the protected field of every cryptographic
+     * structure with "If there are no protected attributes, a zero-length byte string is used". The structure a
+     * signer computes over and the one a verifier rebuilds are therefore the same whichever of the two forms travels
+     * on the wire, which is what the "Redo protected" fixtures of cose-wg/Examples check. A non-empty bucket is kept
+     * byte for byte: re-encoding it is how signatures silently stop verifying.
+     */
+    public static function emptyOrSerializedMap(
+        ByteStringObject|IndefiniteLengthByteStringObject $protectedHeader
+    ): ByteStringObject|IndefiniteLengthByteStringObject {
+        return $protectedHeader->getValue() === "\xa0" ? ByteStringObject::create('') : $protectedHeader;
     }
 
     public function __toString(): string
