@@ -6,6 +6,7 @@ namespace Cose\Algorithm\KeyManagement;
 
 use CBOR\MapObject;
 use Cose\Key\Key;
+use Cose\Key\SymmetricKey;
 use InvalidArgumentException;
 use function is_string;
 use function sprintf;
@@ -81,10 +82,10 @@ final class Direct implements DirectEncryption
                 $key->type()
             ));
         }
-        if (! $key->has(-1)) {
+        if (! $key->has(SymmetricKey::DATA_K)) {
             throw new InvalidArgumentException('Invalid key. The value of the key is missing');
         }
-        $k = $key->get(-1);
+        $k = $key->get(SymmetricKey::DATA_K);
         if (! is_string($k)) {
             throw new InvalidArgumentException(
                 'Invalid key. The value of the key must be a byte string (CBOR objects shall be normalized first)'
