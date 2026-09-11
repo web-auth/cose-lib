@@ -17,6 +17,7 @@ This library implements:
 - **[RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html)** - COSE: Fully-Specified Algorithms
 - **[RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html)** - COSE "typ" (type) Header Parameter
 - **[RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html)** - CWT Claims in COSE Headers
+- **[RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html)** - COSE: Hash Algorithms
 
 Every algorithm and key type table below carries a *Reference* column naming the RFC and the section that define the
 row, so that a shipped identifier can be traced to its specification without leaving this page.
@@ -56,6 +57,9 @@ row, so that a shipped identifier can be traced to its specification without lea
 - **Content encryption** ([RFC 9053 §4](https://www.rfc-editor.org/rfc/rfc9053.html#section-4)): AES-GCM (128/192/256),
   the eight AES-CCM variants, ChaCha20/Poly1305 — through the `Enc_structure`, with the `IV` / `Partial IV` resolution
   of [RFC 9052 §3.1](https://www.rfc-editor.org/rfc/rfc9052.html#section-3.1)
+- **Hash algorithms** ([RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html)): SHA-1, SHA-256/64, SHA-256, SHA-384,
+  SHA-512, SHA-512/256, SHAKE128, SHAKE256 — with IANA's *Filter Only* mark on SHA-1 and SHA-256/64 expressed as a
+  type, see [Hash Algorithms](#hash-algorithms)
 - Compatible with WebAuthn, FIDO2, and digital COVID certificates
 
 ✅ **Key Restrictions** ([RFC 9052](https://www.rfc-editor.org/rfc/rfc9052.html#section-7.1) §7.1)
@@ -225,6 +229,7 @@ $encoded = (string) $coseSign1;
 - **[RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html)** - Fully-Specified Algorithms
 - **[RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html)** - COSE "typ" (type) Header Parameter
 - **[RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html)** - CWT Claims in COSE Headers
+- **[RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html)** - COSE: Hash Algorithms
 - **[IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)** - The algorithm, key type and curve
   registries every identifier of this library is checked against
 
@@ -509,6 +514,51 @@ if (! SymmetricKeyValidator::create()->isValid($key)) {
     // reject the key
 }
 ```
+
+### Hash Algorithms
+
+The hash algorithms of [RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html), in `Cose\Algorithm\Hash`. They are
+what `x5t` ([RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html)) and the COSE Key Thumbprint
+([RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html)) name a hash by; each takes data and returns a digest of
+`length()` bytes.
+
+| Algorithm | Identifier | Class | Digest | IANA recommendation | Reference |
+|-----------|------------|-------|--------|---------------------|-----------|
+| SHA-1 | -14 | `SHA1` | 20 bytes | Filter Only | [RFC 9054 §3.1](https://www.rfc-editor.org/rfc/rfc9054#section-3.1) |
+| SHA-256/64 | -15 | `SHA256_64` | 8 bytes — SHA-256 truncated | Filter Only | [RFC 9054 §3.2](https://www.rfc-editor.org/rfc/rfc9054#section-3.2) |
+| SHA-256 | -16 | `SHA256` | 32 bytes | Yes | [RFC 9054 §3.2](https://www.rfc-editor.org/rfc/rfc9054#section-3.2) |
+| SHA-512/256 | -17 | `SHA512_256` | 32 bytes — a distinct SHA-2 function, not SHA-512 truncated | Yes | [RFC 9054 §3.2](https://www.rfc-editor.org/rfc/rfc9054#section-3.2) |
+| SHAKE128 | -18 | `SHAKE128` | 32 bytes | Yes | [RFC 9054 §3.3](https://www.rfc-editor.org/rfc/rfc9054#section-3.3) |
+| SHA-384 | -43 | `SHA384` | 48 bytes | Yes | [RFC 9054 §3.2](https://www.rfc-editor.org/rfc/rfc9054#section-3.2) |
+| SHA-512 | -44 | `SHA512` | 64 bytes | Yes | [RFC 9054 §3.2](https://www.rfc-editor.org/rfc/rfc9054#section-3.2) |
+| SHAKE256 | -45 | `SHAKE256` | 64 bytes | Yes | [RFC 9054 §3.3](https://www.rfc-editor.org/rfc/rfc9054#section-3.3) |
+
+**Filter Only is a type.** RFC 9054 §2 separates two uses of a hash: *filtering* — picking, among many
+certificates or keys, the candidates whose fingerprint matches, each of which is then verified for real — and
+standing for the data as an integrity primitive. SHA-1 and SHA-256/64 are safe for the first and not for the
+second, which the registry records as *Filter Only*. The library records it in the class hierarchy: every hash
+implements `FilterOnlyHash`, only the six recommended ones also implement `Hash`. Type the parameter after the use,
+and PHPStan or Psalm refuse `SHA1` where a `Hash` is expected — nothing has to be checked at runtime.
+
+```php
+use Cose\Algorithm\Hash\FilterOnlyHash;
+use Cose\Algorithm\Hash\Hash;
+use Cose\Algorithm\Hash\SHA1;
+use Cose\Algorithm\Hash\SHA256;
+
+function findCandidateCertificates(FilterOnlyHash $hash, string $thumbprint, array $certificates): array { /* … */ }
+function bindTo(Hash $hash, string $data): string { return $hash->hash($data); }
+
+findCandidateCertificates(SHA1::create(), $thumbprint, $certificates);   // fine: filtering
+bindTo(SHA256::create(), $data);                                         // fine
+bindTo(SHA1::create(), $data);                                           // rejected by static analysis, TypeError at runtime
+```
+
+`SHAKE128` and `SHAKE256` are computed by a pure PHP Keccak sponge — PHP has no SHAKE primitive — which needs
+64-bit integers; `SHAKE128::isSupported()` says. They are the extendable-output functions cut to the 256 and 512 bits
+RFC 9054 stores. A `Manager` holds the hash algorithms like any other, so an identifier read from a message resolves
+to its class. See [Hash Algorithms](doc/Usage.md#hash-algorithms) and
+[`examples/11-hash-algorithms.php`](examples/11-hash-algorithms.php).
 
 ### Key Types
 

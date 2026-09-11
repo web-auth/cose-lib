@@ -165,6 +165,33 @@ abstract class Algorithms
     final public const COSE_ALGORITHM_ED448 = -53;
 
     /**
+     * Hash algorithms (RFC 9054). They are algorithms in the registry's sense - "x5t" (RFC 9360) and the COSE Key
+     * Thumbprint (RFC 9679) name the hash by one of these identifiers - and the Cose\Algorithm\Hash classes
+     * implement them. They are absent from the two maps below on purpose: those describe the digest a signature
+     * identifier hands to OpenSSL, and SHA-256/64 and the SHAKE functions have no OpenSSL digest anyway. A Manager
+     * resolves an identifier to its class.
+     *
+     * SHA-1 (-14) and SHA-256/64 (-15) are "Filter Only" at IANA: Cose\Algorithm\Hash\FilterOnlyHash.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9054.html
+     */
+    final public const COSE_ALGORITHM_SHA_1 = -14;
+
+    final public const COSE_ALGORITHM_SHA_256_64 = -15;
+
+    final public const COSE_ALGORITHM_SHA_256 = -16;
+
+    final public const COSE_ALGORITHM_SHA_512_256 = -17;
+
+    final public const COSE_ALGORITHM_SHAKE128 = -18;
+
+    final public const COSE_ALGORITHM_SHA_384 = -43;
+
+    final public const COSE_ALGORITHM_SHA_512 = -44;
+
+    final public const COSE_ALGORITHM_SHAKE256 = -45;
+
+    /**
      * The digest to hand to openssl_sign() / openssl_verify() for the ECDSA and RSASSA-PKCS1-v1_5 algorithms, and
      * for those only.
      *

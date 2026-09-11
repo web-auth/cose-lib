@@ -26,6 +26,7 @@ Every CBOR item is printed as hex in full, never truncated, so it can be pasted 
 | [`08-cwt.php`](08-cwt.php) | CBOR Web Tokens: verify first, then read the claims; `typ` and `CWT Claims` in the header |
 | [`09-migration.php`](09-migration.php) | Moving off the deprecated `Cose\...Tag` classes |
 | [`10-fully-specified-algorithms.php`](10-fully-specified-algorithms.php) | RFC 9864: the fully-specified identifiers next to the polymorphic ones, the curve binding, and the platform gates |
+| [`11-hash-algorithms.php`](11-hash-algorithms.php) | RFC 9054: the eight hash identifiers, a certificate thumbprint as `x5t` carries it, and why *Filter Only* is a type |
 
 ## What the library does and does not do
 
