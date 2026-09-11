@@ -106,7 +106,7 @@ class OkpKey extends Key
         // InvalidArgumentException this library documents rather than through a warning, a TypeError or an Error.
         $data = self::normalizeIntegerEntries($data, self::DATA_CURVE, self::TYPE);
         parent::__construct($data);
-        if ($data[self::TYPE] !== self::TYPE_OKP && $data[self::TYPE] !== self::TYPE_NAME_OKP) {
+        if (! $this->typeIs(self::TYPE_OKP)) {
             throw new InvalidArgumentException('Invalid OKP key. The key type does not correspond to an OKP key');
         }
         // RFC 9053 section 7.2: "d" is the authoritative private key material and "x" is only RECOMMENDED for a

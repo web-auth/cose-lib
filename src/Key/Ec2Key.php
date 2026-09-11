@@ -144,7 +144,7 @@ class Ec2Key extends Key
         // InvalidArgumentException this library documents rather than through a warning, a TypeError or an Error.
         $data = self::normalizeIntegerEntries($data, self::DATA_CURVE, self::TYPE);
         parent::__construct($data);
-        if ($data[self::TYPE] !== self::TYPE_EC2 && $data[self::TYPE] !== self::TYPE_NAME_EC2) {
+        if (! $this->typeIs(self::TYPE_EC2)) {
             throw new InvalidArgumentException('Invalid EC2 key. The key type does not correspond to an EC2 key');
         }
         // RFC 9053 section 7.1.1: "For public keys, it is REQUIRED that 'crv', 'x', and 'y' be present".

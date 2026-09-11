@@ -11,6 +11,8 @@ use Cose\Key\RsaKey;
 use Cose\Key\SymmetricKey;
 use Cose\Tests\RaisesNoPhpError;
 use InvalidArgumentException;
+use function is_numeric;
+use function is_string;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -110,6 +112,9 @@ final class KeyTest extends TestCase
         yield 'an EC2 key type by name' => [[
             Key::TYPE => Key::TYPE_NAME_EC2,
         ] + $ec2, Ec2Key::class];
+        yield 'an EC2 key type by its IANA name' => [[
+            Key::TYPE => Key::TYPE_NAME_EC2_IANA,
+        ] + $ec2, Ec2Key::class];
         yield 'an RSA key type as an integer' => [[
             Key::TYPE => Key::TYPE_RSA,
         ] + $rsa, RsaKey::class];
@@ -128,5 +133,64 @@ final class KeyTest extends TestCase
         yield 'a symmetric key type by name' => [[
             Key::TYPE => Key::TYPE_NAME_OCT,
         ] + $oct, SymmetricKey::class];
+        yield 'a symmetric key type by its IANA name' => [[
+            Key::TYPE => Key::TYPE_NAME_OCT_IANA,
+        ] + $oct, SymmetricKey::class];
+    }
+
+    /**
+     * RFC 9053 registers key type 2 as "EC2" and key type 4 as "Symmetric" (sections 7.1 and 7.3); "EC" and "oct"
+     * are the JOSE spellings a key converted from a JWK carries. typeIs() answers for every form, while type()
+     * keeps returning the form supplied.
+     */
+    #[Test]
+    #[DataProvider('getTypeForms')]
+    public function theKeyTypeIsRecognisedInEveryForm(int|string $form, int $type): void
+    {
+        // When
+        $key = Key::create([
+            Key::TYPE => $form,
+        ]);
+
+        // Then
+        static::assertTrue($key->typeIs($type));
+        foreach ([Key::TYPE_OKP, Key::TYPE_EC2, Key::TYPE_RSA, Key::TYPE_OCT] as $other) {
+            if ($other !== $type) {
+                static::assertFalse($key->typeIs($other));
+            }
+        }
+        static::assertSame(is_string($form) && ! is_numeric($form) ? $form : $type, $key->type());
+    }
+
+    /**
+     * @return iterable<string, array{int|string, int}>
+     */
+    public static function getTypeForms(): iterable
+    {
+        yield 'OKP as an integer' => [Key::TYPE_OKP, Key::TYPE_OKP];
+        yield 'OKP as a numeric string' => ['1', Key::TYPE_OKP];
+        yield 'OKP by name' => [Key::TYPE_NAME_OKP, Key::TYPE_OKP];
+        yield 'EC2 as an integer' => [Key::TYPE_EC2, Key::TYPE_EC2];
+        yield 'EC2 by its IANA name' => [Key::TYPE_NAME_EC2_IANA, Key::TYPE_EC2];
+        yield 'EC2 by its JOSE name' => [Key::TYPE_NAME_EC2, Key::TYPE_EC2];
+        yield 'RSA by name' => [Key::TYPE_NAME_RSA, Key::TYPE_RSA];
+        yield 'Symmetric as an integer' => [Key::TYPE_OCT, Key::TYPE_OCT];
+        yield 'Symmetric by its IANA name' => [Key::TYPE_NAME_OCT_IANA, Key::TYPE_OCT];
+        yield 'Symmetric by its JOSE name' => [Key::TYPE_NAME_OCT, Key::TYPE_OCT];
+    }
+
+    #[Test]
+    public function anUnregisteredTypeIsNoneOfTheRegisteredOnes(): void
+    {
+        // Given
+        $key = Key::create([
+            Key::TYPE => 'HSS-LMS',
+        ]);
+
+        // Then
+        foreach ([Key::TYPE_OKP, Key::TYPE_EC2, Key::TYPE_RSA, Key::TYPE_OCT] as $type) {
+            static::assertFalse($key->typeIs($type));
+        }
+        static::assertFalse($key->typeIs(5));
     }
 }

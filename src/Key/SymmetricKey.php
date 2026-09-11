@@ -32,7 +32,7 @@ class SymmetricKey extends Key
         // comparison only, so a key decoded from CBOR kept the string "4" that every HMAC algorithm then rejected.
         $data = self::normalizeIntegerEntries($data, self::TYPE);
         parent::__construct($data);
-        if ($data[self::TYPE] !== self::TYPE_OCT && $data[self::TYPE] !== self::TYPE_NAME_OCT) {
+        if (! $this->typeIs(self::TYPE_OCT)) {
             throw new InvalidArgumentException(
                 'Invalid symmetric key. The key type does not correspond to a symmetric key'
             );
