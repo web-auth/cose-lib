@@ -7,6 +7,8 @@ namespace Cose\Tests\Structure;
 use CBOR\ByteStringObject;
 use CBOR\CBORObject;
 use CBOR\Decoder;
+use CBOR\IndefiniteLengthMapObject;
+use CBOR\IndefiniteLengthTextStringObject;
 use CBOR\ListObject;
 use CBOR\MapItem;
 use CBOR\MapObject;
@@ -22,6 +24,7 @@ use CBOR\Tag\CoseSignTag;
 use CBOR\TextStringObject;
 use CBOR\UnsignedIntegerObject;
 use Cose\Structure\CoseHeaders;
+use Cose\Structure\HeaderMapHelper;
 use Cose\Tests\CoseInnerLists;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -34,8 +37,14 @@ use PHPUnit\Framework\TestCase;
  * The point of running one body against all six is that RFC 9052 defines the two header buckets once, for every
  * message type; the reader has to answer the same way whether the message is a COSE_Sign1 or a COSE_Encrypt.
  *
+ * The two typed accessors of RFC 9596 ("typ") and RFC 9597 ("CWT Claims") are tested here as well, since both are
+ * header parameters and nothing more.
+ *
  * @see https://www.rfc-editor.org/rfc/rfc9052#section-3
+ * @see https://www.rfc-editor.org/rfc/rfc9596#section-2
+ * @see https://www.rfc-editor.org/rfc/rfc9597#section-2
  * @see https://github.com/web-auth/cose-lib/issues/166
+ * @see https://github.com/web-auth/cose-lib/issues/198
  */
 final class CoseHeadersTest extends TestCase
 {
@@ -247,6 +256,347 @@ final class CoseHeadersTest extends TestCase
 
         // Then
         static::assertSame($headers->getProtectedHeaderAsMap(), $headers->getProtectedHeaderAsMap());
+    }
+
+    /**
+     * The labels of RFC 9596 and RFC 9597 as IANA registers them.
+     */
+    #[Test]
+    public function theLabelsAreTheRegisteredOnes(): void
+    {
+        static::assertSame(15, CoseHeaders::LABEL_CWT_CLAIMS);
+        static::assertSame(16, CoseHeaders::LABEL_TYP);
+    }
+
+    /**
+     * A protected header carrying both parameters is written by HeaderMapHelper::encodeProtected() and read back
+     * by the typed accessors, on every message type.
+     *
+     * @param class-string<AbstractCoseTag> $class
+     */
+    #[Test]
+    #[DataProvider('getMessageClasses')]
+    public function typAndCwtClaimsRoundTripThroughTheProtectedHeader(string $class): void
+    {
+        // Given: {1: -7, 16: "application/cwt", 15: {1: "coap://as.example.com", 4: 1443944944}}
+        $claims = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(1), TextStringObject::create('coap://as.example.com')),
+            MapItem::create(UnsignedIntegerObject::create(4), UnsignedIntegerObject::create(1443944944)),
+        ]);
+        $protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(1), NegativeIntegerObject::create(-7)),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_TYP), TextStringObject::create('application/cwt')),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_CWT_CLAIMS), $claims),
+        ]));
+
+        // When: the message travels as bytes and is decoded again
+        $message = Decoder::create()
+            ->decode(StringStream::create((string) self::message($class, $protectedHeader)));
+        static::assertInstanceOf(AbstractCoseTag::class, $message);
+        $headers = CoseHeaders::fromMessage($message);
+
+        // Then
+        static::assertSame('application/cwt', $headers->getTyp());
+        $readClaims = $headers->getCwtClaims();
+        static::assertNotNull($readClaims);
+        static::assertSame((string) $claims, (string) $readClaims);
+        static::assertSame(
+            'coap://as.example.com',
+            HeaderMapHelper::findLabel($readClaims, 1)?->normalize()
+        );
+        static::assertSame('1443944944', HeaderMapHelper::findLabel($readClaims, 4)?->normalize());
+        static::assertNull($headers->getUnprotectedHeaderParameter(CoseHeaders::LABEL_TYP));
+        static::assertNull($headers->getUnprotectedHeaderParameter(CoseHeaders::LABEL_CWT_CLAIMS));
+    }
+
+    /**
+     * A message without either parameter answers null, not an exception.
+     */
+    #[Test]
+    public function absentTypAndCwtClaimsAreNull(): void
+    {
+        // Given: {1: -7}
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(1), NegativeIntegerObject::create(-7)),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        static::assertNull($headers->getTyp());
+        static::assertNull($headers->getCwtClaims());
+    }
+
+    /**
+     * RFC 9596 section 2: "typ" is "either an unsigned integer as registered in the 'CoAP Content-Formats' registry
+     * or a string content type value", which "MAY include media type parameters".
+     *
+     * @param int|string $expected what the accessor answers
+     */
+    #[Test]
+    #[DataProvider('getValidTypValues')]
+    public function aWellFormedTypIsRead(CBORObject $value, int|string $expected): void
+    {
+        // Given
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_TYP), $value),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        static::assertSame($expected, $headers->getTyp());
+    }
+
+    /**
+     * @return iterable<string, array{CBORObject, int|string}>
+     */
+    public static function getValidTypValues(): iterable
+    {
+        yield 'the media type name "application/cwt"' => [TextStringObject::create('application/cwt'), 'application/cwt'];
+        yield 'the CoAP Content-Format 61 (application/cwt)' => [UnsignedIntegerObject::create(61), 61];
+        yield 'the CoAP Content-Format 0 (text/plain; charset=utf-8)' => [UnsignedIntegerObject::create(0), 0];
+        yield 'the largest CoAP Content-Format, 65535' => [UnsignedIntegerObject::create(65535), 65535];
+        yield 'a media type with parameters' => [
+            TextStringObject::create('application/sd-cwt; version=1'),
+            'application/sd-cwt; version=1',
+        ];
+        yield 'a structured syntax suffix' => [TextStringObject::create('application/cose+cbor'), 'application/cose+cbor'];
+        yield 'an indefinite-length text string' => [
+            IndefiniteLengthTextStringObject::create('application/', 'cwt'),
+            'application/cwt',
+        ];
+    }
+
+    /**
+     * RFC 9052 section 3.1, which RFC 9596 section 2 refers to for the syntax: a text value follows
+     * "<type-name>/<subtype-name>" and "Leading and trailing whitespace is not permitted"; an integer is a CoAP
+     * Content-Format identifier, hence 0-65535 (RFC 7252 section 12.3). A bare "cwt" is the case the issue names:
+     * RFC 9596 defines no "application/" shorthand, so it is malformed, not something to expand.
+     */
+    #[Test]
+    #[DataProvider('getInvalidTypValues')]
+    public function aMalformedTypIsRejected(CBORObject $value, string $message): void
+    {
+        // Given
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_TYP), $value),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then: the raw lookup still answers, the typed accessor does not
+        static::assertNotNull($headers->getProtectedHeaderParameter(CoseHeaders::LABEL_TYP));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($message);
+        $headers->getTyp();
+    }
+
+    /**
+     * @return iterable<string, array{CBORObject, string}>
+     */
+    public static function getInvalidTypValues(): iterable
+    {
+        yield 'a bare "cwt"' => [TextStringObject::create('cwt'), 'shall be a media type name'];
+        yield 'an empty text string' => [TextStringObject::create(''), 'shall be a media type name'];
+        yield 'a missing type name' => [TextStringObject::create('/cwt'), 'shall be a media type name'];
+        yield 'a missing subtype name' => [TextStringObject::create('application/'), 'shall be a media type name'];
+        yield 'leading whitespace' => [TextStringObject::create(' application/cwt'), 'shall be a media type name'];
+        yield 'trailing whitespace' => [TextStringObject::create('application/cwt '), 'shall be a media type name'];
+        yield 'a character outside RFC 6838' => [TextStringObject::create('application/c wt'), 'shall be a media type name'];
+        yield 'an integer beyond the CoAP registry' => [UnsignedIntegerObject::create(65536), 'in the range 0-65535'];
+        yield 'a very large integer' => [UnsignedIntegerObject::createFromString('18446744073709551615'), 'in the range 0-65535'];
+        yield 'a negative integer' => [NegativeIntegerObject::create(-1), 'shall be an unsigned integer or a text string'];
+        yield 'a byte string' => [ByteStringObject::create('application/cwt'), 'shall be an unsigned integer or a text string'];
+        yield 'a map' => [MapObject::create(), 'shall be an unsigned integer or a text string'];
+    }
+
+    /**
+     * RFC 9596 section 2: "The 'typ' parameter MUST NOT be present in unprotected headers."
+     *
+     * @param class-string<AbstractCoseTag> $class
+     */
+    #[Test]
+    #[DataProvider('getMessageClasses')]
+    public function aTypInTheUnprotectedBucketIsRejectedByTheTypedAccessor(string $class): void
+    {
+        // Given: {} protected, {16: "application/cwt"} unprotected
+        $unprotectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_TYP), TextStringObject::create('application/cwt')),
+        ]);
+        $headers = CoseHeaders::fromMessage(self::message($class, ByteStringObject::create(''), $unprotectedHeader));
+
+        // Then: the lenient lookup ignores it, the typed accessor refuses the message
+        static::assertNull($headers->getProtectedHeaderParameter(CoseHeaders::LABEL_TYP));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('shall not be present in the unprotected header (RFC 9596 section 2)');
+        $headers->getTyp();
+    }
+
+    /**
+     * The unprotected copy makes the message malformed even when the protected bucket carries a valid "typ": the
+     * rule is on the presence of the label, not on which value would win.
+     */
+    #[Test]
+    public function aTypInBothBucketsIsRejectedByTheTypedAccessor(): void
+    {
+        // Given: {16: 61} protected, {16: 61} unprotected
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_TYP), UnsignedIntegerObject::create(61)),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header), $header)
+        );
+
+        // Then
+        static::assertSame('61', $headers->getProtectedHeaderParameter(CoseHeaders::LABEL_TYP)?->normalize());
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('shall not be present in the unprotected header');
+        $headers->getTyp();
+    }
+
+    /**
+     * RFC 9597 section 2 only recommends the protected bucket, so a claims map in the unprotected one is read.
+     *
+     * @param class-string<AbstractCoseTag> $class
+     */
+    #[Test]
+    #[DataProvider('getMessageClasses')]
+    public function cwtClaimsInTheUnprotectedBucketAreRead(string $class): void
+    {
+        // Given: {} protected, {15: {2: "erikw"}} unprotected
+        $claims = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(2), TextStringObject::create('erikw')),
+        ]);
+        $unprotectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_CWT_CLAIMS), $claims),
+        ]);
+        $headers = CoseHeaders::fromMessage(self::message($class, ByteStringObject::create(''), $unprotectedHeader));
+
+        // Then
+        static::assertSame('erikw', HeaderMapHelper::findLabel($headers->getCwtClaims() ?? MapObject::create(), 2)?->normalize());
+    }
+
+    /**
+     * RFC 9597 section 2: "The header parameter MUST only occur once in either the protected or unprotected header
+     * of a COSE structure."
+     *
+     * @param class-string<AbstractCoseTag> $class
+     */
+    #[Test]
+    #[DataProvider('getMessageClasses')]
+    public function cwtClaimsInBothBucketsAreRejected(string $class): void
+    {
+        // Given: the same {15: {2: "erikw"}} in both buckets
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_CWT_CLAIMS), MapObject::create([
+                MapItem::create(UnsignedIntegerObject::create(2), TextStringObject::create('erikw')),
+            ])),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message($class, ByteStringObject::create((string) $header), $header)
+        );
+
+        // Then: the raw lookups answer for each bucket, the typed accessor refuses the message
+        static::assertNotNull($headers->getProtectedHeaderParameter(CoseHeaders::LABEL_CWT_CLAIMS));
+        static::assertNotNull($headers->getUnprotectedHeaderParameter(CoseHeaders::LABEL_CWT_CLAIMS));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('not in both (RFC 9597 section 2)');
+        $headers->getCwtClaims();
+    }
+
+    /**
+     * The values of the claims are handed back as carried: a nested "cnf" (RFC 8747) map is neither read nor
+     * checked, and an indefinite-length claims map is accepted as any other CBOR map is.
+     */
+    #[Test]
+    public function theClaimsAreHandedBackAsCarried(): void
+    {
+        // Given: {15: {_ 8: {1: {1: 2, -1: 1}}, "custom": h'00'}}
+        $confirmation = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(1), MapObject::create([
+                MapItem::create(UnsignedIntegerObject::create(1), UnsignedIntegerObject::create(2)),
+                MapItem::create(NegativeIntegerObject::create(-1), UnsignedIntegerObject::create(1)),
+            ])),
+        ]);
+        $claims = IndefiniteLengthMapObject::create()
+            ->add(UnsignedIntegerObject::create(8), $confirmation)
+            ->add(TextStringObject::create('custom'), ByteStringObject::create("\x00"));
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_CWT_CLAIMS), $claims),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // When
+        $read = $headers->getCwtClaims();
+
+        // Then
+        static::assertNotNull($read);
+        static::assertCount(2, $read);
+        static::assertSame((string) $confirmation, (string) HeaderMapHelper::findLabel($read, 8));
+        static::assertSame("\x00", HeaderMapHelper::findLabel($read, 'custom')?->getValue());
+        static::assertNull(HeaderMapHelper::findLabel($read, 'nope'));
+    }
+
+    /**
+     * RFC 9597 section 2 types the parameter as a map: anything else is malformed.
+     */
+    #[Test]
+    #[DataProvider('getNonMapClaims')]
+    public function cwtClaimsThatAreNotAMapAreRejected(CBORObject $value): void
+    {
+        // Given
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_CWT_CLAIMS), $value),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('shall be a map of claims (RFC 9597 section 2)');
+        $headers->getCwtClaims();
+    }
+
+    /**
+     * @return iterable<string, array{CBORObject}>
+     */
+    public static function getNonMapClaims(): iterable
+    {
+        yield 'a byte string' => [ByteStringObject::create("\xa0")];
+        yield 'a text string' => [TextStringObject::create('{}')];
+        yield 'a list' => [ListObject::create()];
+        yield 'an integer' => [UnsignedIntegerObject::create(1)];
+    }
+
+    /**
+     * RFC 9597 section 2: "Claim-Label = int / text". A byte-string key normalizes to the same offset as an
+     * integer or a text string, which is the reason the header-label rule exists; it applies to the claims too.
+     */
+    #[Test]
+    public function aByteStringClaimLabelIsRejected(): void
+    {
+        // Given: {15: {h'31': "coap://as.example.com"}}
+        $claims = MapObject::create([
+            MapItem::create(ByteStringObject::create('1'), TextStringObject::create('coap://as.example.com')),
+        ]);
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_CWT_CLAIMS), $claims),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid CWT claim label');
+        $headers->getCwtClaims();
     }
 
     /**

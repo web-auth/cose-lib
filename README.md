@@ -15,6 +15,8 @@ This library implements:
 - **[RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812)** - RSASSA-PKCS1-v1_5 (RS256, RS384, RS512, RS1) and
   ECDSA with secp256k1 (ES256K)
 - **[RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html)** - COSE: Fully-Specified Algorithms
+- **[RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html)** - COSE "typ" (type) Header Parameter
+- **[RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html)** - CWT Claims in COSE Headers
 
 Every algorithm and key type table below carries a *Reference* column naming the RFC and the section that define the
 row, so that a shipped identifier can be traced to its specification without leaving this page.
@@ -34,6 +36,12 @@ row, so that a shipped identifier can be traced to its specification without lea
   protected bucket are not, and the protected value wins a combined lookup
 - `CoseSignature` and `CoseRecipient` are the checked views over the `signatures` and `recipients` lists (`[+ ...]`)
 - Works on the COSE message classes of spomky-labs/cbor-php 3.4.0
+
+✅ **Header Parameters** ([RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html), [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html))
+- `typ` (16): `getTyp()` reads the type of the COSE object as a CoAP Content-Format number or a media type name,
+  from the protected bucket only, and rejects a message carrying it in the unprotected one (RFC 9596 §2)
+- `CWT Claims` (15): `getCwtClaims()` reads the claims map carried in the header, and rejects it when it appears in
+  both buckets (RFC 9597 §2); see [`typ` and `CWT Claims`](doc/Usage.md#typ-and-cwt-claims)
 
 ✅ **COSE Tag Support** (via [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0)
 - `CBOR\Tag\CoseSign1Tag` (18), `CoseSignTag` (98), `CoseEncrypt0Tag` (16), `CoseEncryptTag` (96),

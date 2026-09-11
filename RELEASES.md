@@ -56,6 +56,15 @@ verify and are reproduced byte for byte. RFC 9053 §3.2.1 makes two demands the 
 message length, and never the key of a CBC encryption — both documented in the README; the `MAC_structure` covers the
 first.
 
+**The `typ` (RFC 9596) and `CWT Claims` (RFC 9597) header parameters have typed accessors.** `CoseHeaders::getTyp()`
+returns the type of the COSE object as an `int` (a CoAP Content-Format number) or a `string` (a media type name),
+from the protected bucket only, and throws when a message carries the label in the unprotected bucket, which
+RFC 9596 §2 forbids. `CoseHeaders::getCwtClaims()` returns the claims map carried in the header, protected bucket
+first, and throws when the parameter appears in both buckets (RFC 9597 §2). The labels are `CoseHeaders::LABEL_TYP`
+(16) and `CoseHeaders::LABEL_CWT_CLAIMS` (15); the value checks are `HeaderMapHelper::assertContentTypeValue()` and
+`HeaderMapHelper::assertValidClaimLabels()`. Nothing existing changes: the raw lookups still hand both labels back
+unchecked. See [doc/Usage.md](doc/Usage.md#typ-and-cwt-claims).
+
 ### 4.7.x to 4.8.x
 
 **The six COSE message classes are deprecated.** `Cose\Signature\CoseSign1Tag`, `Cose\Signature\CoseSignTag`,

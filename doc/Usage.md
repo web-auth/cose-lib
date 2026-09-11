@@ -12,6 +12,7 @@ Content encryption itself is not implemented: the encryption tags carry a cipher
 - [COSE Tags](#cose-tags)
 - [Cryptographic Structures](#cryptographic-structures)
 - [Reading Headers](#reading-headers)
+  - [`typ` and `CWT Claims`](#typ-and-cwt-claims)
 - [Signature Operations](#signature-operations)
   - [COSE_Sign1 (Single Signer)](#cose_sign1-single-signer)
   - [COSE_Sign (Multiple Signers)](#cose_sign-multiple-signers)
@@ -172,6 +173,56 @@ levels of nesting. Pass your own `Decoder` when a header carries custom CBOR tag
 ```php
 $headers = CoseHeaders::fromMessage($coseSign1, $customDecoder);
 ```
+
+### `typ` and `CWT Claims`
+
+Two header parameters have a typed accessor, because each comes with a rule of its own that a raw lookup cannot
+apply:
+
+| Name | Label | Type | Reference | Accessor |
+|---|---|---|---|---|
+| `typ` (type) | 16 (`CoseHeaders::LABEL_TYP`) | `uint / tstr` | [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596) | `getTyp(): int\|string\|null` |
+| `CWT Claims` | 15 (`CoseHeaders::LABEL_CWT_CLAIMS`) | `map` | [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597) | `getCwtClaims(): ?MapObject` |
+
+```php
+use Cose\Structure\CoseHeaders;
+use Cose\Structure\HeaderMapHelper;
+
+$headers = CoseHeaders::fromMessage($coseSign1);
+
+$typ = $headers->getTyp();                 // "application/cwt", 61, or null — protected bucket only
+$claims = $headers->getCwtClaims();        // MapObject or null — protected bucket first
+$issuer = $claims === null ? null : HeaderMapHelper::findLabel($claims, 1)?->normalize();
+```
+
+**`typ`** names the whole COSE object, as opposed to `content type` (label 3), which names its payload. An unsigned
+integer is a CoAP Content-Format identifier (0–65535, [RFC 7252 §12.3](https://www.rfc-editor.org/rfc/rfc7252#section-12.3));
+a text string is a media type name, `<type-name>/<subtype-name>` per
+[RFC 6838 §4.2](https://www.rfc-editor.org/rfc/rfc6838#section-4.2) with no leading or trailing whitespace — the
+syntax of `content type` in [RFC 9052 §3.1](https://datatracker.ietf.org/doc/html/rfc9052#section-3.1), which
+[RFC 9596 §2](https://www.rfc-editor.org/rfc/rfc9596#section-2) adopts — and "MAY include media type parameters".
+`"application/cwt"` and `61` both say CWT; a bare `"cwt"` is rejected, because unlike JOSE, RFC 9596 defines no
+`application/` shorthand to expand it with.
+
+RFC 9596 §2: "The 'typ' parameter MUST NOT be present in unprotected headers." `getTyp()` reads the protected bucket
+only and throws when the label is found in the unprotected one, whatever the protected bucket says. The raw
+`getProtectedHeaderParameter(CoseHeaders::LABEL_TYP)` is the lenient form: it never looks at the unprotected bucket
+and hands the value back unchecked. What to do with the value — typically, compare it with the media type the
+application expects and refuse anything else — is left to the application by the RFC.
+
+**`CWT Claims`** carries CWT claims ([RFC 8392](https://datatracker.ietf.org/doc/html/rfc8392)) in the header, so
+that they can be read without decoding the payload, or when there is no payload to carry them in. The accessor hands
+back the map as it travels, with every key checked to be a `Claim-Label` (`int / text`, the same rule as a header
+label) and nothing read into the claims themselves. It looks in the protected bucket first, then in the unprotected
+one — [RFC 9597 §2](https://www.rfc-editor.org/rfc/rfc9597#section-2) only *recommends* the protected bucket, "to
+avoid the contents being malleable" — and throws when the parameter appears in both: "The header parameter MUST only
+occur once in either the protected or unprotected header of a COSE structure."
+
+> [!IMPORTANT]
+> RFC 9597 §2: when a claim is present both in the header and in the payload, "an application receiving such a
+> structure MUST verify that their values are identical". The library cannot do this for you — the payload is opaque
+> to it — so the comparison is yours to make once the signature has been verified;
+> [`examples/08-cwt.php`](../examples/08-cwt.php) shows it claim by claim.
 
 ## Signature Operations
 
@@ -561,6 +612,25 @@ $expiresAt = isset($claims[4]) ? (int) $claims[4] : null;
 > [!IMPORTANT]
 > Verify before you read. A claims map decoded from an unverified payload is attacker-controlled input, and `exp` or
 > `iss` read from it means nothing.
+
+A token can also name itself and repeat claims in its protected header — `typ` ([RFC 9596](https://www.rfc-editor.org/rfc/rfc9596))
+and `CWT Claims` ([RFC 9597](https://www.rfc-editor.org/rfc/rfc9597)), read through `getTyp()` and
+`getCwtClaims()`; see [`typ` and `CWT Claims`](#typ-and-cwt-claims). Header claims are readable before the signature
+is checked, which is what they are for (routing to the right key, say), but they are no more trustworthy than the
+payload until it is; and a claim carried in both places has to be verified identical by the application.
+
+```php
+$headers = CoseHeaders::fromMessage($message);
+if ($headers->getTyp() !== 'application/cwt') {
+    throw new RuntimeException('Not a CWT');
+}
+$headerClaims = $headers->getCwtClaims(); // ?MapObject, protected bucket first
+
+// ... verify the signature, decode the payload claims, then:
+foreach ($headerClaims ?? [] as $claim) {
+    // RFC 9597 §2: a claim in both the header and the payload MUST have identical values
+}
+```
 
 ## Detached Content
 

@@ -23,8 +23,10 @@ use function in_array;
 use InvalidArgumentException;
 use function is_int;
 use function ord;
+use function preg_match;
 use function sprintf;
 use function strlen;
+use function trim;
 
 /**
  * The RFC 9052 rules that sit above the CBOR shape of a COSE message: how a protected bucket is encoded and decoded,
@@ -53,6 +55,19 @@ final class HeaderMapHelper
      * to nest thousands of levels is rejected instead of being walked.
      */
     public const DEFAULT_PROTECTED_HEADER_MAX_DEPTH = 32;
+
+    /**
+     * The largest CoAP Content-Format identifier: RFC 7252 section 12.3 registers "the numeric identifier in the
+     * range 0-65535".
+     */
+    public const COAP_CONTENT_FORMAT_MAX = 65535;
+
+    /**
+     * "<type-name>/<subtype-name>" as RFC 9052 section 3.1 defines a textual content type, each name being a
+     * restricted-name of RFC 6838 section 4.2 (a letter or a digit, then up to 126 of [A-Za-z0-9!#$&^_.+-]), followed
+     * by the optional media type parameters of RFC 9110 section 8.3.1 ("*( OWS ";" OWS [ parameter ] )").
+     */
+    private const CONTENT_TYPE_PATTERN = '/^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}(?:[ \t]*;.*)?$/D';
 
     /**
      * Decode the protected bucket, strictly.
@@ -126,19 +141,78 @@ final class HeaderMapHelper
      */
     public static function assertValidLabels(MapObject|IndefiniteLengthMapObject $header): MapObject
     {
-        $checked = MapObject::create();
-        foreach ($header as $item) {
-            $key = $item->getKey();
-            if (! self::isLabel($key)) {
+        return self::assertIntOrTextKeys(
+            $header,
+            'Invalid header label. A label shall be an integer or a text string, got "%s" (RFC 9052 section 1.5).'
+        );
+    }
+
+    /**
+     * The same rule for a CWT claims map, and the same reason.
+     *
+     * RFC 9597 section 2 writes the value of the "CWT Claims" header parameter as "{ * Claim-Label => any }" with
+     * "Claim-Label = int / text" -- the label rule of RFC 9052 section 1.5, applied to claims. The check stops at
+     * the keys: what a claim means is left to the application (RFC 8392), so the values are handed back as carried.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9597#section-2
+     */
+    public static function assertValidClaimLabels(MapObject|IndefiniteLengthMapObject $claims): MapObject
+    {
+        return self::assertIntOrTextKeys(
+            $claims,
+            'Invalid CWT claim label. A Claim-Label shall be an integer or a text string, got "%s" (RFC 9597 section 2).'
+        );
+    }
+
+    /**
+     * The value of a content-type-shaped header parameter: "content type" (label 3) and "typ" (label 16).
+     *
+     * RFC 9052 section 3.1 types "content type" as "tstr / uint" -- an unsigned integer "from the 'CoAP
+     * Content-Formats' IANA registry table", or a text value that follows "the syntax of '<type-name>/<subtype-name>',
+     * where <type-name> and <subtype-name> are defined in Section 4.2 of [RFC6838]. Leading and trailing whitespace
+     * is not permitted." RFC 9596 section 2 gives "typ" that same syntax, and adds that a text value "MAY include
+     * media type parameters".
+     *
+     * An integer is therefore bounded to the registry, 0 to 65535 (RFC 7252 section 12.3), and a text value has to
+     * carry the slash: neither RFC defines the "application/" shorthand of JOSE, so a bare "cwt" is not a media type
+     * name here, and there is nothing to expand it into.
+     *
+     * @param string $parameter the name of the parameter, for the error messages
+     */
+    public static function assertContentTypeValue(CBORObject $value, string $parameter): int|string
+    {
+        if ($value instanceof UnsignedIntegerObject) {
+            $number = $value->getValue();
+            if (strlen($number) > 5 || (int) $number > self::COAP_CONTENT_FORMAT_MAX) {
                 throw new InvalidArgumentException(sprintf(
-                    'Invalid header label. A label shall be an integer or a text string, got "%s" (RFC 9052 section 1.5).',
-                    $key::class
+                    'Invalid "%s" header parameter. An integer value shall be a CoAP Content-Format identifier, in the range 0-%d (RFC 7252 section 12.3), got %s.',
+                    $parameter,
+                    self::COAP_CONTENT_FORMAT_MAX,
+                    $number
                 ));
             }
-            $checked->add($key, $item->getValue());
+
+            return (int) $number;
         }
 
-        return $checked;
+        if ($value instanceof TextStringObject || $value instanceof IndefiniteLengthTextStringObject) {
+            $text = $value->getValue();
+            if (trim($text) !== $text || preg_match(self::CONTENT_TYPE_PATTERN, $text) !== 1) {
+                throw new InvalidArgumentException(sprintf(
+                    'Invalid "%s" header parameter. A text value shall be a media type name of the form "<type-name>/<subtype-name>" (RFC 9052 section 3.1, RFC 6838 section 4.2), got "%s".',
+                    $parameter,
+                    $text
+                ));
+            }
+
+            return $text;
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            'Invalid "%s" header parameter. The value shall be an unsigned integer or a text string (RFC 9052 section 3.1), got "%s".',
+            $parameter,
+            $value::class
+        ));
     }
 
     /**
@@ -286,6 +360,24 @@ final class HeaderMapHelper
     private static function isByteString(CBORObject $object): bool
     {
         return $object instanceof ByteStringObject || $object instanceof IndefiniteLengthByteStringObject;
+    }
+
+    /**
+     * Rebuild a map as a definite-length one, refusing any key that is neither an integer nor a text string; $message
+     * is the sprintf() template of the error, with the class of the offending key as its argument.
+     */
+    private static function assertIntOrTextKeys(MapObject|IndefiniteLengthMapObject $map, string $message): MapObject
+    {
+        $checked = MapObject::create();
+        foreach ($map as $item) {
+            $key = $item->getKey();
+            if (! self::isLabel($key)) {
+                throw new InvalidArgumentException(sprintf($message, $key::class));
+            }
+            $checked->add($key, $item->getValue());
+        }
+
+        return $checked;
     }
 
     private static function isLabel(CBORObject $key): bool

@@ -23,7 +23,7 @@ Every CBOR item is printed as hex in full, never truncated, so it can be pasted 
 | [`05-encrypt-recipients.php`](05-encrypt-recipients.php) | COSE_Encrypt: key wrapping per recipient, nested recipients, detached ciphertext |
 | [`06-headers.php`](06-headers.php) | The RFC 9052 header rules, each shown against what the raw CBOR map answers |
 | [`07-detached-and-external-aad.php`](07-detached-and-external-aad.php) | Detached content, and binding context that never travels |
-| [`08-cwt.php`](08-cwt.php) | CBOR Web Tokens: verify first, then read the claims |
+| [`08-cwt.php`](08-cwt.php) | CBOR Web Tokens: verify first, then read the claims; `typ` and `CWT Claims` in the header |
 | [`09-migration.php`](09-migration.php) | Moving off the deprecated `Cose\...Tag` classes |
 
 ## What the library does and does not do
