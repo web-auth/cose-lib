@@ -18,7 +18,7 @@ Every CBOR item is printed as hex in full, never truncated, so it can be pasted 
 |---|---|
 | [`01-sign1.php`](01-sign1.php) | COSE_Sign1: sign, encode, decode, verify — and what a swapped payload does |
 | [`02-sign-multiple-signers.php`](02-sign-multiple-signers.php) | COSE_Sign: several signers, and why `Signature` carries `sign_protected` |
-| [`03-mac0.php`](03-mac0.php) | COSE_Mac0: the tag covers the MAC_structure, never the bare payload |
+| [`03-mac0.php`](03-mac0.php) | COSE_Mac0: the tag covers the MAC_structure, never the bare payload — with HMAC, then AES-CBC-MAC |
 | [`04-encrypt0.php`](04-encrypt0.php) | COSE_Encrypt0: `Enc_structure` as the AEAD's additional authenticated data |
 | [`05-encrypt-recipients.php`](05-encrypt-recipients.php) | COSE_Encrypt: key wrapping per recipient, nested recipients, detached ciphertext |
 | [`06-headers.php`](06-headers.php) | The RFC 9052 header rules, each shown against what the raw CBOR map answers |

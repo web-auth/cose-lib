@@ -95,6 +95,10 @@ final class RfcReferencesTest extends TestCase
         5 => ['HS256', 9053, '3.1'],
         6 => ['HS384', 9053, '3.1'],
         7 => ['HS512', 9053, '3.1'],
+        14 => ['AES-MAC 128/64', 9053, '3.2'],
+        15 => ['AES-MAC 256/64', 9053, '3.2'],
+        25 => ['AES-MAC 128/128', 9053, '3.2'],
+        26 => ['AES-MAC 256/128', 9053, '3.2'],
     ];
 
     /**
@@ -110,6 +114,10 @@ final class RfcReferencesTest extends TestCase
      */
     private const DOCUMENTED_NAMES = [
         'HS256Truncated64' => 'HS256/64',
+        'AESMAC128_64' => 'AES-MAC 128/64',
+        'AESMAC256_64' => 'AES-MAC 256/64',
+        'AESMAC128_128' => 'AES-MAC 128/128',
+        'AESMAC256_128' => 'AES-MAC 256/128',
     ];
 
     /**

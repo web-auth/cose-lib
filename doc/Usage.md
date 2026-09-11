@@ -824,7 +824,7 @@ it two parameters for that: `alg` (label 3) pins it to one algorithm — "If the
 object MUST NOT be used to perform the cryptographic operation" — and `key_ops` (label 4) pins it to a set of
 operations, whose values are those of Table 5: `sign` (1), `verify` (2), `MAC create` (9) and `MAC verify` (10) for
 the algorithms this library implements. [RFC 9053](https://www.rfc-editor.org/rfc/rfc9053.html#section-2.1) repeats
-both as a per-algorithm requirement for ECDSA (§2.1), EdDSA (§2.2) and HMAC (§3.1).
+both as a per-algorithm requirement for ECDSA (§2.1), EdDSA (§2.2), HMAC (§3.1) and AES-CBC-MAC (§3.2).
 
 Enforcing them is **opt-in**, so that a key which used to work keeps working. Ask an algorithm — or a whole
 `Manager` — to enforce the restrictions, and it refuses the key with an `InvalidArgumentException` whenever the key
@@ -1156,12 +1156,58 @@ $key = PublicKeyLoader::fromSubjectPublicKeyInfo($spkiDer);
 | HS512 | 7 | HMAC with SHA-512 (`HMAC 512/512`) | [RFC 9053 §3.1](https://www.rfc-editor.org/rfc/rfc9053#section-3.1) |
 | HS256/64 | 4 | HMAC with SHA-256 truncated to 64 bits (`HMAC 256/64`), class `HS256Truncated64` | [RFC 9053 §3.1](https://www.rfc-editor.org/rfc/rfc9053#section-3.1) |
 
+**AES-CBC-MAC** (`Cose\Algorithm\Mac\AESMAC128_64` and siblings)
+
+| Algorithm | Identifier | Description | Reference |
+|-----------|------------|-------------|-----------|
+| AES-MAC 128/64 | 14 | AES-128 in CBC mode, 64-bit tag — class `AESMAC128_64` | [RFC 9053 §3.2](https://www.rfc-editor.org/rfc/rfc9053#section-3.2) |
+| AES-MAC 256/64 | 15 | AES-256 in CBC mode, 64-bit tag — class `AESMAC256_64` | [RFC 9053 §3.2](https://www.rfc-editor.org/rfc/rfc9053#section-3.2) |
+| AES-MAC 128/128 | 25 | AES-128 in CBC mode, 128-bit tag — class `AESMAC128_128` | [RFC 9053 §3.2](https://www.rfc-editor.org/rfc/rfc9053#section-3.2) |
+| AES-MAC 256/128 | 26 | AES-256 in CBC mode, 128-bit tag — class `AESMAC256_128` | [RFC 9053 §3.2](https://www.rfc-editor.org/rfc/rfc9053#section-3.2) |
+
+Every MAC algorithm implements `Cose\Algorithm\Mac\Mac`: `hash()` computes the tag, `verify()` compares it with
+`hash_equals()`, and both take a symmetric `Key`.
+
+```php
+use Cose\Algorithm\Mac\AESMAC128_64;
+use Cose\Key\SymmetricKey;
+use Cose\Mac\Mac0Structure;
+
+$key = SymmetricKey::create([
+    SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
+    SymmetricKey::DATA_K => random_bytes(16), // exactly 16 bytes for the 128-bit identifiers, 32 for the 256-bit ones
+]);
+$algorithm = AESMAC128_64::create();
+
+$toBeMaced = Mac0Structure::create($protectedHeaderAsBytes, $payload);
+$tag = $algorithm->hash((string) $toBeMaced, $key);                  // 8 bytes
+$isValid = $algorithm->verify((string) $toBeMaced, $key, $tag);
+```
+
+> [!WARNING]
+> AES-CBC-MAC comes with two conditions of its own, stated by
+> [RFC 9053 §3.2.1](https://www.rfc-editor.org/rfc/rfc9053#section-3.2.1), that no class can check for you:
+>
+> - **A key must only authenticate messages of a fixed or known length.** With messages of varying length, two
+>   message/tag pairs let an attacker forge a third. The `MAC_structure` is the mitigation: it is CBOR, so it
+>   encodes the length of every field, and a tag computed over a `Mac0Structure` or `MacStructure` is not exposed.
+>   A tag computed over the bare payload is.
+> - **CBC encryption and CBC-MAC must use different keys.** With a shared key, the last ciphertext block of an
+>   encryption is a valid tag.
+>
+> The construction is the CBC-MAC of ISO/IEC 9797-1 with AES, an all-zero IV, padding method 1 (zero bytes up to
+> the block boundary, none when the message is already a multiple of 16 bytes — what the cose-wg/Examples vectors
+> use) and the last block truncated to the tag length. It is not AES-CMAC (RFC 4493).
+
 ### Validating Symmetric Keys
 
 [RFC 9053, section 3.1](https://www.rfc-editor.org/rfc/rfc9053#section-3.1) requires implementations "creating and
 validating MAC values" to validate the key type, the key length and the algorithm. The first two constraints admit no
 exception and are applied by the MAC algorithms themselves: `hash()` and `verify()` throw an
 `InvalidArgumentException` when the key is not symmetric, or when its `k` is missing, is not a PHP string or is empty.
+The AES-CBC-MAC algorithms add the length: RFC 9053 §3.2 ties it to the identifier, so a `k` that is not exactly
+16 bytes (AES-MAC 128/64 and 128/128) or 32 bytes (AES-MAC 256/64 and 256/128) is refused the same way, before
+OpenSSL is reached.
 `SymmetricKey` applies the same contract at construction time, where the mistake is easiest to attribute. A value
 decoded from CBOR has to be normalized first — a `CBOR\ByteStringObject` is not a byte string.
 
@@ -1234,7 +1280,7 @@ php examples/01-sign1.php
 |---|---|
 | `examples/01-sign1.php` | COSE_Sign1: sign, encode, decode, verify |
 | `examples/02-sign-multiple-signers.php` | COSE_Sign, and why `Signature` carries `sign_protected` |
-| `examples/03-mac0.php` | COSE_Mac0 over the MAC_structure |
+| `examples/03-mac0.php` | COSE_Mac0 over the MAC_structure, with HMAC and AES-CBC-MAC |
 | `examples/04-encrypt0.php` | COSE_Encrypt0 with `Enc_structure` as the AEAD's AAD |
 | `examples/05-encrypt-recipients.php` | COSE_Encrypt: key wrapping, nested recipients, detached ciphertext |
 | `examples/06-headers.php` | The header rules, against what the raw CBOR map answers |

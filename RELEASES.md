@@ -48,6 +48,14 @@ with the missing identifier. Two behaviours changed on the way, both additive:
   `tests/RfcReferencesTest.php` keeps those tables in step with the classes and with the IANA registry. The
   `keywords` of `composer.json` replace the obsolete `RFC8152` with the five RFCs implemented. No code changed.
 
+**New: the AES-CBC-MAC algorithms of RFC 9053 §3.2.** `Cose\Algorithm\Mac\AESMAC128_64` (14), `AESMAC256_64` (15),
+`AESMAC128_128` (25) and `AESMAC256_128` (26), on the `AesCbcMac` base, implement the existing `Mac` interface and
+enforce the key restrictions like every other algorithm. The key must be exactly 16 or 32 bytes long, as the
+identifier says; the tag is compared with `hash_equals()`. The `cbc-mac-examples/` fixtures of cose-wg/Examples
+verify and are reproduced byte for byte. RFC 9053 §3.2.1 makes two demands the classes cannot check — one key per
+message length, and never the key of a CBC encryption — both documented in the README; the `MAC_structure` covers the
+first.
+
 ### 4.7.x to 4.8.x
 
 **The six COSE message classes are deprecated.** `Cose\Signature\CoseSign1Tag`, `Cose\Signature\CoseSignTag`,

@@ -18,7 +18,9 @@ use CBOR\MapObject;
 use CBOR\StringStream;
 use CBOR\Tag\CoseMac0Tag;
 use CBOR\UnsignedIntegerObject;
+use Cose\Algorithm\Mac\AESMAC256_64;
 use Cose\Algorithm\Mac\HS256;
+use Cose\Key\SymmetricKey;
 use Cose\Mac\Mac0Structure;
 use Cose\Mac\MacStructure;
 use Cose\Structure\CoseHeaders;
@@ -88,3 +90,41 @@ example_assert(
 );
 example_hex('MAC0 structure', (string) $toBeVerified);
 example_hex('MAC structure', (string) $asMac);
+
+// --- the same message under AES-CBC-MAC ---------------------------------------
+
+// RFC 9053 section 3.2: the AES-MAC identifiers are AES in CBC mode with a zero IV, the last block truncated to the
+// tag length. The key length is part of the identifier -- AES-MAC 256/64 wants exactly 32 bytes -- and the tag is 8
+// bytes: what a constrained device sends.
+echo PHP_EOL;
+$cbcMacKey = SymmetricKey::create([
+    SymmetricKey::TYPE => SymmetricKey::TYPE_OCT,
+    SymmetricKey::DATA_K => random_bytes(32),
+]);
+$cbcMac = AESMAC256_64::create();
+
+$protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+    MapItem::create(UnsignedIntegerObject::create(1), UnsignedIntegerObject::create(AESMAC256_64::identifier())),
+]));
+$toBeMaced = Mac0Structure::create($protectedHeader, $payload);
+$cbcTag = $cbcMac->hash((string) $toBeMaced, $cbcMacKey);
+
+example_hex('AES-MAC 256/64 tag', $cbcTag);
+example_assert(strlen($cbcTag) === 8, 'the tag is 64 bits long');
+example_assert($cbcMac->verify((string) $toBeMaced, $cbcMacKey, $cbcTag), 'the tag verifies over the MAC_structure');
+
+// RFC 9053 section 3.2.1: "A single key must only be used for messages of a fixed or known length." The padding of
+// CBC-MAC appends zero bytes and no length, so two byte strings that differ only by trailing zero bytes up to the
+// block boundary share a tag when they are authenticated bare...
+$bare = 'Data to authenticate';
+example_assert(
+    $cbcMac->hash($bare, $cbcMacKey) === $cbcMac->hash($bare . "\0", $cbcMacKey),
+    'over bare bytes, "Data to authenticate" and the same with a trailing NUL share a tag'
+);
+
+// ...and do not once they are wrapped in a MAC_structure, whose CBOR encoding carries the length of every field.
+$withNul = Mac0Structure::create($protectedHeader, ByteStringObject::create($bare . "\0"));
+example_assert(
+    ! $cbcMac->verify((string) $withNul, $cbcMacKey, $cbcTag),
+    'over the MAC_structure, the payload with a trailing NUL has another tag'
+);
