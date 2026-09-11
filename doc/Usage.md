@@ -1,6 +1,6 @@
 # How to Use COSE Library
 
-This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature, MAC and content encryption algorithms, the cryptographic structures a signature, a MAC or an encryption is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`) and [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims), and the hash algorithms of [RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html). Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
+This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature, MAC and content encryption algorithms, the cryptographic structures a signature, a MAC or an encryption is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`) and [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims), the hash algorithms of [RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html) and the COSE Key Thumbprint of [RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html). Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
 
 The six COSE message types themselves come from [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0 or later, as `CBOR\Tag\CoseSign1Tag` and its siblings. The `Cose\...Tag` classes this library used to ship are deprecated since 4.8.0 and removed in 5.0.0 — see [Upgrading from the Cose\...Tag classes](#upgrading-from-the-cosetag-classes).
 
@@ -34,6 +34,7 @@ The key management algorithms of RFC 9053 §5–6 (HKDF, AES Key Wrap, ECDH) are
   - [Key Types](#key-types)
   - [Ed25519 Private Keys](#ed25519-private-keys)
   - [Key Parameter Forms](#key-parameter-forms)
+  - [Key Thumbprints](#key-thumbprints)
   - [Validating RSA Keys](#validating-rsa-keys)
   - [Registering Algorithms](#registering-algorithms)
   - [Verifying a Signature Made by a Certificate](#verifying-a-signature-made-by-a-certificate)
@@ -1207,8 +1208,101 @@ Curve 8 is named `secp256k1` by [RFC 8812, section 4.2](https://datatracker.ietf
 `Ec2Key::CURVE_NAME_P256K` (`'P-256K'`), the spelling of a draft that was renamed before its first revision, is
 deprecated but still accepted.
 
+- the `y` of an `Ec2Key` may be a boolean: the *sign bit* of the compressed point encoding that
+  [RFC 9053 §7.1.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1.1) allows for a public key — "if the sign
+  bit is zero, then encode y as a CBOR false value; otherwise, encode y as a CBOR true value", the sign bit being
+  the parity of `y` (SEC 1 §2.3.3). The point is decompressed when the key is built: the square root of
+  x³ + ax + b modulo the field prime, a single modular exponentiation since every supported curve has p ≡ 3 (mod 4),
+  checked against the curve equation so that an `x` on no point of the curve is refused. `y()`,
+  `getUncompressedCoordinates()` and `asPEM()` return the coordinate; `getData()` keeps the boolean, so that the map
+  round-trips unchanged. All eight curves of the table above are supported, and `PublicKeyLoader` reads a compressed
+  `subjectPublicKey` (`0x02` / `0x03`, RFC 5480 §2.2) the same way, handing back a key that carries the uncompressed
+  point.
+
+```php
+use Cose\Key\Ec2Key;
+
+$key = Ec2Key::create([
+    Ec2Key::TYPE => Ec2Key::TYPE_EC2,
+    Ec2Key::DATA_CURVE => Ec2Key::CURVE_P256,
+    Ec2Key::DATA_X => $x,
+    Ec2Key::DATA_Y => true, // the sign bit: y is odd
+]);
+
+$key->y();                 // the 32-byte coordinate, decompressed
+$key->get(Ec2Key::DATA_Y); // true, as supplied
+```
+
 Anything else — a float, a numeric string that is not an integer, a name no registry defines, an `x` that is not a
-byte string — is refused by the constructor with an `InvalidArgumentException`, before any of it is used.
+byte string, a sign bit that names no point of the curve — is refused by the constructor with an
+`InvalidArgumentException`, before any of it is used.
+
+### Key Thumbprints
+
+`Cose\Key\Thumbprint` computes the COSE Key Thumbprint of [RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html),
+the COSE counterpart of the JWK Thumbprint of RFC 7638: a digest of the key that depends on the key and on nothing
+else. It is what a producer can use as a `kid`, what the `ckt` member of a CWT `cnf` claim carries
+([§5.6](https://www.rfc-editor.org/rfc/rfc9679#section-5.6)), and what the URI of
+[§5.7](https://www.rfc-editor.org/rfc/rfc9679#section-5.7) names.
+
+The computation follows [§3](https://www.rfc-editor.org/rfc/rfc9679#section-3): a `COSE_Key` holding only the
+required parameters of the key type ([§4](https://www.rfc-editor.org/rfc/rfc9679#section-4)) is built from scratch,
+encoded in the deterministic encoding of [RFC 8949 §4.2.1](https://www.rfc-editor.org/rfc/rfc8949#section-4.2.1) —
+shortest-form integers and lengths, map keys sorted in the bytewise order of their encodings — and hashed. The map
+the key was decoded from is never re-encoded, so:
+
+- `kid`, `alg`, `key_ops`, `Base IV` and the private parts do not affect the result;
+- neither does the order of the members, nor whether `kty` and `crv` were given as integers, as numeric strings or
+  as names — the canonical form always carries the integers of the IANA registries;
+- an EC2 key carrying `y` as a sign bit and the same key carrying the coordinate have the same thumbprint, computed
+  over the uncompressed point as [§4.2](https://www.rfc-editor.org/rfc/rfc9679#section-4.2) requires;
+- a private key has the thumbprint of its public half, an OKP private key without `x` included.
+
+| Key type | Required parameters | Reference |
+|----------|---------------------|-----------|
+| OKP | `kty` (1), `crv` (-1), `x` (-2) | [RFC 9679 §4.1](https://www.rfc-editor.org/rfc/rfc9679#section-4.1) |
+| EC2 | `kty` (1), `crv` (-1), `x` (-2), `y` (-3) | [RFC 9679 §4.2](https://www.rfc-editor.org/rfc/rfc9679#section-4.2) |
+| RSA | `kty` (1), `n` (-1), `e` (-2) | [RFC 9679 §4.3](https://www.rfc-editor.org/rfc/rfc9679#section-4.3) |
+| Symmetric | `kty` (1), `k` (-1) | [RFC 9679 §4.4](https://www.rfc-editor.org/rfc/rfc9679#section-4.4) |
+
+A generic `Cose\Key\Key` of another type — HSS-LMS (5), AKP (7) — has no thumbprint here and `Thumbprint::of()`
+refuses it; RFC 9679 §4.6 defers those to the specifications of the types.
+
+```php
+use Cose\Algorithm\Hash\SHA256;
+use Cose\Algorithm\Hash\SHA384;
+use Cose\Key\Key;
+use Cose\Key\Thumbprint;
+
+$key = Key::createFromData($decodedCoseKey);
+
+$thumbprint = Thumbprint::of($key);              // with SHA-256, which §3 requires every implementation to support
+$thumbprint->value();                            // the 32 raw bytes: a kid, or the value of a "ckt"
+$thumbprint->toUri();                            // 'urn:ietf:params:oauth:ckt:sha-256:SWvYr63zB-WwjGSwQhv53AFSijRKQ72oj63RZp2iU-w'
+$thumbprint->hash();                             // the SHA256 instance it was computed with
+Thumbprint::canonicalForm($key);                 // the CBOR bytes the digest is computed over, for a cross-check
+
+// Another hash of RFC 9054: the parameter is typed Hash, so SHA1 and SHA256_64 (Filter Only) are refused
+Thumbprint::of($key, SHA384::create())->toUri(); // 'urn:ietf:params:oauth:ckt:sha-384:…'
+
+// Verifying the "ckt" confirmation method of a CWT (RFC 9679 §5.6, RFC 8747): cnf (8) => { ckt (5) => bstr }
+$confirmed = Thumbprint::of($presentedKey)->equals($claims[8][5]);
+```
+
+`equals()` compares with `hash_equals()`. The hash segment of the URI must be a name of the IANA
+[Named Information Hash Algorithm Registry](https://www.iana.org/assignments/named-information/named-information.xhtml)
+([§5.7](https://www.rfc-editor.org/rfc/rfc9679#section-5.7)), and that registry names `sha-256`, `sha-384` and
+`sha-512` only among the hashes of RFC 9054: `toUri()` throws an `InvalidArgumentException` for a thumbprint made with
+SHA-512/256, SHAKE128 or SHAKE256, whose `value()` is nonetheless computed.
+
+**Symmetric keys.** The thumbprint of a symmetric key is a digest of the secret, and therefore a public identifier of
+a secret value. [RFC 9679 §7](https://www.rfc-editor.org/rfc/rfc9679#section-7): "Thumbprints MUST NOT be used with
+passwords or other low-entropy secrets"; a randomly selected key of at least 128 bits is safe to name this way, and
+"if a developer is unable to determine whether all symmetric keys used in an application have sufficient entropy,
+then thumbprints of symmetric keys MUST NOT be used".
+
+[`examples/12-key-thumbprint.php`](../examples/12-key-thumbprint.php) reproduces the worked example of
+[RFC 9679 §6](https://www.rfc-editor.org/rfc/rfc9679#section-6) byte for byte.
 
 ### Validating RSA Keys
 
@@ -1669,6 +1763,9 @@ php examples/01-sign1.php
 | `examples/07-detached-and-external-aad.php` | Detached content and `external_aad` |
 | `examples/08-cwt.php` | CBOR Web Tokens |
 | `examples/09-migration.php` | Moving off the deprecated `Cose\...Tag` classes |
+| `examples/10-fully-specified-algorithms.php` | RFC 9864: the fully-specified identifiers next to the polymorphic ones |
+| `examples/11-hash-algorithms.php` | RFC 9054: the hash identifiers, and why *Filter Only* is a type |
+| `examples/12-key-thumbprint.php` | RFC 9679: the COSE Key Thumbprint, and a compressed EC2 point |
 
 The test suite is the rest of the examples, and every one of them is executed on each build:
 
@@ -1695,4 +1792,5 @@ The test suite is the rest of the examples, and every one of them is executed on
 - [RFC 9596 - CBOR Object Signing and Encryption (COSE) "typ" (type) Header Parameter](https://www.rfc-editor.org/rfc/rfc9596.html)
 - [RFC 9597 - CBOR Web Token (CWT) Claims in COSE Headers](https://www.rfc-editor.org/rfc/rfc9597.html)
 - [RFC 9054 - CBOR Object Signing and Encryption (COSE): Hash Algorithms](https://www.rfc-editor.org/rfc/rfc9054.html)
+- [RFC 9679 - CBOR Object Signing and Encryption (COSE) Key Thumbprint](https://www.rfc-editor.org/rfc/rfc9679.html)
 - [IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)

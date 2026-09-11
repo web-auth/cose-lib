@@ -18,6 +18,7 @@ This library implements:
 - **[RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html)** - COSE "typ" (type) Header Parameter
 - **[RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html)** - CWT Claims in COSE Headers
 - **[RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html)** - COSE: Hash Algorithms
+- **[RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html)** - COSE Key Thumbprint
 
 Every algorithm and key type table below carries a *Reference* column naming the RFC and the section that define the
 row, so that a shipped identifier can be traced to its specification without leaving this page.
@@ -60,6 +61,11 @@ row, so that a shipped identifier can be traced to its specification without lea
 - **Hash algorithms** ([RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html)): SHA-1, SHA-256/64, SHA-256, SHA-384,
   SHA-512, SHA-512/256, SHAKE128, SHAKE256 — with IANA's *Filter Only* mark on SHA-1 and SHA-256/64 expressed as a
   type, see [Hash Algorithms](#hash-algorithms)
+- **COSE Key Thumbprint** ([RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html)): `Thumbprint::of($key)` — a
+  digest of the required parameters of the key and of nothing else, with the `urn:ietf:params:oauth:ckt:` URI, see
+  [Key Thumbprints](#key-thumbprints)
+- **Compressed EC2 points**: an `Ec2Key` accepts `y` as the sign bit of [RFC 9053 §7.1.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1.1)
+  and decompresses it on load, for every curve it supports
 - Compatible with WebAuthn, FIDO2, and digital COVID certificates
 
 ✅ **Key Restrictions** ([RFC 9052](https://www.rfc-editor.org/rfc/rfc9052.html#section-7.1) §7.1)
@@ -230,6 +236,7 @@ $encoded = (string) $coseSign1;
 - **[RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html)** - COSE "typ" (type) Header Parameter
 - **[RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html)** - CWT Claims in COSE Headers
 - **[RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html)** - COSE: Hash Algorithms
+- **[RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html)** - COSE Key Thumbprint
 - **[IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)** - The algorithm, key type and curve
   registries every identifier of this library is checked against
 
@@ -661,8 +668,75 @@ Curve 8 is named `secp256k1` by [RFC 8812, section 4.2](https://datatracker.ietf
 `Ec2Key::CURVE_NAME_P256K` (`'P-256K'`), the spelling of a draft that was renamed before its first revision, is
 deprecated but still accepted.
 
+- the `y` of an `Ec2Key` may be a boolean, the *sign bit* of the compressed point encoding that
+  [RFC 9053 §7.1.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1.1) allows for a public key (`true` when `y`
+  is odd, `false` when it is even, as SEC 1 §2.3.3 defines it). The point is decompressed when the key is built and
+  checked to be on the curve; `y()`, `getUncompressedCoordinates()` and `asPEM()` return the coordinate, `getData()`
+  keeps the boolean so that the map round-trips unchanged. Every curve of the table above is supported.
+  `PublicKeyLoader` reads a compressed `subjectPublicKey` (`0x02` / `0x03`) the same way, and hands back a key
+  carrying the uncompressed point.
+
+```php
+use Cose\Key\Ec2Key;
+
+$key = Ec2Key::create([
+    Ec2Key::TYPE => Ec2Key::TYPE_EC2,
+    Ec2Key::DATA_CURVE => Ec2Key::CURVE_P256,
+    Ec2Key::DATA_X => $x,
+    Ec2Key::DATA_Y => true, // the sign bit: y is odd
+]);
+
+$key->y();                    // the 32-byte coordinate, decompressed
+$key->get(Ec2Key::DATA_Y);    // true, as supplied
+```
+
 Anything else — a float, a numeric string that is not an integer, a name no registry defines, an `x` that is not a
-byte string — is refused by the constructor with an `InvalidArgumentException`, before any of it is used.
+byte string, a sign bit that names no point of the curve — is refused by the constructor with an
+`InvalidArgumentException`, before any of it is used.
+
+## Key Thumbprints
+
+`Cose\Key\Thumbprint` computes the COSE Key Thumbprint of [RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html):
+a digest of the key that depends on the key and on nothing else, usable as a `kid`, as the `ckt` confirmation method
+of a CWT (§5.6), or as a URI (§5.7). The digest is taken over a `COSE_Key` rebuilt from the required parameters of
+the key type (§4) in the deterministic encoding of [RFC 8949 §4.2.1](https://www.rfc-editor.org/rfc/rfc8949#section-4.2.1),
+so `kid`, `alg`, `key_ops`, the private parts, the order of the members, the spelling of `kty` and `crv` and the
+compressed or uncompressed form of an EC2 point all leave it unchanged, and a private key has the thumbprint of its
+public half.
+
+```php
+use Cose\Algorithm\Hash\SHA384;
+use Cose\Key\Thumbprint;
+
+$thumbprint = Thumbprint::of($key);                  // SHA-256, the hash §3 requires
+$thumbprint->value();                                // 32 raw bytes: a kid, or the value of a "ckt"
+$thumbprint->toUri();                                // urn:ietf:params:oauth:ckt:sha-256:SWvYr63zB-…
+$thumbprint->equals($claims[8][5]);                  // constant-time comparison with a "ckt"
+Thumbprint::canonicalForm($key);                     // the CBOR bytes the digest is computed over
+
+Thumbprint::of($key, SHA384::create())->toUri();     // urn:ietf:params:oauth:ckt:sha-384:…
+```
+
+| Key type | Required parameters | Reference |
+|----------|---------------------|-----------|
+| OKP | `kty` (1), `crv` (-1), `x` (-2) | [RFC 9679 §4.1](https://www.rfc-editor.org/rfc/rfc9679#section-4.1) |
+| EC2 | `kty` (1), `crv` (-1), `x` (-2), `y` (-3) | [RFC 9679 §4.2](https://www.rfc-editor.org/rfc/rfc9679#section-4.2) |
+| RSA | `kty` (1), `n` (-1), `e` (-2) | [RFC 9679 §4.3](https://www.rfc-editor.org/rfc/rfc9679#section-4.3) |
+| Symmetric | `kty` (1), `k` (-1) | [RFC 9679 §4.4](https://www.rfc-editor.org/rfc/rfc9679#section-4.4) |
+
+`kty` and `crv` are always encoded as the integers of the IANA registries, whatever form the key names them under.
+The hash is any `Cose\Algorithm\Hash\Hash` — not a *Filter Only* one, since the thumbprint stands for the key —
+and the URI is available for the hashes the IANA
+[Named Information Hash Algorithm Registry](https://www.iana.org/assignments/named-information/named-information.xhtml)
+names: `sha-256`, `sha-384` and `sha-512`. SHA-512/256, SHAKE128 and SHAKE256 have no name there, so `toUri()`
+refuses them; `value()` is available for all.
+
+**Symmetric keys.** The thumbprint of a symmetric key is computed over the secret. RFC 9679 §7: "Thumbprints MUST
+NOT be used with passwords or other low-entropy secrets", and where the entropy of every symmetric key of an
+application cannot be established, thumbprints of symmetric keys must not be used at all. A random key of 128 bits or
+more reveals nothing through its thumbprint; anything guessable is a hash to brute-force.
+
+[`examples/12-key-thumbprint.php`](examples/12-key-thumbprint.php) reproduces the worked example of RFC 9679 §6.
 
 ## Validating RSA Keys
 
