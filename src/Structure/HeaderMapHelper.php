@@ -17,6 +17,7 @@ use CBOR\MapObject;
 use CBOR\NegativeIntegerObject;
 use CBOR\OtherObject\OtherObjectInterface;
 use CBOR\StringStream;
+use CBOR\Tag;
 use CBOR\TextStringObject;
 use CBOR\UnsignedIntegerObject;
 use function in_array;
@@ -44,6 +45,7 @@ use function trim;
  *
  * @see https://www.rfc-editor.org/rfc/rfc9052#section-3
  * @see https://www.rfc-editor.org/rfc/rfc9052#section-1.5
+ * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
  * @see https://github.com/web-auth/cose-lib/issues/166
  * @see \Cose\Tests\Structure\HeaderMapHelperTest
  */
@@ -68,6 +70,18 @@ final class HeaderMapHelper
      * by the optional media type parameters of RFC 9110 section 8.3.1 ("*( OWS ";" OWS [ parameter ] )").
      */
     private const CONTENT_TYPE_PATTERN = '/^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}(?:[ \t]*;.*)?$/D';
+
+    /**
+     * The CBOR tag number of a URI, RFC 8949 section 3.4.5.3: the CDDL type "uri" of RFC 8610 section 3.10 is
+     * "#6.32(tstr)".
+     */
+    private const TAG_URI = 32;
+
+    /**
+     * The start of a URI, RFC 3986 section 3: "URI = scheme ":" hier-part [ "?" query ] [ "#" fragment ]" with
+     * "scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )". A relative reference has no scheme and is not a URI.
+     */
+    private const URI_SCHEME_PATTERN = '/^[A-Za-z][A-Za-z0-9+.-]*:/';
 
     /**
      * Decode the protected bucket, strictly.
@@ -213,6 +227,52 @@ final class HeaderMapHelper
             $parameter,
             $value::class
         ));
+    }
+
+    /**
+     * The value of a URI-typed header parameter: "x5u" (label 35) and "x5u-sender" (label -28).
+     *
+     * RFC 9360 section 2 types both as "uri" and says of the value that "It contains a CBOR text string". The CDDL
+     * type "uri" (RFC 8610 section 3.10) is the text string under CBOR tag 32, so both spellings are read: the bare
+     * text string the RFC describes, and the tagged one the CDDL type denotes. The text has to start with a scheme
+     * (RFC 3986 section 3) -- a relative reference identifies nothing on its own -- and that is all that is checked:
+     * the value is never dereferenced by this library, and what the URI may point at (RFC 9360 section 2 lists the
+     * media types) is between the application and the server it chooses to trust.
+     *
+     * @param string $parameter the name of the parameter, for the error messages
+     */
+    public static function assertUriValue(CBORObject $value, string $parameter): string
+    {
+        $text = $value;
+        if ($value instanceof Tag) {
+            $number = self::tagNumber($value->getAdditionalInformation(), $value->getData(), $parameter);
+            if ($number !== self::TAG_URI) {
+                throw new InvalidArgumentException(sprintf(
+                    'Invalid "%s" header parameter. A URI is a text string, tagged %d or not (RFC 8610 section 3.10), got CBOR tag %d.',
+                    $parameter,
+                    self::TAG_URI,
+                    $number
+                ));
+            }
+            $text = $value->getValue();
+        }
+        if (! $text instanceof TextStringObject && ! $text instanceof IndefiniteLengthTextStringObject) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The value shall be a text string containing a URI (RFC 9360 section 2), got "%s".',
+                $parameter,
+                $text::class
+            ));
+        }
+        $uri = $text->getValue();
+        if (preg_match(self::URI_SCHEME_PATTERN, $uri) !== 1) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The value shall be a URI, starting with a scheme (RFC 3986 section 3), got "%s".',
+                $parameter,
+                $uri
+            ));
+        }
+
+        return $uri;
     }
 
     /**

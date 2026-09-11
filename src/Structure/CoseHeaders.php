@@ -11,6 +11,9 @@ use CBOR\IndefiniteLengthByteStringObject;
 use CBOR\IndefiniteLengthMapObject;
 use CBOR\MapObject;
 use CBOR\Tag\AbstractCoseTag;
+use Cose\Structure\X509\CoseCertHash;
+use Cose\Structure\X509\X5Bag;
+use Cose\Structure\X509\X5Chain;
 use InvalidArgumentException;
 use function sprintf;
 
@@ -33,6 +36,7 @@ use function sprintf;
  * $kid = $headers->getHeaderParameter(4);            // protected bucket first
  * $typ = $headers->getTyp();                         // RFC 9596: "application/cwt" or 61, protected bucket only
  * $claims = $headers->getCwtClaims();                // RFC 9597: the claims map, or null
+ * $chain = $headers->getX5Chain();                   // RFC 9360: the certificate chain, end-entity first, or null
  * ```
  *
  * The protected bucket is decoded once, on first use.
@@ -40,6 +44,7 @@ use function sprintf;
  * @see https://www.rfc-editor.org/rfc/rfc9052#section-3
  * @see https://www.rfc-editor.org/rfc/rfc9596#section-2
  * @see https://www.rfc-editor.org/rfc/rfc9597#section-2
+ * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
  * @see https://github.com/web-auth/cose-lib/issues/166
  * @see \Cose\Tests\Structure\CoseHeadersTest
  */
@@ -58,6 +63,46 @@ final class CoseHeaders
      * (label 3), which is the type of its payload.
      */
     public const LABEL_TYP = 16;
+
+    /**
+     * The "x5bag" header parameter of RFC 9360: an unordered bag of X.509 certificates, a COSE_X509.
+     */
+    public const LABEL_X5BAG = 32;
+
+    /**
+     * The "x5chain" header parameter of RFC 9360: an ordered chain of X.509 certificates, end-entity first, a
+     * COSE_X509.
+     */
+    public const LABEL_X5CHAIN = 33;
+
+    /**
+     * The "x5t" header parameter of RFC 9360: the thumbprint of the end-entity X.509 certificate, a COSE_CertHash.
+     */
+    public const LABEL_X5T = 34;
+
+    /**
+     * The "x5u" header parameter of RFC 9360: a URI pointing to an X.509 certificate.
+     */
+    public const LABEL_X5U = 35;
+
+    /**
+     * The "x5t-sender" header algorithm parameter of RFC 9360 section 3: the thumbprint of the sender's key exchange
+     * certificate, a COSE_CertHash. Only meaningful with the ECDH-SS algorithms, hence no accessor until those exist
+     * (issue #201); {@see CoseCertHash::fromCBOR()} reads the value of a raw lookup.
+     */
+    public const LABEL_X5T_SENDER = -27;
+
+    /**
+     * The "x5u-sender" header algorithm parameter of RFC 9360 section 3: a URI for the sender's key exchange
+     * certificate. ECDH-SS only; {@see HeaderMapHelper::assertUriValue()} reads the value of a raw lookup.
+     */
+    public const LABEL_X5U_SENDER = -28;
+
+    /**
+     * The "x5chain-sender" header algorithm parameter of RFC 9360 section 3: the chain of the sender's key exchange
+     * certificate, a COSE_X509. ECDH-SS only; {@see X5Chain::fromCBOR()} reads the value of a raw lookup.
+     */
+    public const LABEL_X5CHAIN_SENDER = -29;
 
     private ?MapObject $decodedProtectedHeader = null;
 
@@ -235,5 +280,78 @@ final class CoseHeaders
         }
 
         return HeaderMapHelper::assertValidClaimLabels($claims);
+    }
+
+    /**
+     * The "x5bag" header parameter (RFC 9360), or null when the message does not carry one.
+     *
+     * The bag is looked up in the protected bucket first, then in the unprotected one: section 2 allows either ("As
+     * the contents of this header parameter are untrusted input, the header parameter can be in either the protected
+     * or unprotected header bucket"). Where it was found matters to the application all the same, because "The
+     * end-entity certificate MUST be integrity protected by COSE" -- by this parameter being in the protected bucket,
+     * by an "x5t" in the protected bucket naming the certificate, or by the certificate being in the external_aad.
+     * The decode applies the shape rules of COSE_X509 and nothing more: no certificate is parsed, validated or
+     * trusted here.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
+     */
+    public function getX5Bag(): ?X5Bag
+    {
+        $value = $this->getHeaderParameter(self::LABEL_X5BAG);
+
+        return $value === null ? null : X5Bag::fromCBOR($value, 'x5bag');
+    }
+
+    /**
+     * The "x5chain" header parameter (RFC 9360), or null when the message does not carry one.
+     *
+     * Protected bucket first, then unprotected, under the same rule and with the same caveat as {@see getX5Bag()}.
+     * The chain is a candidate path proposed by the sender, end-entity certificate first; building and validating the
+     * path against the trust anchors of the application is the application's work, which {@see X5Chain::toCertificateChain()}
+     * hands to spomky-labs/pki-framework.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
+     */
+    public function getX5Chain(): ?X5Chain
+    {
+        $value = $this->getHeaderParameter(self::LABEL_X5CHAIN);
+
+        return $value === null ? null : X5Chain::fromCBOR($value, 'x5chain');
+    }
+
+    /**
+     * The "x5t" header parameter (RFC 9360), or null when the message does not carry one.
+     *
+     * Protected bucket first, then unprotected ("As this header parameter does not provide any trust, the header
+     * parameter can be in either a protected or unprotected header bucket"), while "The identification of the
+     * end-entity certificate MUST be integrity protected by COSE", so a thumbprint read from the unprotected bucket
+     * identifies nothing an application should act on. The hash algorithm the thumbprint names is resolved by the
+     * application, through {@see CoseCertHash::hashAlgorithm()} and its Manager.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
+     */
+    public function getX5T(): ?CoseCertHash
+    {
+        $value = $this->getHeaderParameter(self::LABEL_X5T);
+
+        return $value === null ? null : CoseCertHash::fromCBOR($value, 'x5t');
+    }
+
+    /**
+     * The "x5u" header parameter (RFC 9360) as a URI string, or null when the message does not carry one.
+     *
+     * Protected bucket first, then unprotected. The value is returned as text and nothing else: this library never
+     * dereferences it. Whether to fetch it, over what, and what to make of the answer -- RFC 9360 section 2: "If a
+     * retrieved certificate does not chain to an existing trust anchor, that certificate MUST NOT be trusted unless
+     * the URI provides integrity protection and server authentication and the server is configured as trusted to
+     * provide new trust anchors" -- is entirely the application's.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
+     */
+    public function getX5U(): ?string
+    {
+        $value = $this->getHeaderParameter(self::LABEL_X5U);
+
+        return $value === null ? null : HeaderMapHelper::assertUriValue($value, 'x5u');
     }
 }

@@ -19,6 +19,8 @@ This library implements:
 - **[RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html)** - CWT Claims in COSE Headers
 - **[RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html)** - COSE: Hash Algorithms
 - **[RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html)** - COSE Key Thumbprint
+- **[RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html)** - COSE: Header Parameters for Carrying and Referencing
+  X.509 Certificates
 
 Every algorithm and key type table below carries a *Reference* column naming the RFC and the section that define the
 row, so that a shipped identifier can be traced to its specification without leaving this page.
@@ -44,6 +46,15 @@ row, so that a shipped identifier can be traced to its specification without lea
   from the protected bucket only, and rejects a message carrying it in the unprotected one (RFC 9596 §2)
 - `CWT Claims` (15): `getCwtClaims()` reads the claims map carried in the header, and rejects it when it appears in
   both buckets (RFC 9597 §2); see [`typ` and `CWT Claims`](doc/Usage.md#typ-and-cwt-claims)
+
+✅ **X.509 Header Parameters** ([RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html))
+- `x5bag` (32), `x5chain` (33), `x5t` (34), `x5u` (35): `getX5Bag()`, `getX5Chain()`, `getX5T()`, `getX5U()` read
+  the `COSE_X509`, `COSE_CertHash` and URI values with their CDDL rules applied — an array of one certificate is
+  rejected, a thumbprint resolves its hash through the RFC 9054 registry and compares in constant time
+- `CertificateSignatureVerifier::verifyWithX5Chain()` verifies a signature with the end-entity certificate of the
+  chain in one call; `X5Chain::toCertificateChain()` and `X5Bag::toCertificateBundle()` hand the certificates to
+  spomky-labs/pki-framework for the path validation, which is the application's — **no chain is validated and no
+  URI is fetched by this library**; see [X.509 Header Parameters](doc/Usage.md#x509-header-parameters)
 
 ✅ **COSE Tag Support** (via [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0)
 - `CBOR\Tag\CoseSign1Tag` (18), `CoseSignTag` (98), `CoseEncrypt0Tag` (16), `CoseEncryptTag` (96),
@@ -237,6 +248,7 @@ $encoded = (string) $coseSign1;
 - **[RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html)** - CWT Claims in COSE Headers
 - **[RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html)** - COSE: Hash Algorithms
 - **[RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html)** - COSE Key Thumbprint
+- **[RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html)** - X.509 Certificates in COSE Headers
 - **[IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)** - The algorithm, key type and curve
   registries every identifier of this library is checked against
 
@@ -853,6 +865,50 @@ use Cose\Key\PublicKeyLoader;
 $key = PublicKeyLoader::fromCertificate($certificatePem);
 $key = PublicKeyLoader::fromSubjectPublicKeyInfo($spkiPem);
 ```
+
+## X.509 Header Parameters
+
+> [!IMPORTANT]
+> **This library validates no certificate chain and fetches no URI.** It reads the X.509 header parameters of
+> [RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html) and hands the certificates to the application, which
+> validates them — chain building, path validation, revocation, trust anchors — before acting on anything. RFC 9360
+> §5: "both the signature validation and the certificate validation MUST be completed successfully before acting on
+> any requests." A `getX5U()` result is a string; nothing is downloaded.
+
+| Name | Label | Type | Reference | Accessor |
+|---|---|---|---|---|
+| `x5bag` | 32 (`CoseHeaders::LABEL_X5BAG`) | `COSE_X509` | [RFC 9360 §2](https://www.rfc-editor.org/rfc/rfc9360#section-2) | `getX5Bag(): ?X5Bag` |
+| `x5chain` | 33 (`CoseHeaders::LABEL_X5CHAIN`) | `COSE_X509` | [RFC 9360 §2](https://www.rfc-editor.org/rfc/rfc9360#section-2) | `getX5Chain(): ?X5Chain` |
+| `x5t` | 34 (`CoseHeaders::LABEL_X5T`) | `COSE_CertHash` | [RFC 9360 §2](https://www.rfc-editor.org/rfc/rfc9360#section-2) | `getX5T(): ?CoseCertHash` |
+| `x5u` | 35 (`CoseHeaders::LABEL_X5U`) | `uri` | [RFC 9360 §2](https://www.rfc-editor.org/rfc/rfc9360#section-2) | `getX5U(): ?string` |
+
+```php
+use Cose\Algorithm\Hash\SHA256;
+use Cose\Algorithm\Manager;
+use Cose\Algorithm\Signature\CertificateSignatureVerifier;
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Structure\CoseHeaders;
+
+$manager = Manager::create()->add(ES256::create(), SHA256::create()); // RFC 9360 §2: SHA-256 MUST be supported for x5t
+$headers = CoseHeaders::fromMessage($coseSign1);
+
+// x5chain: verify with the end-entity certificate, then validate the proposed path yourself.
+$chain = $headers->getX5Chain();
+$isValid = CertificateSignatureVerifier::create($manager)->verifyWithX5Chain($alg, $chain, $toBeSigned, $signature);
+$certificateChain = $chain->toCertificateChain();   // SpomkyLabs\Pki\X509\Certificate\CertificateChain
+
+// x5t: select the certificate the thumbprint names, out of the bag or out of your own store.
+$x5t = $headers->getX5T();
+$certificate = $headers->getX5Bag()?->find($x5t, $x5t->hashAlgorithm($manager)); // DER, or null
+```
+
+`COSE_X509` is `bstr / [ 2*certs: bstr ]`: an array of one certificate is invalid CDDL and is rejected on decode, and
+never produced on encode. A thumbprint is computed over the bytes of the certificate as carried, and its hash
+algorithm resolves through the `Manager` — SHA-1 included, filtering being the one use RFC 9054 admits it for. The
+`*-sender` labels of RFC 9360 §3 (`LABEL_X5T_SENDER` -27, `LABEL_X5U_SENDER` -28, `LABEL_X5CHAIN_SENDER` -29) are
+declared; their accessors come with the ECDH-SS algorithms (issue #201). See
+[X.509 Header Parameters](doc/Usage.md#x509-header-parameters) in the usage guide and
+[`examples/13-x509-header-parameters.php`](examples/13-x509-header-parameters.php).
 
 ## Registering Algorithms
 

@@ -7,6 +7,8 @@ namespace Cose\Algorithm\Signature;
 use Cose\Algorithm\Manager;
 use Cose\Key\Key;
 use Cose\Key\PublicKeyLoader;
+use Cose\Structure\CoseHeaders;
+use Cose\Structure\X509\X5Chain;
 use InvalidArgumentException;
 use function sprintf;
 
@@ -35,7 +37,14 @@ use function sprintf;
  * rejects, and throws an InvalidArgumentException when the certificate, the identifier or the key type make the
  * verification impossible to even attempt.
  *
+ * The certificate may come from the message itself: the "x5chain" header parameter of RFC 9360 proposes a chain whose
+ * first certificate holds the key that made the signature, and verifyWithX5Chain() takes it as {@see CoseHeaders::getX5Chain()}
+ * hands it back. That verifies the signature and nothing else -- the chain is untrusted input until the application
+ * has validated it against its own trust anchors, and RFC 9360 section 5 requires "both the signature validation and
+ * the certificate validation" to succeed "before acting on any requests".
+ *
  * @see https://www.w3.org/TR/webauthn-3/#sctn-packed-attestation
+ * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
  * @see \Cose\Tests\Algorithm\Signature\CertificateSignatureVerifierTest
  */
 final class CertificateSignatureVerifier
@@ -64,6 +73,21 @@ final class CertificateSignatureVerifier
             $data,
             $signature
         );
+    }
+
+    /**
+     * The same verification against the end-entity certificate of an "x5chain" header parameter (RFC 9360 section 2):
+     * the first certificate of the chain, "the certificate containing the end-entity key".
+     *
+     * The rest of the chain is not looked at. It is the sender's proposal of a path to a trust anchor, and walking it
+     * is the application's job, before or after this call but in any case before the result is acted upon:
+     * {@see X5Chain::toCertificateChain()} hands it to spomky-labs/pki-framework for that.
+     *
+     * @throws InvalidArgumentException see verify()
+     */
+    public function verifyWithX5Chain(int $algorithmIdentifier, X5Chain $x5chain, string $data, string $signature): bool
+    {
+        return $this->verify($algorithmIdentifier, $x5chain->endEntityCertificate(), $data, $signature);
     }
 
     /**

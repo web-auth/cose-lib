@@ -23,6 +23,7 @@ use Cose\Algorithm\Signature\RSA\RS256;
 use Cose\Algorithm\Signature\Signature;
 use Cose\Key\Key;
 use Cose\Key\RsaKeyValidator;
+use Cose\Structure\X509\X5Chain;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -93,6 +94,47 @@ final class CertificateSignatureVerifierTest extends TestCase
             self::DATA,
             $signature
         ));
+    }
+
+    /**
+     * The same verification against the end-entity certificate of an "x5chain" (RFC 9360 section 2): the first
+     * certificate of the chain is the one whose key verifies, whatever follows it.
+     */
+    #[Test]
+    #[DataProvider('getAlgorithms')]
+    public function aSignatureIsVerifiedWithTheEndEntityCertificateOfAnX5Chain(
+        Signature $algorithm,
+        string $certificate,
+        Key $privateKey
+    ): void {
+        // Given: the certificate first, then a stranger that plays the issuer
+        $verifier = CertificateSignatureVerifier::create(Manager::create()->add($algorithm));
+        $signature = $algorithm->sign(self::DATA, $privateKey);
+        $chain = X5Chain::create(Certificates::der($certificate), Certificates::der(Certificates::RSA_CERTIFICATE));
+
+        // Then
+        static::assertTrue($verifier->verifyWithX5Chain($algorithm::identifier(), $chain, self::DATA, $signature));
+        static::assertFalse($verifier->verifyWithX5Chain($algorithm::identifier(), $chain, 'other data', $signature));
+    }
+
+    /**
+     * Only the end-entity certificate is looked at: a chain whose first certificate is not the signer's is answered
+     * for that certificate -- here, with the exception an RSA key gets from ES256 -- and the second one is never
+     * tried, however well it would have done.
+     */
+    #[Test]
+    public function theSecondCertificateOfAnX5ChainIsNeverTried(): void
+    {
+        // Given: the signer's certificate second, behind an RSA one
+        $algorithm = ES256::create();
+        $verifier = CertificateSignatureVerifier::create(Manager::create()->add($algorithm));
+        $signature = $algorithm->sign(self::DATA, Certificates::p256PrivateKey());
+        $reversed = X5Chain::create(Certificates::der(Certificates::RSA_CERTIFICATE), Certificates::der(Certificates::P256_CERTIFICATE));
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The key type does not correspond to an EC2 key');
+        $verifier->verifyWithX5Chain(ES256::ID, $reversed, self::DATA, $signature);
     }
 
     /**
