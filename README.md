@@ -22,6 +22,7 @@ This library implements:
 - **[RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html)** - COSE Key Thumbprint
 - **[RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html)** - COSE: Header Parameters for Carrying and Referencing
   X.509 Certificates
+- **[RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html)** - COSE Hash Envelope
 
 Every algorithm and key type table below carries a *Reference* column naming the RFC and the section that define the
 row, so that a shipped identifier can be traced to its specification without leaving this page.
@@ -57,6 +58,15 @@ row, so that a shipped identifier can be traced to its specification without lea
   chain in one call; `X5Chain::toCertificateChain()` and `X5Bag::toCertificateBundle()` hand the certificates to
   spomky-labs/pki-framework for the path validation, which is the application's — **no chain is validated and no
   URI is fetched by this library**; see [X.509 Header Parameters](doc/Usage.md#x509-header-parameters)
+
+✅ **Hash Envelope** ([RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html))
+- `payload-hash-alg` (258), `preimage-content-type` (259), `payload-location` (260): `getPayloadHashAlg()`,
+  `getPreimageContentType()`, `getPayloadLocation()` read the three parameters from the protected bucket only, reject
+  any of them in the unprotected one, and reject `content type` (3) anywhere in a hash envelope (§4)
+- `HashEnvelope::protectedHeaderFor()` and `payloadFor()` build the envelope, `matches()` recomputes the digest with
+  the algorithm the header names — resolved through the RFC 9054 registry, *Filter Only* hashes refused — and
+  compares in constant time; **the library never fetches `payload-location`**; see
+  [Hash Envelope](doc/Usage.md#hash-envelope)
 
 ✅ **COSE Tag Support** (via [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0)
 - `CBOR\Tag\CoseSign1Tag` (18), `CoseSignTag` (98), `CoseEncrypt0Tag` (16), `CoseEncryptTag` (96),
@@ -257,6 +267,7 @@ $encoded = (string) $coseSign1;
 - **[RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html)** - COSE: Hash Algorithms
 - **[RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html)** - COSE Key Thumbprint
 - **[RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html)** - X.509 Certificates in COSE Headers
+- **[RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html)** - COSE Hash Envelope
 - **[IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)** - The algorithm, key type and curve
   registries every identifier of this library is checked against
 
@@ -996,6 +1007,46 @@ static key of an ECDH-SS recipient: `getX5TSender()`, `getX5USender()` and `getX
 way, and the key they name is the application's to validate and hand to the algorithm. See
 [X.509 Header Parameters](doc/Usage.md#x509-header-parameters) in the usage guide and
 [`examples/13-x509-header-parameters.php`](examples/13-x509-header-parameters.php).
+
+## Hash Envelope
+
+A hash envelope ([RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html)) is a `COSE_Sign`, `COSE_Sign1`, `COSE_Mac`
+or `COSE_Mac0` whose payload is the digest of the content rather than the content: a large artefact — an SBOM, a
+firmware image — is hashed once, the digest is signed, and the signature travels without it. Three protected header
+parameters say what the payload is:
+
+| Name | Label | Type | Reference | Accessor |
+|---|---|---|---|---|
+| `payload-hash-alg` | 258 (`CoseHeaders::LABEL_PAYLOAD_HASH_ALG`) | `int` (COSE Algorithms) | [RFC 9995 §3](https://www.rfc-editor.org/rfc/rfc9995#section-3) | `getPayloadHashAlg(): ?int` |
+| `preimage-content-type` | 259 (`CoseHeaders::LABEL_PREIMAGE_CONTENT_TYPE`) | `uint / tstr` | [RFC 9995 §3](https://www.rfc-editor.org/rfc/rfc9995#section-3) | `getPreimageContentType(): int\|string\|null` |
+| `payload-location` | 260 (`CoseHeaders::LABEL_PAYLOAD_LOCATION`) | `tstr` | [RFC 9995 §3](https://www.rfc-editor.org/rfc/rfc9995#section-3) | `getPayloadLocation(): ?string` |
+
+```php
+use Cose\Algorithm\Hash\SHA256;
+use Cose\Structure\CoseHeaders;
+use Cose\Structure\HashEnvelope;
+
+// Sender: the digest is the payload, the three parameters sit next to "alg" in the protected header.
+$protected = MapObject::create([
+    MapItem::create(UnsignedIntegerObject::create(1), NegativeIntegerObject::create(ES256::identifier())),
+    ...HashEnvelope::protectedHeaderFor(SHA256::create(), 'application/spdx+json', 'https://sbom.example/manifest.spdx.json'),
+]);
+$payload = ByteStringObject::create(HashEnvelope::payloadFor(SHA256::create(), $sbom));
+
+// Verifier: verify the signature as usual, then confirm the content you obtained against the digest.
+$headers = CoseHeaders::fromMessage($coseSign1);
+$headers->getPayloadHashAlg();        // -16 — protected bucket only, "content type" (3) refused alongside
+$headers->getPayloadLocation();       // a string; nothing is fetched
+$envelope = HashEnvelope::create($manager);
+$isTheSignedContent = $envelope->matches($headers, $coseSign1->getPayload()->getValue(), $sbom);
+```
+
+`payload-hash-alg` resolves through the `Manager` and has to resolve to a `Hash`: SHA-1 (-14) and SHA-256/64 (-15)
+are *Filter Only* (RFC 9054 §2) and a payload standing for the content is not a filter, so `matches()` refuses them
+even when the registry knows them for `x5t`. `matches()` compares with `hash_equals()`. RFC 9995 §5.1 recommends
+a signature at least as strong as the payload hash; §5.2 leaves `COSE_Encrypt` out of the RFC, and so does this
+library. See [Hash Envelope](doc/Usage.md#hash-envelope) in the usage guide and
+[`examples/14-hash-envelope.php`](examples/14-hash-envelope.php).
 
 ## Registering Algorithms
 
