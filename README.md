@@ -24,6 +24,8 @@ This library implements:
   X.509 Certificates
 - **[RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html)** - COSE Hash Envelope
 - **[RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html)** - COSE: Countersignatures (version 2, labels 11 and 12)
+- **[RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html)** - ML-DSA for JOSE and COSE: ML-DSA-44/65/87 and the
+  AKP key type
 
 Every algorithm and key type table below carries a *Reference* column naming the RFC and the section that define the
 row, so that a shipped identifier can be traced to its specification without leaving this page.
@@ -89,6 +91,9 @@ row, so that a shipped identifier can be traced to its specification without lea
 ✅ **Cryptographic Algorithms**
 - **Signatures**: ECDSA (ES256, ES384, ES512, ES256K), EdDSA (Ed25519, Ed448), RSA (RS256/384/512, PS256/384/512)
 - **Fully-specified identifiers** ([RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html)): ESP256/384/512, ESB256/320/384/512, Ed25519, Ed448
+- **Post-quantum signatures** ([RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html)): ML-DSA-44, ML-DSA-65 and
+  ML-DSA-87 (FIPS 204) over the AKP key type, through OpenSSL 3.5 — pure ML-DSA, the seed as the private key, the
+  key sizes and the seed-to-public-key consistency checked before any operation; see [ML-DSA](#ml-dsa-rfc-9964)
 - **MAC**: HMAC with SHA-256/384/512, AES-CBC-MAC with 128/256-bit keys and 64/128-bit tags
 - **Content encryption** ([RFC 9053 §4](https://www.rfc-editor.org/rfc/rfc9053.html#section-4)): AES-GCM (128/192/256),
   the eight AES-CCM variants, ChaCha20/Poly1305 — through the `Enc_structure`, with the `IV` / `Partial IV` resolution
@@ -281,6 +286,7 @@ $encoded = (string) $coseSign1;
 - **[RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html)** - X.509 Certificates in COSE Headers
 - **[RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html)** - COSE Hash Envelope
 - **[RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html)** - COSE: Countersignatures
+- **[RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html)** - ML-DSA for JOSE and COSE
 - **[IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)** - The algorithm, key type and curve
   registries every identifier of this library is checked against
 
@@ -361,6 +367,75 @@ the key. They live in the `Cose\Algorithm\Signature\FullySpecified` namespace.
 >     $manager->add(ESB256::create());
 > }
 > ```
+
+#### ML-DSA ([RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html))
+
+The module-lattice signature scheme of FIPS 204, the first post-quantum signature registered for COSE. The three
+parameter sets live in the `Cose\Algorithm\Signature\MLDSA` namespace and sign with a key of the AKP type
+(`Cose\Key\AkpKey`, `kty` 7), see [Key Types](#key-types).
+
+| Algorithm | Identifier | Description | Reference |
+|-----------|------------|-------------|-----------|
+| ML-DSA-44 | -48 | ML-DSA with the FIPS 204 parameter set of security category 2 — 1312-byte public key, 2420-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
+| ML-DSA-65 | -49 | ML-DSA with the parameter set of security category 3 — 1952-byte public key, 3309-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
+| ML-DSA-87 | -50 | ML-DSA with the parameter set of security category 5 — 2592-byte public key, 4627-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
+
+The three are *pure* ML-DSA (FIPS 204 algorithm 2) with the empty context string, which is all RFC 9964 allows:
+HashML-DSA is not registered (§7.2) and a non-empty `ctx` is forbidden (§5). The private key is the 32-byte seed of
+FIPS 204 and nothing else (§4): the expanded private key is not a representation the RFC allows, and `AkpKey`
+refuses it.
+
+```php
+use Cose\Algorithm\Signature\MLDSA\MLDSA65;
+use Cose\Key\AkpKey;
+use Cose\Key\Key;
+
+$algorithm = MLDSA65::create();
+
+// A key pair from a fresh seed, or from the seed you stored: "priv" is the seed, "pub" is derived from it.
+$key = $algorithm->keyPairFromSeed(random_bytes(32));
+
+// Or the key as it travels: kty 7, the REQUIRED "alg", "pub" (-1) and, on the signing side, "priv" (-2).
+$key = AkpKey::create([
+    Key::TYPE => Key::TYPE_AKP,
+    Key::ALG => MLDSA65::ID,
+    AkpKey::DATA_PUB => $pub,     // 1952 bytes
+    AkpKey::DATA_PRIV => $seed,   // 32 bytes
+]);
+
+$signature = $algorithm->sign((string) $toBeSigned, $key);              // 3309 bytes
+$isValid = $algorithm->verify((string) $toBeSigned, $key->toPublic(), $signature);
+```
+
+What is checked, and where: `AkpKey` rejects a `pub` whose length is not the one of the parameter set named by
+`alg`, and a `priv` that is not 32 bytes (§4, §5, §7.3), so a malformed key is refused when it is first seen. The
+algorithm refuses an AKP key without `alg` — the type says nothing about the algorithm, and §3 makes the parameter
+REQUIRED — and one whose `alg` is another parameter set, whether or not the [key restrictions](doc/Usage.md#key-restrictions-alg-and-key_ops)
+are enforced. When a key carries both halves, the public key is recomputed from the seed and compared, so a
+mismatched pair (§7.4) is rejected before it signs anything. A signature of any other length than the table's is
+invalid without OpenSSL being called.
+
+> [!NOTE]
+> ML-DSA is computed by OpenSSL, which ships it in its default provider as of **3.5**, and needs the digest-less
+> `openssl_sign()` PHP only offers as of **8.4**. Both are checked at runtime — the OpenSSL library actually loaded,
+> not the one PHP was compiled against — and reported by `MLDSA44::isSupported()`, which the three classes share;
+> `create()` throws a `RuntimeException` naming the missing piece. Register them conditionally when the platform is
+> not known in advance:
+>
+> ```php
+> use Cose\Algorithm\Signature\MLDSA\MLDSA44;
+> use Cose\Algorithm\Signature\MLDSA\MLDSA65;
+> use Cose\Algorithm\Signature\MLDSA\MLDSA87;
+>
+> if (MLDSA44::isSupported()) {
+>     $manager->add(MLDSA44::create(), MLDSA65::create(), MLDSA87::create());
+> }
+> ```
+>
+> The thumbprint of an AKP key includes `alg` (RFC 9964 §6), see [Key Thumbprints](#key-thumbprints), and
+> `PublicKeyLoader` reads an ML-DSA SubjectPublicKeyInfo — or the key of a certificate a classical CA issued for
+> it — into an `AkpKey` carrying the `alg` its OID names. A certificate *signed* with ML-DSA is not readable yet:
+> spomky-labs/pki-framework does not know those signature algorithms.
 
 > [!WARNING]
 > **`Ed256` (-260) and `Ed512` (-261) are not defined by any specification, and their identifiers are not theirs.**
@@ -691,7 +766,7 @@ to its class. See [Hash Algorithms](doc/Usage.md#hash-algorithms) and
 
 ### Key Types
 
-The `Cose\Key` classes cover the four key types of the IANA
+The `Cose\Key` classes cover the five key types of the IANA
 [COSE Key Types](https://www.iana.org/assignments/cose/cose.xhtml#key-type) registry that the algorithms above use.
 `Key::createFromData()` picks the class from `kty` (label 1); the parameter labels are the `DATA_*` constants of each
 class.
@@ -702,6 +777,11 @@ class.
 | EC2 | 2 | `Cose\Key\Ec2Key` | `crv` (-1), `x` (-2), `y` (-3), `d` (-4) | [RFC 9053 §7.1.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1.1) |
 | RSA | 3 | `Cose\Key\RsaKey` | `n` (-1), `e` (-2), `d` (-3), `p` (-4), `q` (-5), `dP` (-6), `dQ` (-7), `qInv` (-8), `other` (-9), `r_i` (-10), `d_i` (-11), `t_i` (-12) | [RFC 8230 §4](https://www.rfc-editor.org/rfc/rfc8230#section-4) |
 | Symmetric | 4 | `Cose\Key\SymmetricKey` | `k` (-1) | [RFC 9053 §7.3](https://www.rfc-editor.org/rfc/rfc9053#section-7.3) |
+| AKP | 7 | `Cose\Key\AkpKey` | `pub` (-1), `priv` (-2) | [RFC 9964 §3](https://www.rfc-editor.org/rfc/rfc9964#section-3) |
+
+An AKP key carries `alg` as a **required** parameter (RFC 9964 §3): the type is a pair of byte strings whose format
+the algorithm decides. For the ML-DSA algorithms, `pub` is the encoded public key of FIPS 204 and `priv` the 32-byte
+seed, see [ML-DSA](#ml-dsa-rfc-9964).
 
 The curves an `OkpKey` or an `Ec2Key` may carry in `crv`, with the `CURVE_*` constant naming each value:
 
@@ -845,8 +925,11 @@ Thumbprint::of($key, SHA384::create())->toUri();     // urn:ietf:params:oauth:ck
 | EC2 | `kty` (1), `crv` (-1), `x` (-2), `y` (-3) | [RFC 9679 §4.2](https://www.rfc-editor.org/rfc/rfc9679#section-4.2) |
 | RSA | `kty` (1), `n` (-1), `e` (-2) | [RFC 9679 §4.3](https://www.rfc-editor.org/rfc/rfc9679#section-4.3) |
 | Symmetric | `kty` (1), `k` (-1) | [RFC 9679 §4.4](https://www.rfc-editor.org/rfc/rfc9679#section-4.4) |
+| AKP | `kty` (1), `alg` (3), `pub` (-1) | [RFC 9964 §6](https://www.rfc-editor.org/rfc/rfc9964#section-6) |
 
 `kty` and `crv` are always encoded as the integers of the IANA registries, whatever form the key names them under.
+The AKP key type is the one exception to "`alg` makes no difference": RFC 9964 §6 puts it among the required
+members, because the type alone does not say what the key is, and an AKP key without `alg` has no thumbprint.
 The hash is any `Cose\Algorithm\Hash\Hash` — not a *Filter Only* one, since the thumbprint stands for the key —
 and the URI is available for the hashes the IANA
 [Named Information Hash Algorithm Registry](https://www.iana.org/assignments/named-information/named-information.xhtml)
@@ -1159,6 +1242,8 @@ The library includes comprehensive tests including:
   the bytes the working group's generator signed, verified, and signed again; the fixtures the generator broke on
   purpose are asserted to be rejected. Fixtures for algorithms the library does not implement yet are reported as
   skipped with the identifier, so `phpunit --display-skipped` lists what is left.
+- The ML-DSA vectors of [RFC 9964 Appendix A](tests/fixtures/rfc9964/README.md), of the OpenSSL command line and of
+  [NIST ACVP](tests/fixtures/nist-acvp/ml-dsa/README.md) (FIPS 204 key generation and pure-mode signatures).
 
 ## Requirements
 
@@ -1177,6 +1262,8 @@ Optional, depending on what you use:
 - **spomky-labs/cbor-php** `^3.3.4` — required by the COSE tag classes (Sign, Encrypt, Mac). Versions below 3.3.4 are
   rejected by a `conflict` entry, because that decoder is what enforces the RFC 9052 header-map rules.
 - **ext-gmp** or **ext-bcmath** — see [Performance](#performance).
+- **PHP 8.4 and OpenSSL 3.5** at runtime — required by the ML-DSA algorithms (-48, -49, -50); everything else runs
+  on any supported PHP. Call `MLDSA44::isSupported()` when the platform is not known in advance.
 
 ## Contributing
 

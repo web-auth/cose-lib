@@ -186,6 +186,40 @@ validation, revocation and trust anchors are the application's, as is dereferenc
 string. `HeaderMapHelper::assertUriValue()` is the value check behind it (a text string, tagged 32 or not, with a
 scheme). Nothing existing changes. See [doc/Usage.md](doc/Usage.md#x509-header-parameters).
 
+**ML-DSA (RFC 9964) is implemented, over the new AKP key type.** `Cose\Algorithm\Signature\MLDSA\MLDSA44` (-48),
+`MLDSA65` (-49) and `MLDSA87` (-50), on the `MLDSA` base, implement `Signature` and enforce the key restrictions like
+every other signature algorithm; `Algorithms::COSE_ALGORITHM_ML_DSA_44/65/87` name the identifiers. They are pure
+ML-DSA (FIPS 204 algorithm 2) with the empty context string, which is all the RFC allows; HashML-DSA is not
+registered and not offered. The computation is OpenSSL's, which ships ML-DSA in its default provider as of 3.5,
+through the digest-less `openssl_sign()` PHP offers as of 8.4: `MLDSA44::isSupported()` — one gate for the three
+classes — probes the OpenSSL library actually loaded at runtime, and `create()` throws a `RuntimeException` naming
+the missing piece, the way `Ed448` and the Brainpool `ESB*` algorithms do. `Cose\Key\AkpKey` is the Algorithm Key
+Pair type of RFC 9964 §3: `kty` 7 (`Key::TYPE_AKP`, name `AKP`, dispatched by `Key::createFromData()`), `pub` (-1)
+and `priv` (-2), with `alg` a required parameter of the type. For ML-DSA, `priv` is the 32-byte seed of FIPS 204 and
+nothing else — §4 deliberately excludes the expanded private key — and `pub` the encoded public key, 1312, 1952 or
+2592 bytes; both sizes are checked against `alg` when the key is built. `MLDSA::keyPairFromSeed()` expands a seed
+into the key pair, `AkpKey::asPEM()` writes the RFC 9881 forms (a seed-only PrivateKeyInfo, a SubjectPublicKeyInfo),
+`PublicKeyLoader` reads an ML-DSA SubjectPublicKeyInfo — bare, or from the certificate a classical CA issued for the
+key — into an `AkpKey` carrying the `alg` its OID names, and `Thumbprint` computes the AKP thumbprint of §6 over
+`kty`, `alg` and `pub`. The vectors of RFC 9964 Appendix A (whose `kid` values are reproduced), of the OpenSSL command
+line and of NIST ACVP (FIPS 204 key generation and pure-mode signatures) are in the test suite; the CI runs both
+sides of the gate. Points to know:
+
+- **An AKP key without `alg` is built but unusable.** RFC 9964 §3 makes `alg` REQUIRED, because the type says nothing
+  about the algorithm; the class accepts its absence so that a map read from the wire can be inspected, and the
+  signature algorithms, `Thumbprint::of()` and `asPEM()` refuse the key. An AKP key whose `alg` is another parameter
+  set is refused by the algorithm whether or not the key restrictions are enforced — for this type, `alg` is what
+  `crv` is to an EC2 key.
+- **A mismatched key pair is refused.** When a key carries both `pub` and `priv`, the public key is recomputed from
+  the seed and compared in constant time before any operation (RFC 9964 §7.4).
+- **`alg` is part of an AKP thumbprint**, the one exception to the "kid, alg, key_ops make no difference" rule of
+  RFC 9679; every other key type is unchanged.
+- A certificate *signed* with ML-DSA cannot be read by `PublicKeyLoader` yet: spomky-labs/pki-framework does not
+  know the ML-DSA signature algorithm identifiers. A certificate holding an ML-DSA key and signed by a classical CA
+  is.
+- **ML-DSA is unavailable on PHP 8.1 to 8.3, whatever the OpenSSL version**, and on any PHP running on OpenSSL
+  older than 3.5. Nothing else of the library is affected. See [doc/Usage.md](doc/Usage.md#ml-dsa).
+
 - **The spomky-labs/pki-framework floor moves to 1.6.2** (`^1.6.2`, was `^1.0`). Every earlier release verifies a
   certificate signature over a re-encoded `tbsCertificate`, so a certificate that is not strict DER -- the cose-wg
   ones, whose `keyUsage` BIT STRING carries a spare byte -- fails path validation; 1.6.2 verifies the bytes as
