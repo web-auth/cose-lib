@@ -26,6 +26,8 @@ This library implements:
 - **[RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html)** - COSE: Countersignatures (version 2, labels 11 and 12)
 - **[RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html)** - ML-DSA for JOSE and COSE: ML-DSA-44/65/87 and the
   AKP key type
+- **[RFC 9942](https://www.rfc-editor.org/rfc/rfc9942.html)** - COSE Receipts: the `receipts`, `vds` and `vdp` header
+  parameters and the `RFC9162_SHA256` verifiable data structure
 
 Every algorithm and key type table below carries a *Reference* column naming the RFC and the section that define the
 row, so that a shipped identifier can be traced to its specification without leaving this page.
@@ -81,6 +83,18 @@ row, so that a shipped identifier can be traced to its specification without lea
 - `getCountersignatures()` and `getCountersignature0()` read the unprotected bucket and reject either label in the
   protected one (§2); `Countersigner::attach()` writes one and normalises the value to an array from the second on
 - The six examples of RFC 9338 Appendix A verify; see [Countersignatures](doc/Usage.md#countersignatures)
+✅ **COSE Receipts** ([RFC 9942](https://www.rfc-editor.org/rfc/rfc9942.html))
+- `receipts` (394), `vds` (395), `vdp` (396): `getReceipts()` hands back the receipts a message carries as
+  `CBOR\Tag\CoseSign1Tag` instances — an entry that is not a tagged `COSE_Sign1` is rejected — `getVds()` reads the
+  structure identifier from the protected bucket only, `getVdp()` the proof map
+- `RFC9162_SHA256` (`vds` 1), the one registered structure: the binary Merkle Tree of RFC 9162 §2.1 with its
+  inclusion proofs (`Rfc9162Sha256InclusionProof`) and consistency proofs (`Rfc9162Sha256ConsistencyProof`), decoded
+  with their CDDL rules and verified as RFC 9162 §2.1.3.2 and §2.1.4.2 prescribe — 186 probes of the Certificate
+  Transparency implementation run in the test suite
+- `ReceiptVerifier` is the two-step verification of RFC 9942 §5.2: apply the proof to the entry, then verify the
+  signature over the tree head it leads to, as one boolean; an unregistered `vds` or proof label is an error, never
+  skipped (§4.3). **Who the issuer is and whether the log is honest are the application's**; see
+  [COSE Receipts](#cose-receipts)
 
 ✅ **COSE Tag Support** (via [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0)
 - `CBOR\Tag\CoseSign1Tag` (18), `CoseSignTag` (98), `CoseEncrypt0Tag` (16), `CoseEncryptTag` (96),
@@ -287,6 +301,7 @@ $encoded = (string) $coseSign1;
 - **[RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html)** - COSE Hash Envelope
 - **[RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html)** - COSE: Countersignatures
 - **[RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html)** - ML-DSA for JOSE and COSE
+- **[RFC 9942](https://www.rfc-editor.org/rfc/rfc9942.html)** - COSE Receipts and Verifiable Data Structures
 - **[IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)** - The algorithm, key type and curve
   registries every identifier of this library is checked against
 
@@ -1193,6 +1208,41 @@ of this library can countersign (§3.1 requires a scheme with appendix, which th
 See [Countersignatures](doc/Usage.md#countersignatures) in the usage guide and
 [`examples/15-countersignatures.php`](examples/15-countersignatures.php). The RFC 8152 countersignatures (labels 7
 and 9) are Deprecated at IANA and are not implemented.
+## COSE Receipts
+
+> [!IMPORTANT]
+> **This library establishes no trust in a receipt issuer.** It reads the receipts of
+> [RFC 9942](https://www.rfc-editor.org/rfc/rfc9942.html), walks their Merkle proofs and verifies their signature with
+> the key the application hands it. What a `true` result means is exactly this: *the entry is a leaf of a tree whose
+> head the holder of that key signed*. Who the key belongs to, whether the transparency service behind it is honest,
+> and whether the receipt is still valid (RFC 9942 §7.2) are the application's to settle.
+
+| Name | Label | Type | Reference | Accessor |
+|---|---|---|---|---|
+| `receipts` | 394 (`CoseHeaders::LABEL_RECEIPTS`) | `[+ bstr .cbor Receipt]` | [RFC 9942 §2](https://www.rfc-editor.org/rfc/rfc9942#section-2) | `getReceipts(): list<CoseSign1Tag>` |
+| `vds` | 395 (`CoseHeaders::LABEL_VDS`) | `int` | [RFC 9942 §2](https://www.rfc-editor.org/rfc/rfc9942#section-2) | `getVds(): ?int` |
+| `vdp` | 396 (`CoseHeaders::LABEL_VDP`) | `map` | [RFC 9942 §2](https://www.rfc-editor.org/rfc/rfc9942#section-2) | `getVdp(): ?MapObject` |
+
+```php
+use Cose\Algorithm\Manager;
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Structure\CoseHeaders;
+use Cose\Structure\VerifiableDataStructure\ReceiptVerifier;
+
+$verifier = ReceiptVerifier::create(Manager::create()->add(ES256::create()));
+foreach (CoseHeaders::fromMessage($signedStatement)->getReceipts() as $receipt) {   // CBOR\Tag\CoseSign1Tag
+    $issuerKey = $yourKeyResolver(CoseHeaders::fromMessage($receipt));            // kid, x5chain … yours to trust
+    $isIncluded = $verifier->verifyInclusion($receipt, $entry, $issuerKey);        // RFC 9942 §5.2, both steps
+}
+```
+
+`Rfc9162Sha256` is the one structure the IANA registry lists (`vds` = 1): the SHA-256 binary Merkle Tree of
+[RFC 9162 §2.1](https://www.rfc-editor.org/rfc/rfc9162#section-2.1). Its inclusion proofs (`vdp` label -1) and
+consistency proofs (label -2) decode into `Rfc9162Sha256InclusionProof` and `Rfc9162Sha256ConsistencyProof`, which
+walk the path as RFC 9162 §2.1.3.2 and §2.1.4.2 prescribe — `leaf-index >= tree-size` fails, a flipped node fails, a
+path of the wrong length fails — and hand back the tree head the proof leads to, or `null`. A receipt naming another
+`vds`, or a proof label the registry does not list, is an error, not something to skip (§4.3). See
+[COSE Receipts](doc/Usage.md#cose-receipts) in the usage guide and [`examples/17-receipts.php`](examples/17-receipts.php).
 
 ## Registering Algorithms
 

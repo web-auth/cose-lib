@@ -9,11 +9,15 @@ use CBOR\ByteStringObject;
 use CBOR\CBORObject;
 use CBOR\DecoderInterface;
 use CBOR\IndefiniteLengthByteStringObject;
+use CBOR\IndefiniteLengthListObject;
 use CBOR\IndefiniteLengthMapObject;
 use CBOR\IndefiniteLengthTextStringObject;
+use CBOR\ListObject;
 use CBOR\MapObject;
 use CBOR\NegativeIntegerObject;
+use CBOR\Tag;
 use CBOR\Tag\AbstractCoseTag;
+use CBOR\Tag\CoseSign1Tag;
 use CBOR\TextStringObject;
 use CBOR\UnsignedIntegerObject;
 use Cose\Key\Ec2Key;
@@ -51,6 +55,7 @@ use Throwable;
  * $epk = $recipient->headers()->getEphemeralKey();   // RFC 9053: the sender's ephemeral public key of an ECDH-ES recipient
  * $hashAlg = $headers->getPayloadHashAlg();          // RFC 9995: -16 when the payload is the SHA-256 of the content
  * $countersignatures = $headers->getCountersignatures(); // RFC 9338: the COSE_Countersignature entries of label 11
+ * $receipts = $headers->getReceipts();               // RFC 9942: the COSE receipts, each a CBOR\Tag\CoseSign1Tag
  * ```
  *
  * The protected bucket is decoded once, on first use.
@@ -63,6 +68,7 @@ use Throwable;
  * @see https://www.rfc-editor.org/rfc/rfc9053#section-6.3.1
  * @see https://www.rfc-editor.org/rfc/rfc9995#section-4
  * @see https://www.rfc-editor.org/rfc/rfc9338#section-2
+ * @see https://www.rfc-editor.org/rfc/rfc9942#section-2
  * @see https://github.com/web-auth/cose-lib/issues/166
  * @see \Cose\Tests\Structure\CoseHeadersTest
  * @see \Cose\Tests\Structure\CountersignatureHeadersTest
@@ -142,6 +148,24 @@ final class CoseHeaders
      * dereferenced by this library.
      */
     public const LABEL_PAYLOAD_LOCATION = 260;
+
+    /**
+     * The "receipts" header parameter of RFC 9942: a "Priority ordered sequence of CBOR encoded Receipts", each a
+     * tagged COSE_Sign1 carrying the proofs of a verifiable data structure.
+     */
+    public const LABEL_RECEIPTS = 394;
+
+    /**
+     * The "vds" header parameter of RFC 9942: the identifier of the verifiable data structure a receipt's proofs
+     * belong to, in the IANA "COSE Verifiable Data Structure Algorithms" registry.
+     */
+    public const LABEL_VDS = 395;
+
+    /**
+     * The "vdp" header parameter of RFC 9942: the map of verifiable data structure proofs of a receipt, keyed by
+     * the labels of the IANA "COSE Verifiable Data Structure Proofs" registry.
+     */
+    public const LABEL_VDP = 396;
 
     /**
      * The "x5t-sender" header algorithm parameter of RFC 9360 section 3: the thumbprint of the sender's key exchange
@@ -639,6 +663,127 @@ final class CoseHeaders
     }
 
     /**
+     * The "receipts" header parameter (RFC 9942), as the COSE_Sign1 messages it carries, in the order they are
+     * carried -- "Priority ordered", the registry says -- or an empty list when the message carries none.
+     *
+     * RFC 9942 section 4.3 registers the parameter "to enable Receipts to be conveyed in the protected and unprotected
+     * headers", so the lookup is the usual one, protected bucket first. A receipt is self-contained -- its own
+     * signature is what makes it trustworthy, not the bucket it sits in -- which is also why the example of the RFC
+     * puts them in the unprotected bucket of a message that was signed before any receipt existed. The value is
+     * "[+ bstr .cbor Receipt]": an array of one or more byte strings, each wrapping exactly one CBOR data item,
+     * and "Receipts MUST be tagged as COSE_Sign1" (section 4.3), so an entry that does not decode to a tag 18 is
+     * rejected. Nothing inside a receipt is read here: {@see fromMessage()} on an entry gives its headers, and
+     * {@see \Cose\Structure\VerifiableDataStructure\ReceiptVerifier} verifies it.
+     *
+     * @return list<CoseSign1Tag>
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9942#section-4.3
+     */
+    public function getReceipts(): array
+    {
+        $value = $this->getHeaderParameter(self::LABEL_RECEIPTS);
+        if ($value === null) {
+            return [];
+        }
+        if (! $value instanceof ListObject && ! $value instanceof IndefiniteLengthListObject) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "receipts" header parameter. The value shall be an array of one or more byte strings, each a CBOR-encoded receipt (RFC 9942 section 4.3), got "%s".',
+                get_debug_type($value)
+            ));
+        }
+        if ($value->count() === 0) {
+            throw new InvalidArgumentException(
+                'Invalid "receipts" header parameter. The array shall carry at least one receipt, "[+ bstr .cbor Receipt]" (RFC 9942 section 4.3).'
+            );
+        }
+
+        $receipts = [];
+        foreach ($value as $entry) {
+            if (! $entry instanceof ByteStringObject && ! $entry instanceof IndefiniteLengthByteStringObject) {
+                throw new InvalidArgumentException(sprintf(
+                    'Invalid "receipts" header parameter. Each receipt shall be a byte string carrying a CBOR-encoded COSE_Sign1 (RFC 9942 section 4.3), got "%s".',
+                    get_debug_type($entry)
+                ));
+            }
+            $receipts[] = self::receiptValue(
+                HeaderMapHelper::decodeEmbedded($entry, $this->decoder, $this->maxDepth, 'receipt')
+            );
+        }
+
+        return $receipts;
+    }
+
+    /**
+     * The "vds" header parameter (RFC 9942), or null when the message does not declare one in its protected header.
+     *
+     * The parameter names the verifiable data structure the proofs of a receipt belong to, and RFC 9942 sections
+     * 5.2.1 and 5.3.1 require it in the protected header: "The VDS in the protected header is necessary to
+     * understand the inclusion proof structure in the unprotected header." An identifier the signature does not
+     * cover could redirect the proofs to another structure, so this accessor reads the protected bucket only; a
+     * copy in the unprotected one is ignored, as the raw lookup getUnprotectedHeaderParameter(CoseHeaders::LABEL_VDS)
+     * remains for whoever wants to see it.
+     *
+     * The value is handed back as carried. Whether it is registered -- 1 is RFC9162_SHA256, 0 is reserved, nothing
+     * else is assigned at the time of writing -- is checked where the proofs are read, since "the verifier MUST
+     * confirm that the associated VDS and VDPs match entries present in the registries" (section 4.3).
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9942#section-5.2.1
+     */
+    public function getVds(): ?int
+    {
+        $value = $this->getProtectedHeaderParameter(self::LABEL_VDS);
+        if ($value === null) {
+            return null;
+        }
+        if (! $value instanceof UnsignedIntegerObject && ! $value instanceof NegativeIntegerObject) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "vds" header parameter. The value shall be an integer of the IANA "COSE Verifiable Data Structure Algorithms" registry (RFC 9942 section 2), got "%s".',
+                get_debug_type($value)
+            ));
+        }
+        $normalized = $value->normalize();
+        if ((string) (int) $normalized !== $normalized) {
+            throw new InvalidArgumentException(
+                'Invalid "vds" header parameter. The integer value exceeds the platform integer range.'
+            );
+        }
+
+        return (int) $normalized;
+    }
+
+    /**
+     * The "vdp" header parameter (RFC 9942), or null when the message does not carry one.
+     *
+     * The value is the map of proofs as it travels, keyed by the labels of the IANA "COSE Verifiable Data Structure
+     * Proofs" registry -- for RFC9162_SHA256, -1 for the inclusion proofs and -2 for the consistency proofs -- with
+     * each key checked to be a label and unique, and nothing read into the proofs themselves:
+     * {@see \Cose\Structure\VerifiableDataStructure\Rfc9162Sha256::inclusionProofs()} decodes them once the "vds"
+     * has said what they are.
+     *
+     * The CDDL of RFC 9942 section 5 places the map in the unprotected header of a receipt, and a proof gains nothing
+     * from the signature: the tree head it leads to is what the signature covers, so a tampered proof leads to a
+     * root the signature does not verify over. The lookup is nonetheless the usual one, protected bucket first, so
+     * that a receipt whose issuer chose to protect the map is read too.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9942#section-5.2.1
+     */
+    public function getVdp(): ?MapObject
+    {
+        $value = $this->getHeaderParameter(self::LABEL_VDP);
+        if ($value === null) {
+            return null;
+        }
+        if (! $value instanceof MapObject && ! $value instanceof IndefiniteLengthMapObject) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "vdp" header parameter. The value shall be a map of proofs keyed by proof type (RFC 9942 section 2), got "%s".',
+                get_debug_type($value)
+            ));
+        }
+
+        return HeaderMapHelper::assertValidLabels($value);
+    }
+
+    /**
      * The "ephemeral key" header algorithm parameter (RFC 9053 section 6.3.1), or null when the recipient does not
      * carry one: the sender's ephemeral public key of an ECDH-ES recipient, as an EC2 or an OKP key.
      *
@@ -879,6 +1024,34 @@ final class CoseHeaders
         }
 
         return $key;
+    }
+
+    /**
+     * A decoded receipt as a CBOR\Tag\CoseSign1Tag: the class the default decoder produces for tag 18, or the
+     * GenericTag a decoder without that class produces for it, rebuilt as the typed message -- the bytes are the same.
+     */
+    private static function receiptValue(CBORObject $decoded): CoseSign1Tag
+    {
+        if ($decoded instanceof CoseSign1Tag) {
+            return $decoded;
+        }
+        if ($decoded instanceof Tag
+            && HeaderMapHelper::tagNumber($decoded->getAdditionalInformation(), $decoded->getData(), 'receipt') === CoseSign1Tag::getTagId()
+        ) {
+            $receipt = CoseSign1Tag::createFromLoadedData(
+                $decoded->getAdditionalInformation(),
+                $decoded->getData(),
+                $decoded->getValue()
+            );
+            if ($receipt instanceof CoseSign1Tag) {
+                return $receipt;
+            }
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            'Invalid "receipts" header parameter. Receipts MUST be tagged as COSE_Sign1 (RFC 9942 section 4.3), got "%s".',
+            get_debug_type($decoded)
+        ));
     }
 
     private static function byteStringValue(CBORObject $value, string $parameter): string

@@ -490,4 +490,92 @@ final class HeaderMapHelperTest extends TestCase
         static::assertFalse(HeaderMapHelper::isNil(UndefinedObject::create()));
         static::assertFalse(HeaderMapHelper::isNil(ByteStringObject::create('')));
     }
+
+    // --- bstr .cbor: an embedded data item ------------------------------------------------------------------------
+
+    /**
+     * "bstr .cbor T" (RFC 8610 section 3.8.4) carries exactly one data item: what a receipt of RFC 9942 and its
+     * proofs travel as.
+     */
+    #[Test]
+    public function anEmbeddedItemIsDecoded(): void
+    {
+        // Given: h'8201820203' = [1, [2, 3]]
+        $wrapped = ByteStringObject::create((string) ListObject::create([
+            UnsignedIntegerObject::create(1),
+            ListObject::create([UnsignedIntegerObject::create(2), UnsignedIntegerObject::create(3)]),
+        ]));
+
+        // When
+        $decoded = HeaderMapHelper::decodeEmbedded($wrapped);
+
+        // Then
+        static::assertInstanceOf(ListObject::class, $decoded);
+        static::assertSame(['1', ['2', '3']], $decoded->normalize());
+        // an indefinite-length byte string carries it just the same
+        $chunked = IndefiniteLengthByteStringObject::create()->append("\x82\x01")->append("\x82\x02\x03");
+        static::assertSame(['1', ['2', '3']], HeaderMapHelper::decodeEmbedded($chunked)->normalize());
+    }
+
+    #[Test]
+    public function anEmptyByteStringCarriesNoEmbeddedItem(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid receipt. The byte string is empty and carries no CBOR data item.');
+        HeaderMapHelper::decodeEmbedded(ByteStringObject::create(''), what: 'receipt');
+    }
+
+    #[Test]
+    public function trailingBytesAfterTheEmbeddedItemAreRejected(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid embedded CBOR item. The byte string carries trailing data after the CBOR data item.');
+        HeaderMapHelper::decodeEmbedded(ByteStringObject::create("\x01\x02"));
+    }
+
+    /**
+     * The nesting bound applies to the embedded item as it does to the protected bucket.
+     */
+    #[Test]
+    public function theEmbeddedItemIsBoundedInDepth(): void
+    {
+        // Given: [[[[1]]]], four levels
+        $wrapped = ByteStringObject::create("\x81\x81\x81\x81\x01");
+
+        // Then
+        static::assertSame([[[['1']]]], HeaderMapHelper::decodeEmbedded($wrapped, null, 4)->normalize());
+        $this->expectException(InvalidArgumentException::class);
+        HeaderMapHelper::decodeEmbedded($wrapped, null, 3);
+    }
+
+    /**
+     * The tag number of a head, for the callers whose decoder produced a GenericTag: below 24 the additional
+     * information is the number, above it announces the width of the data that follows.
+     */
+    #[Test]
+    #[DataProvider('getTagHeads')]
+    public function theTagNumberIsReadFromTheHead(int $additionalInformation, ?string $data, int $expected): void
+    {
+        static::assertSame($expected, HeaderMapHelper::tagNumber($additionalInformation, $data, 'receipt'));
+    }
+
+    /**
+     * @return iterable<string, array{int, ?string, int}>
+     */
+    public static function getTagHeads(): iterable
+    {
+        yield '18, direct' => [18, null, 18];
+        yield '18, one byte' => [24, "\x12", 18];
+        yield '61, one byte' => [24, "\x3d", 61];
+        yield '98, two bytes' => [25, "\x00\x62", 98];
+        yield '1000, four bytes' => [26, "\x00\x00\x03\xe8", 1000];
+    }
+
+    #[Test]
+    public function aTagHeadThatIsNotOneIsRejected(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Not a valid receipt object. The additional information 31 is not a valid CBOR tag head.');
+        HeaderMapHelper::tagNumber(31, null, 'receipt');
+    }
 }

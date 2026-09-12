@@ -32,6 +32,7 @@ Every CBOR item is printed as hex in full, never truncated, so it can be pasted 
 | [`14-hash-envelope.php`](14-hash-envelope.php) | RFC 9995: a COSE_Sign1 over the SHA-256 of a file, with `preimage-content-type` and `payload-location` — verify the signature, then confirm the file against the digest; what the envelope refuses |
 | [`15-countersignatures.php`](15-countersignatures.php) | RFC 9338: a notary countersigns a `COSE_Sign1`, an archive countersigns the countersignature, an abbreviated countersignature on a `COSE_Mac0` — and what the reader refuses |
 | [`16-ml-dsa.php`](16-ml-dsa.php) | RFC 9964: ML-DSA over the AKP key type — the example of the RFC reproduced (public key, signature, thumbprint as `kid`), a COSE_Sign1 signed with a fresh ML-DSA-65 key, what is refused before OpenSSL is called, and the platform gate |
+| [`17-receipts.php`](17-receipts.php) | RFC 9942: a receipt of inclusion and a receipt of consistency over the Certificate Transparency test tree — `receipts`, `vds`, `vdp`, the two-step verification, a tampered proof, an unregistered structure, and what the library leaves to the application |
 
 ## What the library does and does not do
 

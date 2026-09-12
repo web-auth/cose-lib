@@ -239,6 +239,35 @@ through the `Manager` of the application, and refused unless it is a `Hash`: SHA
 library never fetches `payload-location`** (RFC 9995 §5.3), verifies no signature on the envelope's behalf, and
 leaves `COSE_Encrypt` out, as §5.2 does. Nothing existing changes. See [doc/Usage.md](doc/Usage.md#hash-envelope) and
 `examples/14-hash-envelope.php`.
+**The COSE receipts of RFC 9942 have typed accessors, and the `RFC9162_SHA256` proofs verify.**
+`CoseHeaders::getReceipts()` reads `receipts` (394) as a list of `CBOR\Tag\CoseSign1Tag` — protected bucket first,
+an empty list when absent, and an entry that is not a byte string wrapping exactly one tagged `COSE_Sign1` rejected,
+as §4.3 requires; `getVds()` reads `vds` (395) from the protected bucket only, as an integer handed back as carried;
+`getVdp()` reads `vdp` (396) as the map of proofs with its keys checked to be labels. The labels are
+`CoseHeaders::LABEL_RECEIPTS`, `LABEL_VDS` and `LABEL_VDP`. The one registered structure, `RFC9162_SHA256` (`vds` 1),
+lives in `Cose\Structure\VerifiableDataStructure`: `Rfc9162Sha256` holds the hash functions and the tree head
+computation of RFC 9162 §2.1.1–2.1.2 and reads the proofs out of a receipt's headers under the registry checks of
+RFC 9942 §4.3 — an unregistered `vds` or proof label is an error, never skipped; `Rfc9162Sha256InclusionProof` and
+`Rfc9162Sha256ConsistencyProof` are the CDDL of §5.2 and §5.3 with the verification algorithms of RFC 9162 §2.1.3.2
+and §2.1.4.2, exposed as `root($entry)` / `newerRoot($olderRoot)` — the tree head the proof leads to, or `null` — and
+as `verify()`, with `hash_equals()`; `ReceiptVerifier::verifyInclusion()` and `verifyConsistency()` are the two-step
+verification of §5.2 and §5.3.1 as one boolean, the signature algorithm resolved from the receipt's `alg` through the
+application's `Manager`. **The library establishes no trust in a receipt issuer**: the key is the application's to
+resolve and trust, and validity periods, status and `crit` are the application's to decide. The 186 inclusion and
+consistency probes of transparency-dev/merkle (Apache-2.0) are vendored under `tests/fixtures/rfc9162/` and run in
+the test suite. Two decisions to know:
+
+- **An empty `inclusion-path` is accepted.** The CDDL of RFC 9942 §5.2 writes `[ + bstr ]`, while RFC 9162 §2.1.3.1,
+  which that section points to for the definition of the proof type, gives the only leaf of a one-entry tree an
+  empty proof. The decoder follows RFC 9162 rather than reject the first receipt a log ever issues; the verification
+  then succeeds for a tree of size one and nothing else. A consistency path is never empty (RFC 9162 §2.1.4.2 step
+  1) and the CDDL is applied as written.
+- **`HeaderMapHelper::decodeEmbedded()` and `tagNumber()` are new public helpers**: the first decodes a `bstr .cbor`
+  value with the rules the protected bucket already followed (one item, no trailing bytes, no empty string); the
+  second, formerly private, reads a tag number from a head so that a `GenericTag` 18 from a decoder that does not
+  register the class is recognized as a receipt.
+
+Nothing existing changes. See [doc/Usage.md](doc/Usage.md#cose-receipts).
 
 **The Brainpool algorithms of RFC 9864 check their curve up front.** The Brainpool curves are compiled out of some
 OpenSSL builds and of every FIPS provider; `ESB256`, `ESB320`, `ESB384` and `ESB512` used to fail on such a build

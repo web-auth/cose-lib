@@ -13,6 +13,7 @@ use CBOR\ListObject;
 use CBOR\MapItem;
 use CBOR\MapObject;
 use CBOR\NegativeIntegerObject;
+use CBOR\OtherObject\NullObject;
 use CBOR\StringStream;
 use CBOR\Tag\AbstractCoseTag;
 use CBOR\Tag\CoseEncrypt0Tag;
@@ -21,17 +22,27 @@ use CBOR\Tag\CoseMac0Tag;
 use CBOR\Tag\CoseMacTag;
 use CBOR\Tag\CoseSign1Tag;
 use CBOR\Tag\CoseSignTag;
+use CBOR\Tag\CwtTag;
+use CBOR\Tag\GenericTag;
+use CBOR\Tag\TagManager;
 use CBOR\Tag\UriTag;
 use CBOR\TextStringObject;
 use CBOR\UnsignedIntegerObject;
 use Cose\Algorithm\Hash\SHA256;
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Key\Ec2Key;
+use Cose\Signature\Signature1;
 use Cose\Structure\CoseHeaders;
 use Cose\Structure\HeaderMapHelper;
+use Cose\Structure\VerifiableDataStructure\Rfc9162Sha256;
 use Cose\Structure\X509\CoseCertHash;
 use Cose\Structure\X509\X5Bag;
 use Cose\Structure\X509\X5Chain;
 use Cose\Tests\CoseInnerLists;
+use Cose\Tests\Structure\VerifiableDataStructure\MerkleTree;
 use Cose\Tests\Structure\X509\X509Fixtures;
+use function count;
+use function hex2bin;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -43,19 +54,21 @@ use PHPUnit\Framework\TestCase;
  * The point of running one body against all six is that RFC 9052 defines the two header buckets once, for every
  * message type; the reader has to answer the same way whether the message is a COSE_Sign1 or a COSE_Encrypt.
  *
- * The typed accessors of RFC 9596 ("typ"), RFC 9597 ("CWT Claims"), RFC 9360 ("x5bag", "x5chain", "x5t", "x5u")
- * and RFC 9995 ("payload-hash-alg", "preimage-content-type", "payload-location") are tested here as well, since all
- * of them are header parameters and nothing more.
+ * The typed accessors of RFC 9596 ("typ"), RFC 9597 ("CWT Claims"), RFC 9360 ("x5bag", "x5chain", "x5t", "x5u"),
+ * RFC 9995 ("payload-hash-alg", "preimage-content-type", "payload-location") and RFC 9942 ("receipts", "vds", "vdp")
+ * are tested here as well, since all of them are header parameters and nothing more.
  *
  * @see https://www.rfc-editor.org/rfc/rfc9052#section-3
  * @see https://www.rfc-editor.org/rfc/rfc9596#section-2
  * @see https://www.rfc-editor.org/rfc/rfc9597#section-2
  * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
  * @see https://www.rfc-editor.org/rfc/rfc9995#section-4
+ * @see https://www.rfc-editor.org/rfc/rfc9942#section-4.3
  * @see https://github.com/web-auth/cose-lib/issues/166
  * @see https://github.com/web-auth/cose-lib/issues/198
  * @see https://github.com/web-auth/cose-lib/issues/196
  * @see https://github.com/web-auth/cose-lib/issues/215
+ * @see https://github.com/web-auth/cose-lib/issues/218
  */
 final class CoseHeadersTest extends TestCase
 {
@@ -824,6 +837,304 @@ final class CoseHeadersTest extends TestCase
             TextStringObject::create(''),
             'The value shall be a URI, starting with a scheme (RFC 3986 section 3), got "".',
         ];
+    }
+
+    // --- RFC 9942: receipts, vds, vdp ---------------------------------------------------------------------------------
+
+    /**
+     * Figure 2 of RFC 9942 section 4.3: a COSE_Sign1 whose unprotected header carries two receipts, each a tagged
+     * COSE_Sign1 with "vds" 1 in its protected header and a "vdp" of one inclusion proof in its unprotected one --
+     * the first for leaf 8 of a 9-leaf tree with a one-node path, the second for leaf 5 of a 6-leaf tree with two
+     * nodes, both with a detached payload. The hashes and signatures the RFC elides are filled in from trees built
+     * here; the shape is the one the RFC prints, through the bytes.
+     *
+     * @param class-string<AbstractCoseTag> $class
+     */
+    #[Test]
+    #[DataProvider('getMessageClasses')]
+    public function theReceiptsOfTheRfc9942ExampleAreReadFromEveryMessageType(string $class): void
+    {
+        // Given
+        $first = self::receiptOfInclusion(9, 8);
+        $second = self::receiptOfInclusion(6, 5);
+        $unprotected = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(4), ByteStringObject::create('kid')),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_RECEIPTS), ListObject::create([
+                ByteStringObject::create((string) $first),
+                ByteStringObject::create((string) $second),
+            ])),
+        ]);
+
+        // When: through the bytes
+        $message = Decoder::create()
+            ->decode(StringStream::create((string) self::message($class, ByteStringObject::create(''), $unprotected)));
+        static::assertInstanceOf(AbstractCoseTag::class, $message);
+        $receipts = CoseHeaders::fromMessage($message)->getReceipts();
+
+        // Then
+        static::assertCount(2, $receipts);
+        static::assertContainsOnlyInstancesOf(CoseSign1Tag::class, $receipts);
+        static::assertSame((string) $first, (string) $receipts[0]);
+        static::assertSame((string) $second, (string) $receipts[1]);
+        foreach ($receipts as $receipt) {
+            $headers = CoseHeaders::fromMessage($receipt);
+            static::assertSame(1, $headers->getVds());
+            static::assertSame('-7', $headers->getProtectedHeaderParameter(1)?->normalize());
+            static::assertTrue(HeaderMapHelper::isNil($receipt->getPayload()));
+        }
+        $proofs = Rfc9162Sha256::inclusionProofs(CoseHeaders::fromMessage($receipts[0]));
+        static::assertSame([9, 8, 1], [$proofs[0]->treeSize(), $proofs[0]->leafIndex(), count($proofs[0]->inclusionPath())]);
+        $proofs = Rfc9162Sha256::inclusionProofs(CoseHeaders::fromMessage($receipts[1]));
+        static::assertSame([6, 5, 2], [$proofs[0]->treeSize(), $proofs[0]->leafIndex(), count($proofs[0]->inclusionPath())]);
+    }
+
+    /**
+     * Section 4.3 registers "receipts" for "the protected and unprotected headers"; a message that carries none
+     * answers an empty list, not null, so that the caller can iterate without a check.
+     */
+    #[Test]
+    public function receiptsAreReadFromTheProtectedBucketToo(): void
+    {
+        // Given
+        $receipt = self::receiptOfInclusion(9, 8);
+        $protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_RECEIPTS), ListObject::create([ByteStringObject::create((string) $receipt)])),
+        ]));
+        $headers = CoseHeaders::fromMessage(self::message(CoseSign1Tag::class, $protectedHeader));
+
+        // Then
+        static::assertCount(1, $headers->getReceipts());
+        static::assertSame((string) $receipt, (string) $headers->getReceipts()[0]);
+        static::assertSame([], CoseHeaders::fromMessage(self::message(CoseSign1Tag::class, ByteStringObject::create('')))->getReceipts());
+    }
+
+    /**
+     * "Receipts MUST be tagged as COSE_Sign1" (section 4.3): the class of a receipt decoded by a decoder that does
+     * not register tag 18 is GenericTag, and the number is what says it is a COSE_Sign1.
+     */
+    #[Test]
+    public function aReceiptDecodedAsAGenericTag18IsRebuiltAsACoseSign1(): void
+    {
+        // Given: a decoder knowing no tag at all
+        $receipt = self::receiptOfInclusion(9, 8);
+        $unprotected = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_RECEIPTS), ListObject::create([ByteStringObject::create((string) $receipt)])),
+        ]);
+        $decoder = Decoder::create(TagManager::create());
+        $message = $decoder->decode(StringStream::create((string) self::message(CoseSign1Tag::class, ByteStringObject::create(''), $unprotected)));
+        static::assertInstanceOf(GenericTag::class, $message);
+        $headers = CoseHeaders::of($message->getValue()->get(0), $message->getValue()->get(1), $decoder);
+
+        // When
+        $receipts = $headers->getReceipts();
+
+        // Then
+        static::assertCount(1, $receipts);
+        static::assertInstanceOf(CoseSign1Tag::class, $receipts[0]);
+        static::assertSame((string) $receipt, (string) $receipts[0]);
+    }
+
+    #[Test]
+    #[DataProvider('getInvalidReceipts')]
+    public function aReceiptsParameterThatIsNotAListOfTaggedCoseSign1IsRejected(CBORObject $value, string $message): void
+    {
+        // Given
+        $headers = CoseHeaders::fromMessage(self::message(CoseSign1Tag::class, ByteStringObject::create(''), MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_RECEIPTS), $value),
+        ])));
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($message);
+        $headers->getReceipts();
+    }
+
+    /**
+     * @return iterable<string, array{CBORObject, string}>
+     */
+    public static function getInvalidReceipts(): iterable
+    {
+        $receipt = self::receiptOfInclusion(9, 8);
+        yield 'not an array' => [
+            ByteStringObject::create((string) $receipt),
+            'Invalid "receipts" header parameter. The value shall be an array of one or more byte strings, each a CBOR-encoded receipt (RFC 9942 section 4.3), got "CBOR\\ByteStringObject".',
+        ];
+        yield 'an empty array' => [
+            ListObject::create([]),
+            'Invalid "receipts" header parameter. The array shall carry at least one receipt, "[+ bstr .cbor Receipt]" (RFC 9942 section 4.3).',
+        ];
+        yield 'a receipt that is not wrapped in a byte string' => [
+            ListObject::create([$receipt]),
+            'Invalid "receipts" header parameter. Each receipt shall be a byte string carrying a CBOR-encoded COSE_Sign1 (RFC 9942 section 4.3), got "CBOR\\Tag\\CoseSign1Tag".',
+        ];
+        yield 'an empty byte string' => [
+            ListObject::create([ByteStringObject::create('')]),
+            'Invalid receipt. The byte string is empty and carries no CBOR data item.',
+        ];
+        yield 'trailing bytes after the receipt' => [
+            ListObject::create([ByteStringObject::create($receipt . "\x00")]),
+            'Invalid receipt. The byte string carries trailing data after the CBOR data item.',
+        ];
+        yield 'an untagged COSE_Sign1' => [
+            ListObject::create([ByteStringObject::create((string) $receipt->getValue())]),
+            'Invalid "receipts" header parameter. Receipts MUST be tagged as COSE_Sign1 (RFC 9942 section 4.3), got "CBOR\\ListObject".',
+        ];
+        yield 'a COSE_Mac0 (tag 17)' => [
+            ListObject::create([ByteStringObject::create((string) CoseMac0Tag::create($receipt->getValue()))]),
+            'Invalid "receipts" header parameter. Receipts MUST be tagged as COSE_Sign1 (RFC 9942 section 4.3), got "CBOR\\Tag\\CoseMac0Tag".',
+        ];
+        yield 'a CWT (tag 61) around the COSE_Sign1' => [
+            ListObject::create([ByteStringObject::create((string) CwtTag::create($receipt))]),
+            'Invalid "receipts" header parameter. Receipts MUST be tagged as COSE_Sign1 (RFC 9942 section 4.3), got "CBOR\\Tag\\CwtTag".',
+        ];
+        yield 'a second receipt that is not a byte string' => [
+            ListObject::create([ByteStringObject::create((string) $receipt), UnsignedIntegerObject::create(1)]),
+            'Each receipt shall be a byte string carrying a CBOR-encoded COSE_Sign1 (RFC 9942 section 4.3), got "CBOR\\UnsignedIntegerObject".',
+        ];
+    }
+
+    /**
+     * Sections 5.2.1 and 5.3.1 put "vds" in the protected header; the accessor reads that bucket only.
+     */
+    #[Test]
+    public function vdsIsReadFromTheProtectedBucketOnly(): void
+    {
+        // Given: 1 protected, 2 unprotected
+        $protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_VDS), UnsignedIntegerObject::create(1)),
+        ]));
+        $unprotected = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_VDS), UnsignedIntegerObject::create(2)),
+        ]);
+
+        // Then
+        static::assertSame(1, CoseHeaders::of($protectedHeader, $unprotected)->getVds());
+        static::assertNull(CoseHeaders::of(ByteStringObject::create(''), $unprotected)->getVds());
+        static::assertSame('2', CoseHeaders::of(ByteStringObject::create(''), $unprotected)->getUnprotectedHeaderParameter(CoseHeaders::LABEL_VDS)?->normalize());
+        // handed back as carried: a value the registry does not know is for the reader of the proofs to refuse
+        static::assertSame(0, CoseHeaders::of(HeaderMapHelper::encodeProtected(MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_VDS), UnsignedIntegerObject::create(0)),
+        ])), MapObject::create())->getVds());
+        static::assertSame(-5, CoseHeaders::of(HeaderMapHelper::encodeProtected(MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_VDS), NegativeIntegerObject::create(-5)),
+        ])), MapObject::create())->getVds());
+    }
+
+    #[Test]
+    public function aVdsThatIsNotAnIntegerIsRejected(): void
+    {
+        // Given
+        $protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_VDS), TextStringObject::create('RFC9162_SHA256')),
+        ]));
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "vds" header parameter. The value shall be an integer of the IANA "COSE Verifiable Data Structure Algorithms" registry (RFC 9942 section 2), got "CBOR\\TextStringObject".');
+        CoseHeaders::of($protectedHeader, MapObject::create())->getVds();
+    }
+
+    #[Test]
+    public function aVdsBeyondThePlatformIntegerIsRejected(): void
+    {
+        // Given: {395: 18446744073709551615}
+        $protectedHeader = ByteStringObject::create((string) hex2bin('a119018b1bffffffffffffffff'));
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "vds" header parameter. The integer value exceeds the platform integer range.');
+        CoseHeaders::of($protectedHeader, MapObject::create())->getVds();
+    }
+
+    /**
+     * The CDDL of section 5 places "vdp" in the unprotected header; a protected one is read as well, first.
+     */
+    #[Test]
+    public function vdpIsReadFromEitherBucketProtectedFirst(): void
+    {
+        // Given
+        $tree = MerkleTree::certificateTransparencyLeaves();
+        $unprotectedVdp = MapObject::create([
+            MapItem::create(NegativeIntegerObject::create(-1), ListObject::create([$tree->inclusionProof(1)->toCBOR()])),
+        ]);
+        $protectedVdp = MapObject::create([
+            MapItem::create(NegativeIntegerObject::create(-2), ListObject::create([$tree->consistencyProof(4)->toCBOR()])),
+        ]);
+        $unprotected = MapObject::create([MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_VDP), $unprotectedVdp)]);
+        $protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_VDP), $protectedVdp),
+        ]));
+
+        // Then
+        static::assertSame((string) $unprotectedVdp, (string) CoseHeaders::of(ByteStringObject::create(''), $unprotected)->getVdp());
+        static::assertSame((string) $protectedVdp, (string) CoseHeaders::of($protectedHeader, $unprotected)->getVdp());
+        static::assertNull(CoseHeaders::of(ByteStringObject::create(''), MapObject::create())->getVdp());
+    }
+
+    #[Test]
+    public function aVdpThatIsNotAMapIsRejected(): void
+    {
+        $unprotected = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_VDP), ListObject::create([])),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "vdp" header parameter. The value shall be a map of proofs keyed by proof type (RFC 9942 section 2), got "CBOR\\ListObject".');
+        CoseHeaders::of(ByteStringObject::create(''), $unprotected)->getVdp();
+    }
+
+    /**
+     * The keys of the map are labels: a byte string key is not one, as for a header bucket.
+     */
+    #[Test]
+    public function aVdpKeyThatIsNotALabelIsRejected(): void
+    {
+        $unprotected = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_VDP), MapObject::create([
+                MapItem::create(ByteStringObject::create("\x20"), ListObject::create([])),
+            ])),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid header label. A label shall be an integer or a text string');
+        CoseHeaders::of(ByteStringObject::create(''), $unprotected)->getVdp();
+    }
+
+    /**
+     * A receipt of inclusion for the given leaf of a tree of the given size, signed with ES256 and its payload
+     * detached, as RFC 9942 section 5.2.1 shapes it.
+     */
+    private static function receiptOfInclusion(int $size, int $leaf): CoseSign1Tag
+    {
+        $entries = [];
+        for ($i = 0; $i < $size; ++$i) {
+            $entries[] = 'entry ' . $i;
+        }
+        $tree = MerkleTree::of(...$entries);
+        $protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(1), NegativeIntegerObject::create(-7)),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_VDS), UnsignedIntegerObject::create(1)),
+        ]));
+        $unprotectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_VDP), MapObject::create([
+                MapItem::create(NegativeIntegerObject::create(-1), ListObject::create([$tree->inclusionProof($leaf)->toCBOR()])),
+            ])),
+        ]);
+        $key = Ec2Key::create([
+            Ec2Key::TYPE => Ec2Key::TYPE_EC2,
+            Ec2Key::DATA_CURVE => Ec2Key::CURVE_P256,
+            Ec2Key::DATA_X => hex2bin('bac5b11cad8f99f9c72b05cf4b9e26d244dc189f745228255a219a86d6a09eff'),
+            Ec2Key::DATA_Y => hex2bin('20138bf82dc1b6d562be0fa54ab7804a3a64b6d72ccfed6b6fb6ed28bbfc117e'),
+            Ec2Key::DATA_D => hex2bin('57c92077664146e876760c9520d054aa93c3afb04e306705db6090308507b4d3'),
+        ]);
+        $signature = ES256::create()->sign((string) Signature1::create($protectedHeader, ByteStringObject::create($tree->root())), $key);
+
+        return CoseSign1Tag::create(ListObject::create([
+            $protectedHeader,
+            $unprotectedHeader,
+            NullObject::create(),
+            ByteStringObject::create($signature),
+        ]));
     }
 
     /**
