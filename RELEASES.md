@@ -169,6 +169,20 @@ scheme). Nothing existing changes. See [doc/Usage.md](doc/Usage.md#x509-header-p
   carried. It is also the only supported line: its release notes close 27 security advisories affecting `<= 1.6.1`
   and declare `1.0.x` through `1.5.x` end of life. The API this library uses is unchanged across the range.
 
+**The COSE hash envelope of RFC 9995 is implemented.** `CoseHeaders::getPayloadHashAlg()`,
+`getPreimageContentType()` and `getPayloadLocation()` read `payload-hash-alg` (258), `preimage-content-type` (259) and
+`payload-location` (260) from the protected bucket only, return `null` when absent, and apply the placement rules of
+RFC 9995 §4: any of the three in the unprotected bucket is rejected, and so is `content type` (3) in either bucket of
+a message carrying `payload-hash-alg`. The labels are `CoseHeaders::LABEL_PAYLOAD_HASH_ALG` and siblings, plus
+`LABEL_CONTENT_TYPE` (3). `Cose\Structure\HashEnvelope` is the envelope itself: `protectedHeaderFor(Hash, $contentType,
+$location)` returns the header entries, `payloadFor(Hash, $preimage)` the digest that becomes the payload, and
+`matches(CoseHeaders, $payload, $preimage)` recomputes the digest with the algorithm the header names — resolved
+through the `Manager` of the application, and refused unless it is a `Hash`: SHA-1 and SHA-256/64 are *Filter Only*
+(RFC 9054 §2) and a payload standing for the content is not a filter — and compares with `hash_equals()`. **The
+library never fetches `payload-location`** (RFC 9995 §5.3), verifies no signature on the envelope's behalf, and
+leaves `COSE_Encrypt` out, as §5.2 does. Nothing existing changes. See [doc/Usage.md](doc/Usage.md#hash-envelope) and
+`examples/14-hash-envelope.php`.
+
 **The Brainpool algorithms of RFC 9864 check their curve up front.** The Brainpool curves are compiled out of some
 OpenSSL builds and of every FIPS provider; `ESB256`, `ESB320`, `ESB384` and `ESB512` used to fail on such a build
 inside `sign()` or `verify()`, with an OpenSSL error string. Each now exposes `isSupported()`, backed by
