@@ -21,6 +21,7 @@ use Cose\Algorithm\Signature\FullySpecified\ESB512;
 use Cose\Algorithm\Signature\FullySpecified\ESP256;
 use Cose\Algorithm\Signature\FullySpecified\ESP384;
 use Cose\Algorithm\Signature\FullySpecified\ESP512;
+use Cose\Algorithm\Signature\MLDSA\MLDSA44;
 use Cose\Algorithm\Signature\RSA\PS256;
 use Cose\Algorithm\Signature\RSA\PS384;
 use Cose\Algorithm\Signature\RSA\PS512;
@@ -29,9 +30,11 @@ use Cose\Algorithm\Signature\RSA\RS256;
 use Cose\Algorithm\Signature\RSA\RS384;
 use Cose\Algorithm\Signature\RSA\RS512;
 use Cose\Algorithm\Signature\Signature;
+use Cose\Key\AkpKey;
 use Cose\Key\Ec2Key;
 use Cose\Key\Key;
 use Cose\Key\OkpKey;
+use Cose\Tests\Algorithm\Signature\MLDSA\Rfc9964Vectors;
 use Cose\Tests\Algorithm\Signature\RSA\RsaKeys;
 use ErrorException;
 use function hex2bin;
@@ -184,6 +187,13 @@ final class VerificationContractTest extends TestCase
         if (Ed448::isSupported()) {
             yield 'Ed448' => [Ed448::create(), self::ed448Key(), 114];
         }
+
+        if (MLDSA44::isSupported()) {
+            foreach (Rfc9964Vectors::coseExamples() as $name => [$identifier, $key]) {
+                $algorithm = Rfc9964Vectors::classOf($identifier)::create();
+                yield $name => [$algorithm, $key, $algorithm::signatureLength()];
+            }
+        }
     }
 
     private static function publicPartOf(Key $key): Key
@@ -191,6 +201,7 @@ final class VerificationContractTest extends TestCase
         return match (true) {
             $key instanceof Ec2Key => $key->toPublic(),
             $key instanceof OkpKey => $key->toPublic(),
+            $key instanceof AkpKey => $key->toPublic(),
             default => $key,
         };
     }

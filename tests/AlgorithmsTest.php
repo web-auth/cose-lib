@@ -18,6 +18,9 @@ use Cose\Algorithm\Signature\FullySpecified\ESB512;
 use Cose\Algorithm\Signature\FullySpecified\ESP256;
 use Cose\Algorithm\Signature\FullySpecified\ESP384;
 use Cose\Algorithm\Signature\FullySpecified\ESP512;
+use Cose\Algorithm\Signature\MLDSA\MLDSA44;
+use Cose\Algorithm\Signature\MLDSA\MLDSA65;
+use Cose\Algorithm\Signature\MLDSA\MLDSA87;
 use Cose\Algorithm\Signature\RSA\PS256;
 use Cose\Algorithm\Signature\RSA\PS384;
 use Cose\Algorithm\Signature\RSA\PS512;
@@ -122,6 +125,9 @@ final class AlgorithmsTest extends TestCase
         yield 'EdDSA' => [Ed25519::identifier()];
         yield 'Ed25519' => [FullySpecifiedEd25519::identifier()];
         yield 'Ed448' => [Ed448::identifier()];
+        yield 'ML-DSA-44' => [MLDSA44::identifier()];
+        yield 'ML-DSA-65' => [MLDSA65::identifier()];
+        yield 'ML-DSA-87' => [MLDSA87::identifier()];
     }
 
     /**
@@ -166,6 +172,9 @@ final class AlgorithmsTest extends TestCase
         yield 'EdDSA' => [Ed25519::identifier()];
         yield 'Ed25519' => [FullySpecifiedEd25519::identifier()];
         yield 'Ed448' => [Ed448::identifier()];
+        yield 'ML-DSA-44' => [MLDSA44::identifier()];
+        yield 'ML-DSA-65' => [MLDSA65::identifier()];
+        yield 'ML-DSA-87' => [MLDSA87::identifier()];
     }
 
     /**

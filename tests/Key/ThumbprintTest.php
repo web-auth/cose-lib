@@ -17,6 +17,8 @@ use Cose\Algorithm\Hash\SHA512;
 use Cose\Algorithm\Hash\SHA512_256;
 use Cose\Algorithm\Hash\SHAKE128;
 use Cose\Algorithm\Hash\SHAKE256;
+use Cose\Algorithms;
+use Cose\Key\AkpKey;
 use Cose\Key\Ec2Key;
 use Cose\Key\Key;
 use Cose\Key\OkpKey;
@@ -24,6 +26,7 @@ use Cose\Key\RsaKey;
 use Cose\Key\SymmetricKey;
 use Cose\Key\Thumbprint;
 use Cose\Tests\Algorithm\Signature\Certificates;
+use Cose\Tests\Algorithm\Signature\MLDSA\Rfc9964Vectors;
 use function extension_loaded;
 use function hash;
 use function hex2bin;
@@ -183,7 +186,11 @@ final class ThumbprintTest extends TestCase
         foreach ($expectedMembers as $label => $value) {
             $map->add(
                 $label >= 0 ? UnsignedIntegerObject::create($label) : NegativeIntegerObject::create($label),
-                is_int($value) ? UnsignedIntegerObject::create($value) : ByteStringObject::create($value)
+                match (true) {
+                    ! is_int($value) => ByteStringObject::create($value),
+                    $value >= 0 => UnsignedIntegerObject::create($value),
+                    default => NegativeIntegerObject::create($value),
+                }
             );
         }
 
@@ -239,6 +246,96 @@ final class ThumbprintTest extends TestCase
             Key::TYPE => Key::TYPE_OCT,
             SymmetricKey::DATA_K => $secret,
         ]];
+
+        // RFC 9964 section 6: "alg" is a required member of an AKP key, and the only negative integer value the
+        // canonical forms of this library ever hold.
+        foreach (Rfc9964Vectors::coseExamples() as $name => [$identifier, $akp]) {
+            yield 'AKP ' . $name . ', whose pub takes a two-byte length' => [$akp, [
+                Key::TYPE => Key::TYPE_AKP,
+                Key::ALG => $identifier,
+                AkpKey::DATA_PUB => $akp->pub(),
+            ]];
+        }
+    }
+
+    /**
+     * The "kid" of every COSE key of RFC 9964 Appendix A.2 is the thumbprint of section 6 - reproducible because
+     * the appendix, unlike the truncated figure of section 3, prints the whole public key.
+     */
+    #[Test]
+    #[DataProvider('getRfc9964Examples')]
+    public function theKidOfTheRfc9964ExampleIsItsThumbprint(AkpKey $key, string $kid): void
+    {
+        // When
+        $thumbprint = Thumbprint::of($key);
+
+        // Then
+        static::assertSame(bin2hex($kid), bin2hex($thumbprint->value()));
+        static::assertSame($key->get(Key::KID), $thumbprint->value());
+        static::assertTrue($thumbprint->equals($kid));
+    }
+
+    /**
+     * @return iterable<string, array{AkpKey, string}>
+     */
+    public static function getRfc9964Examples(): iterable
+    {
+        foreach (Rfc9964Vectors::coseExamples() as $name => [, $key, $kid]) {
+            yield $name => [$key, $kid];
+        }
+    }
+
+    /**
+     * Two AKP keys that differ only by their extra members - "kid", "key_ops", "priv" - have one thumbprint; the
+     * same "pub" under another "alg" is another key.
+     */
+    #[Test]
+    public function theThumbprintOfAnAkpKeyDependsOnKtyAlgAndPubAlone(): void
+    {
+        // Given
+        $pub = random_bytes(1312);
+        $bare = AkpKey::create([
+            Key::TYPE => Key::TYPE_AKP,
+            Key::ALG => Algorithms::COSE_ALGORITHM_ML_DSA_44,
+            AkpKey::DATA_PUB => $pub,
+        ]);
+        $decorated = AkpKey::create([
+            AkpKey::DATA_PRIV => random_bytes(32),
+            Key::KEY_OPS => [Key::OP_SIGN],
+            Key::KID => 'signing key',
+            AkpKey::DATA_PUB => $pub,
+            Key::ALG => '-48',
+            Key::TYPE => 'AKP',
+        ]);
+        $otherAlgorithm = AkpKey::create([
+            Key::TYPE => Key::TYPE_AKP,
+            Key::ALG => -65536,
+            AkpKey::DATA_PUB => $pub,
+        ]);
+
+        // Then
+        static::assertSame(Thumbprint::of($bare)->value(), Thumbprint::of($decorated)->value());
+        static::assertFalse(Thumbprint::of($bare)->equals(Thumbprint::of($otherAlgorithm)->value()));
+    }
+
+    /**
+     * RFC 9964 section 6 puts "alg" among the required members: a key without it has no thumbprint.
+     */
+    #[Test]
+    public function anAkpKeyWithoutAlgorithmHasNoThumbprint(): void
+    {
+        // Given
+        $key = AkpKey::create([
+            Key::TYPE => Key::TYPE_AKP,
+            AkpKey::DATA_PUB => random_bytes(1312),
+        ]);
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('No COSE Key Thumbprint can be computed for an AKP key without "alg"');
+
+        // When
+        Thumbprint::of($key);
     }
 
     /**
@@ -246,7 +343,7 @@ final class ThumbprintTest extends TestCase
      */
     #[Test]
     #[DataProvider('getPrivateKeys')]
-    public function aPrivateKeyHasTheThumbprintOfItsPublicKey(Ec2Key|OkpKey|RsaKey $privateKey): void
+    public function aPrivateKeyHasTheThumbprintOfItsPublicKey(Ec2Key|OkpKey|RsaKey|AkpKey $privateKey): void
     {
         // When
         $ofPrivate = Thumbprint::of($privateKey);
@@ -259,7 +356,7 @@ final class ThumbprintTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{Ec2Key|OkpKey|RsaKey}>
+     * @return iterable<string, array{Ec2Key|OkpKey|RsaKey|AkpKey}>
      */
     public static function getPrivateKeys(): iterable
     {
@@ -269,6 +366,9 @@ final class ThumbprintTest extends TestCase
         yield 'OKP Ed25519' => [Certificates::ed25519PrivateKey()];
         yield 'OKP Ed448' => [Certificates::ed448PrivateKey()];
         yield 'RSA' => [Certificates::rsaPrivateKey()];
+        foreach (Rfc9964Vectors::coseExamples() as $name => [, $key]) {
+            yield 'AKP ' . $name => [$key];
+        }
     }
 
     /**

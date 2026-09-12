@@ -5,17 +5,24 @@ declare(strict_types=1);
 namespace Cose\Tests\Key;
 
 use function base64_decode;
+use Cose\Algorithms;
+use Cose\Key\AkpKey;
 use Cose\Key\Ec2Key;
+use Cose\Key\Key;
 use Cose\Key\OkpKey;
 use Cose\Key\PublicKeyLoader;
 use Cose\Key\RsaKey;
 use Cose\Tests\Algorithm\Signature\Certificates;
+use Cose\Tests\Algorithm\Signature\MLDSA\Rfc9964Vectors;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use function preg_replace;
 use function random_bytes;
+use SpomkyLabs\Pki\ASN1\Type\Constructed\Sequence;
+use SpomkyLabs\Pki\ASN1\Type\Primitive\BitString;
+use SpomkyLabs\Pki\ASN1\Type\Primitive\ObjectIdentifier;
 use function strlen;
 use function substr;
 
@@ -89,6 +96,81 @@ final class PublicKeyLoaderTest extends TestCase
         static::assertInstanceOf(Ec2Key::class, PublicKeyLoader::fromCertificate(Certificates::P256_CERTIFICATE));
         static::assertInstanceOf(RsaKey::class, PublicKeyLoader::fromCertificate(Certificates::RSA_CERTIFICATE));
         static::assertInstanceOf(OkpKey::class, PublicKeyLoader::fromCertificate(Certificates::ED25519_CERTIFICATE));
+        static::assertInstanceOf(AkpKey::class, PublicKeyLoader::fromCertificate(Rfc9964Vectors::mlDsa44Certificate()));
+    }
+
+    /**
+     * An ML-DSA SubjectPublicKeyInfo (RFC 9881) is read into an AKP key whose "alg" is the one the OID names, which
+     * RFC 9964 section 3 requires and nothing else in the structure says. Nothing here needs OpenSSL: the loader
+     * only parses.
+     */
+    #[Test]
+    #[DataProvider('getMlDsaPublicKeys')]
+    public function anMlDsaSubjectPublicKeyInfoIsReadIntoAnAkpKey(int $identifier, string $pub, string $pem): void
+    {
+        // When
+        $key = PublicKeyLoader::fromSubjectPublicKeyInfo($pem);
+
+        // Then
+        static::assertInstanceOf(AkpKey::class, $key);
+        static::assertSame([
+            Key::TYPE => Key::TYPE_AKP,
+            Key::ALG => $identifier,
+            AkpKey::DATA_PUB => $pub,
+        ], $key->getData());
+        static::assertFalse($key->isPrivate());
+    }
+
+    /**
+     * @return iterable<string, array{int, string, string}>
+     */
+    public static function getMlDsaPublicKeys(): iterable
+    {
+        foreach (Rfc9964Vectors::openSslVectors() as $name => [$identifier, , $pub, , $publicKeyPem]) {
+            yield $name => [$identifier, $pub, $publicKeyPem];
+        }
+    }
+
+    /**
+     * A certificate whose subject key is ML-DSA, issued by a classical CA: what a transition looks like, and the
+     * one shape spomky-labs/pki-framework 1.6 can parse (it does not know the ML-DSA signature algorithms yet, so a
+     * certificate signed with ML-DSA is rejected as unreadable rather than misread).
+     */
+    #[Test]
+    public function theMlDsaKeyOfACertificateIsRead(): void
+    {
+        // When
+        $key = PublicKeyLoader::fromCertificate(Rfc9964Vectors::mlDsa44Certificate());
+
+        // Then
+        static::assertInstanceOf(AkpKey::class, $key);
+        static::assertSame(Algorithms::COSE_ALGORITHM_ML_DSA_44, $key->alg());
+        foreach (Rfc9964Vectors::openSslVectors() as [$identifier, , $pub]) {
+            if ($identifier === Algorithms::COSE_ALGORITHM_ML_DSA_44) {
+                static::assertSame($pub, $key->pub());
+            }
+        }
+    }
+
+    /**
+     * The OID of ML-DSA-65 with the key of ML-DSA-44: AkpKey refuses the length, so the mismatch cannot be read
+     * into a key that would fail later, inside OpenSSL.
+     */
+    #[Test]
+    public function anMlDsaPublicKeyWhoseLengthDoesNotMatchTheOidIsRejected(): void
+    {
+        // Given
+        $spki = Sequence::create(
+            Sequence::create(ObjectIdentifier::create('2.16.840.1.101.3.4.3.18')),
+            BitString::create(random_bytes(1312))
+        )->toDER();
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The "pub" parameter of an ML-DSA key with the algorithm -49 must be 1952 bytes long');
+
+        // When
+        PublicKeyLoader::fromSubjectPublicKeyInfo($spki);
     }
 
     /**
