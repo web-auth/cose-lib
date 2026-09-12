@@ -46,6 +46,7 @@ use function trim;
  * @see https://www.rfc-editor.org/rfc/rfc9052#section-3
  * @see https://www.rfc-editor.org/rfc/rfc9052#section-1.5
  * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
+ * @see https://www.rfc-editor.org/rfc/rfc9942#section-4.3
  * @see https://github.com/web-auth/cose-lib/issues/166
  * @see \Cose\Tests\Structure\HeaderMapHelperTest
  */
@@ -105,6 +106,59 @@ final class HeaderMapHelper
             return MapObject::create();
         }
 
+        $decoded = self::decodeOneItem(
+            $raw,
+            $decoder,
+            $maxDepth,
+            'Invalid protected header. The byte string carries trailing data after the header map.'
+        );
+
+        if (! $decoded instanceof MapObject && ! $decoded instanceof IndefiniteLengthMapObject) {
+            throw new InvalidArgumentException('Protected header is not a valid Map object.');
+        }
+
+        return self::assertValidLabels($decoded);
+    }
+
+    /**
+     * Decode a byte string that carries exactly one embedded CBOR data item: the "bstr .cbor T" of RFC 8610
+     * section 3.8.4, as a receipt (RFC 9942 section 4.3, "[+ bstr .cbor Receipt]") or a proof of a verifiable data
+     * structure ("bstr .cbor inclusion-proof-content", section 5.2) travel.
+     *
+     * The rule is the one decodeProtected() applies to the protected bucket, minus the zero-length special case
+     * RFC 9052 section 3 makes for that bucket alone: an empty byte string carries no item, and bytes left after the
+     * first item make the value malformed. What the item is -- a tag, an array, a map -- is for the caller to check.
+     *
+     * @param string $what the name of the embedded structure, for the error messages
+     */
+    public static function decodeEmbedded(
+        ByteStringObject|IndefiniteLengthByteStringObject $wrapped,
+        ?DecoderInterface $decoder = null,
+        int $maxDepth = self::DEFAULT_PROTECTED_HEADER_MAX_DEPTH,
+        string $what = 'embedded CBOR item'
+    ): CBORObject {
+        $raw = $wrapped->getValue();
+        if ($raw === '') {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid %s. The byte string is empty and carries no CBOR data item.',
+                $what
+            ));
+        }
+
+        return self::decodeOneItem(
+            $raw,
+            $decoder,
+            $maxDepth,
+            sprintf('Invalid %s. The byte string carries trailing data after the CBOR data item.', $what)
+        );
+    }
+
+    private static function decodeOneItem(
+        string $raw,
+        ?DecoderInterface $decoder,
+        int $maxDepth,
+        string $trailingMessage
+    ): CBORObject {
         $stream = new StringStream($raw);
         $decoder ??= Decoder::create(null, null, $maxDepth);
         $decoded = $decoder->decode($stream);
@@ -117,16 +171,10 @@ final class HeaderMapHelper
             $trailing = false;
         }
         if ($trailing) {
-            throw new InvalidArgumentException(
-                'Invalid protected header. The byte string carries trailing data after the header map.'
-            );
+            throw new InvalidArgumentException($trailingMessage);
         }
 
-        if (! $decoded instanceof MapObject && ! $decoded instanceof IndefiniteLengthMapObject) {
-            throw new InvalidArgumentException('Protected header is not a valid Map object.');
-        }
-
-        return self::assertValidLabels($decoded);
+        return $decoded;
     }
 
     /**
@@ -449,10 +497,16 @@ final class HeaderMapHelper
     }
 
     /**
-     * A tag number is the argument of a major type 6 head: the additional information carries it directly below 24,
-     * and announces its width above.
+     * The number of a CBOR tag from its head, as {@see Tag::getAdditionalInformation()} and {@see Tag::getData()}
+     * hand it back: the argument of a major type 6 head, which the additional information carries directly below
+     * 24 and announces the width of above.
+     *
+     * Public so that a tag the decoder did not type -- a GenericTag, when the caller's decoder does not register the
+     * class -- can be recognized by its number, as {@see CoseHeaders::getReceipts()} does for tag 18.
+     *
+     * @param string $name the name of the structure being read, for the error messages
      */
-    private static function tagNumber(int $additionalInformation, ?string $data, string $name): int
+    public static function tagNumber(int $additionalInformation, ?string $data, string $name): int
     {
         if ($additionalInformation < 24) {
             return $additionalInformation;
