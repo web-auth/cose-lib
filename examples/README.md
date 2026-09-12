@@ -30,6 +30,7 @@ Every CBOR item is printed as hex in full, never truncated, so it can be pasted 
 | [`12-key-thumbprint.php`](12-key-thumbprint.php) | RFC 9679: the COSE Key Thumbprint against the worked example of the RFC, one thumbprint for every representation of a key, and a compressed EC2 point |
 | [`13-x509-header-parameters.php`](13-x509-header-parameters.php) | RFC 9360: `x5chain`, `x5bag`, `x5t` and `x5u` on the cose-wg certificates — verify with the chain, select by thumbprint, then validate the path yourself |
 | [`14-hash-envelope.php`](14-hash-envelope.php) | RFC 9995: a COSE_Sign1 over the SHA-256 of a file, with `preimage-content-type` and `payload-location` — verify the signature, then confirm the file against the digest; what the envelope refuses |
+| [`15-countersignatures.php`](15-countersignatures.php) | RFC 9338: a notary countersigns a `COSE_Sign1`, an archive countersigns the countersignature, an abbreviated countersignature on a `COSE_Mac0` — and what the reader refuses |
 
 ## What the library does and does not do
 

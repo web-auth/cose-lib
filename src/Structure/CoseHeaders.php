@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cose\Structure;
 
+use function array_map;
 use CBOR\ByteStringObject;
 use CBOR\CBORObject;
 use CBOR\DecoderInterface;
@@ -18,6 +19,7 @@ use CBOR\UnsignedIntegerObject;
 use Cose\Key\Ec2Key;
 use Cose\Key\Key;
 use Cose\Key\OkpKey;
+use Cose\Signature\CoseSignature;
 use Cose\Structure\X509\CoseCertHash;
 use Cose\Structure\X509\X5Bag;
 use Cose\Structure\X509\X5Chain;
@@ -48,6 +50,7 @@ use Throwable;
  * $chain = $headers->getX5Chain();                   // RFC 9360: the certificate chain, end-entity first, or null
  * $epk = $recipient->headers()->getEphemeralKey();   // RFC 9053: the sender's ephemeral public key of an ECDH-ES recipient
  * $hashAlg = $headers->getPayloadHashAlg();          // RFC 9995: -16 when the payload is the SHA-256 of the content
+ * $countersignatures = $headers->getCountersignatures(); // RFC 9338: the COSE_Countersignature entries of label 11
  * ```
  *
  * The protected bucket is decoded once, on first use.
@@ -59,8 +62,10 @@ use Throwable;
  * @see https://www.rfc-editor.org/rfc/rfc9053#section-5.2
  * @see https://www.rfc-editor.org/rfc/rfc9053#section-6.3.1
  * @see https://www.rfc-editor.org/rfc/rfc9995#section-4
+ * @see https://www.rfc-editor.org/rfc/rfc9338#section-2
  * @see https://github.com/web-auth/cose-lib/issues/166
  * @see \Cose\Tests\Structure\CoseHeadersTest
+ * @see \Cose\Tests\Structure\CountersignatureHeadersTest
  */
 final class CoseHeaders
 {
@@ -83,6 +88,19 @@ final class CoseHeaders
      * (label 3), which is the type of its payload.
      */
     public const LABEL_TYP = 16;
+
+    /**
+     * The "Countersignature version 2" header parameter of RFC 9338: one COSE_Countersignature, or an array of
+     * them, in the unprotected bucket. Labels 7 and 9 -- the countersignatures of RFC 8152 -- are Deprecated at IANA
+     * and have no constant here.
+     */
+    public const LABEL_COUNTERSIGNATURE_V2 = 11;
+
+    /**
+     * The "Countersignature0 version 2" header parameter of RFC 9338: an abbreviated countersignature, a bare
+     * signature value, in the unprotected bucket.
+     */
+    public const LABEL_COUNTERSIGNATURE0_V2 = 12;
 
     /**
      * The "x5bag" header parameter of RFC 9360: an unordered bag of X.509 certificates, a COSE_X509.
@@ -451,6 +469,56 @@ final class CoseHeaders
     }
 
     /**
+     * The full countersignatures of RFC 9338 the message carries (label 11), as COSE_Signature views, in the order
+     * of the wire; empty when it carries none.
+     *
+     * RFC 9338 section 2 types the value as "COSE_Countersignature / [+ COSE_Countersignature]": a single
+     * countersignature, or an array of one or more, and this reads both into one list. Each is "COSE_Countersignature
+     * = COSE_Signature" (section 3.1), a [protected, unprotected, signature] entry with a header bucket of its own --
+     * its algorithm, its key identifier, and possibly countersignatures of its own -- carried tagged 19 or bare.
+     *
+     * Section 2: the parameter "can occur as an unprotected attribute" of a COSE_Sign1, COSE_Signature, COSE_Encrypt,
+     * COSE_recipient, COSE_Encrypt0, COSE_Mac or COSE_Mac0. Only the unprotected bucket is read, and a message that
+     * carries the label in the protected one is rejected wherever else it appears: a countersignature is applied
+     * after the target is finalized, so it cannot be under the target's own signature or tag.
+     *
+     * Nothing is verified here. {@see \Cose\Signature\Countersigner::verify()} does, against the
+     * {@see \Cose\Signature\CountersignTarget} the message is.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9338#section-2
+     * @return list<CoseSignature>
+     */
+    public function getCountersignatures(): array
+    {
+        $this->assertUnprotectedOnly(self::LABEL_COUNTERSIGNATURE_V2, 'Countersignature version 2');
+        $value = $this->getUnprotectedHeaderParameter(self::LABEL_COUNTERSIGNATURE_V2);
+        if ($value === null) {
+            return [];
+        }
+
+        return array_map(
+            CoseSignature::create(...),
+            HeaderMapHelper::countersignatureItems($value, 'Countersignature version 2')
+        );
+    }
+
+    /**
+     * The abbreviated countersignature of RFC 9338 the message carries (label 12), the bare signature value of
+     * section 3.2, or null when it carries none. The parameters that computed it -- the algorithm, the key -- are
+     * "provided by the same context used to describe the encryption, signature, or MAC processing": the application
+     * knows them. Unprotected bucket only, under the rule of {@see getCountersignatures()}.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9338#section-3.2
+     */
+    public function getCountersignature0(): ?string
+    {
+        $this->assertUnprotectedOnly(self::LABEL_COUNTERSIGNATURE0_V2, 'Countersignature0 version 2');
+        $value = $this->getUnprotectedHeaderParameter(self::LABEL_COUNTERSIGNATURE0_V2);
+
+        return $value === null ? null : self::byteStringValue($value, 'Countersignature0 version 2');
+    }
+
+    /**
      * The "x5bag" header parameter (RFC 9360), or null when the message does not carry one.
      *
      * The bag is looked up in the protected bucket first, then in the unprotected one: section 2 allows either ("As
@@ -756,6 +824,20 @@ final class CoseHeaders
         }
 
         return (int) $normalized;
+    }
+
+    /**
+     * RFC 9338 section 2 places the countersignature parameters in the unprotected bucket; one found in the protected
+     * bucket is a malformed message, not a stronger one.
+     */
+    private function assertUnprotectedOnly(int $label, string $parameter): void
+    {
+        if ($this->getProtectedHeaderParameter($label) !== null) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. It shall occur as an unprotected attribute only (RFC 9338 section 2).',
+                $parameter
+            ));
+        }
     }
 
     /**
