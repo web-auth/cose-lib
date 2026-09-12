@@ -11,6 +11,7 @@ use function array_slice;
 use function basename;
 use function class_exists;
 use Cose\Algorithm\Algorithm;
+use Cose\Key\AkpKey;
 use Cose\Key\Ec2Key;
 use Cose\Key\Key;
 use Cose\Key\OkpKey;
@@ -60,7 +61,7 @@ final class RfcReferencesTest extends TestCase
     /**
      * The RFCs the library implements, as the README and composer.json have to declare them.
      */
-    private const IMPLEMENTED_RFCS = [9052, 9053, 8230, 8812, 9864, 9596, 9597, 9054, 9679, 9360, 9942];
+    private const IMPLEMENTED_RFCS = [9052, 9053, 8230, 8812, 9864, 9596, 9597, 9054, 9679, 9360, 9995, 9338, 9964, 9942];
 
     /**
      * Identifier => [documented name, RFC number, section]. The section is the one the RFC itself defines the
@@ -91,6 +92,9 @@ final class RfcReferencesTest extends TestCase
         -268 => ['ESB512', 9864, '2.1'],
         -19 => ['Ed25519', 9864, '2.2'],
         -53 => ['Ed448', 9864, '2.2'],
+        -48 => ['ML-DSA-44', 9964, '5'],
+        -49 => ['ML-DSA-65', 9964, '5'],
+        -50 => ['ML-DSA-87', 9964, '5'],
         4 => ['HS256/64', 9053, '3.1'],
         5 => ['HS256', 9053, '3.1'],
         6 => ['HS384', 9053, '3.1'],
@@ -151,6 +155,9 @@ final class RfcReferencesTest extends TestCase
      * Class short name => documented name, where the two differ.
      */
     private const DOCUMENTED_NAMES = [
+        'MLDSA44' => 'ML-DSA-44',
+        'MLDSA65' => 'ML-DSA-65',
+        'MLDSA87' => 'ML-DSA-87',
         'HS256Truncated64' => 'HS256/64',
         'AESMAC128_64' => 'AES-MAC 128/64',
         'AESMAC256_64' => 'AES-MAC 256/64',
@@ -196,6 +203,7 @@ final class RfcReferencesTest extends TestCase
         Key::TYPE_EC2 => ['EC2', Ec2Key::class, 9053, '7.1.1'],
         Key::TYPE_RSA => ['RSA', RsaKey::class, 8230, '4'],
         Key::TYPE_OCT => ['Symmetric', SymmetricKey::class, 9053, '7.3'],
+        Key::TYPE_AKP => ['AKP', AkpKey::class, 9964, '3'],
     ];
 
     /**
@@ -446,6 +454,10 @@ final class RfcReferencesTest extends TestCase
             ],
             'Symmetric' => [
                 'k' => SymmetricKey::DATA_K,
+            ],
+            'AKP' => [
+                'pub' => AkpKey::DATA_PUB,
+                'priv' => AkpKey::DATA_PRIV,
             ],
         ];
 

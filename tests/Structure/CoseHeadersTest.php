@@ -54,18 +54,20 @@ use PHPUnit\Framework\TestCase;
  * The point of running one body against all six is that RFC 9052 defines the two header buckets once, for every
  * message type; the reader has to answer the same way whether the message is a COSE_Sign1 or a COSE_Encrypt.
  *
- * The typed accessors of RFC 9596 ("typ"), RFC 9597 ("CWT Claims"), RFC 9360 ("x5bag", "x5chain", "x5t", "x5u") and
- * RFC 9942 ("receipts", "vds", "vdp") are tested here as well, since all of them are header parameters and nothing
- * more.
+ * The typed accessors of RFC 9596 ("typ"), RFC 9597 ("CWT Claims"), RFC 9360 ("x5bag", "x5chain", "x5t", "x5u"),
+ * RFC 9995 ("payload-hash-alg", "preimage-content-type", "payload-location") and RFC 9942 ("receipts", "vds", "vdp")
+ * are tested here as well, since all of them are header parameters and nothing more.
  *
  * @see https://www.rfc-editor.org/rfc/rfc9052#section-3
  * @see https://www.rfc-editor.org/rfc/rfc9596#section-2
  * @see https://www.rfc-editor.org/rfc/rfc9597#section-2
  * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
+ * @see https://www.rfc-editor.org/rfc/rfc9995#section-4
  * @see https://www.rfc-editor.org/rfc/rfc9942#section-4.3
  * @see https://github.com/web-auth/cose-lib/issues/166
  * @see https://github.com/web-auth/cose-lib/issues/198
  * @see https://github.com/web-auth/cose-lib/issues/196
+ * @see https://github.com/web-auth/cose-lib/issues/215
  * @see https://github.com/web-auth/cose-lib/issues/218
  */
 final class CoseHeadersTest extends TestCase
@@ -1133,6 +1135,373 @@ final class CoseHeadersTest extends TestCase
             NullObject::create(),
             ByteStringObject::create($signature),
         ]));
+    }
+
+    /**
+     * The four message types RFC 9995 section 5.2 puts in scope: "Only COSE_Sign/COSE_Sign1 and COSE_Mac/COSE_Mac0
+     * are in scope for this document."
+     *
+     * @return iterable<string, array{class-string<AbstractCoseTag>}>
+     */
+    public static function getHashEnvelopeMessageClasses(): iterable
+    {
+        yield 'COSE_Sign1' => [CoseSign1Tag::class];
+        yield 'COSE_Sign' => [CoseSignTag::class];
+        yield 'COSE_Mac0' => [CoseMac0Tag::class];
+        yield 'COSE_Mac' => [CoseMacTag::class];
+    }
+
+    /**
+     * The labels of RFC 9995 as IANA registers them, and the "content type" label of RFC 9052 the envelope excludes.
+     */
+    #[Test]
+    public function theHashEnvelopeLabelsAreTheRegisteredOnes(): void
+    {
+        static::assertSame(3, CoseHeaders::LABEL_CONTENT_TYPE);
+        static::assertSame(258, CoseHeaders::LABEL_PAYLOAD_HASH_ALG);
+        static::assertSame(259, CoseHeaders::LABEL_PREIMAGE_CONTENT_TYPE);
+        static::assertSame(260, CoseHeaders::LABEL_PAYLOAD_LOCATION);
+    }
+
+    /**
+     * The protected header of the RFC 9995 section 4.1 example -- 1: -35, 4: kid, 16: "application/example+cose",
+     * 258: -16, 259: "application/spdx+json", 260: the URL -- is written by HeaderMapHelper::encodeProtected() and
+     * read back by the typed accessors, on every message type the RFC covers.
+     *
+     * @param class-string<AbstractCoseTag> $class
+     */
+    #[Test]
+    #[DataProvider('getHashEnvelopeMessageClasses')]
+    public function theRfc9995ExampleRoundTripsThroughTheProtectedHeader(string $class): void
+    {
+        // Given
+        $protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(1), NegativeIntegerObject::create(-35)),
+            MapItem::create(UnsignedIntegerObject::create(4), ByteStringObject::create('urn:example:kid')),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_TYP), TextStringObject::create('application/example+cose')),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_HASH_ALG), NegativeIntegerObject::create(-16)),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PREIMAGE_CONTENT_TYPE), TextStringObject::create('application/spdx+json')),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_LOCATION), TextStringObject::create('https://sbom.example/.../manifest.spdx.json')),
+        ]));
+
+        // When: the message travels as bytes and is decoded again
+        $message = Decoder::create()
+            ->decode(StringStream::create((string) self::message($class, $protectedHeader)));
+        static::assertInstanceOf(AbstractCoseTag::class, $message);
+        $headers = CoseHeaders::fromMessage($message);
+
+        // Then
+        static::assertSame(-16, $headers->getPayloadHashAlg());
+        static::assertSame('application/spdx+json', $headers->getPreimageContentType());
+        static::assertSame('https://sbom.example/.../manifest.spdx.json', $headers->getPayloadLocation());
+        static::assertSame('application/example+cose', $headers->getTyp());
+        static::assertNull($headers->getUnprotectedHeaderParameter(CoseHeaders::LABEL_PAYLOAD_HASH_ALG));
+    }
+
+    /**
+     * A message that is not a hash envelope answers null, not an exception, for all three parameters -- a
+     * "content type" is fine there, since the rule of RFC 9995 section 4 only applies to a hash envelope.
+     */
+    #[Test]
+    public function absentHashEnvelopeParametersAreNull(): void
+    {
+        // Given: {1: -7, 3: "application/json"}
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(1), NegativeIntegerObject::create(-7)),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_CONTENT_TYPE), TextStringObject::create('application/json')),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        static::assertNull($headers->getPayloadHashAlg());
+        static::assertNull($headers->getPreimageContentType());
+        static::assertNull($headers->getPayloadLocation());
+    }
+
+    /**
+     * "preimage-content-type" is "uint / tstr": a CoAP Content-Format number or a media type name, parameters
+     * allowed (RFC 9995 section 3), and "payload-location" a bare text string that need not be a URI.
+     */
+    #[Test]
+    public function aCoapContentFormatAndAPlainLocationAreRead(): void
+    {
+        // Given: {258: -44, 259: 60, 260: "manifest.spdx.json"} -- 60 is application/cbor
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_HASH_ALG), NegativeIntegerObject::create(-44)),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PREIMAGE_CONTENT_TYPE), UnsignedIntegerObject::create(60)),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_LOCATION), TextStringObject::create('manifest.spdx.json')),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseMac0Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        static::assertSame(-44, $headers->getPayloadHashAlg());
+        static::assertSame(60, $headers->getPreimageContentType());
+        static::assertSame('manifest.spdx.json', $headers->getPayloadLocation());
+    }
+
+    /**
+     * RFC 9995 section 4: each of the three labels "MUST NOT be present in the unprotected header". The lenient
+     * lookup ignores it, the typed accessor refuses the message.
+     *
+     * @param class-string<AbstractCoseTag> $class
+     */
+    #[Test]
+    #[DataProvider('getHashEnvelopeMessageClasses')]
+    public function aPayloadHashAlgInTheUnprotectedBucketIsRejected(string $class): void
+    {
+        // Given: {} protected, {258: -16} unprotected
+        $unprotectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_HASH_ALG), NegativeIntegerObject::create(-16)),
+        ]);
+        $headers = CoseHeaders::fromMessage(self::message($class, ByteStringObject::create(''), $unprotectedHeader));
+
+        // Then
+        static::assertNull($headers->getProtectedHeaderParameter(CoseHeaders::LABEL_PAYLOAD_HASH_ALG));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "payload-hash-alg" header parameter. It shall not be present in the unprotected header (RFC 9995 section 4).');
+        $headers->getPayloadHashAlg();
+    }
+
+    /**
+     * The unprotected copy makes the message malformed even when the protected bucket carries the parameter too.
+     */
+    #[Test]
+    public function aPayloadHashAlgInBothBucketsIsRejected(): void
+    {
+        // Given: {258: -16} protected, {258: -16} unprotected
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_HASH_ALG), NegativeIntegerObject::create(-16)),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header), $header)
+        );
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('shall not be present in the unprotected header (RFC 9995 section 4)');
+        $headers->getPayloadHashAlg();
+    }
+
+    #[Test]
+    public function aPreimageContentTypeInTheUnprotectedBucketIsRejected(): void
+    {
+        // Given: {258: -16} protected, {259: "application/spdx+json"} unprotected
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_HASH_ALG), NegativeIntegerObject::create(-16)),
+        ]);
+        $unprotectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PREIMAGE_CONTENT_TYPE), TextStringObject::create('application/spdx+json')),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header), $unprotectedHeader)
+        );
+
+        // Then: "payload-hash-alg" itself is fine, the misplaced parameter is not
+        static::assertSame(-16, $headers->getPayloadHashAlg());
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "preimage-content-type" header parameter. It shall not be present in the unprotected header (RFC 9995 section 4).');
+        $headers->getPreimageContentType();
+    }
+
+    #[Test]
+    public function aPayloadLocationInTheUnprotectedBucketIsRejected(): void
+    {
+        // Given: {258: -16} protected, {260: "https://sbom.example/manifest.spdx.json"} unprotected
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_HASH_ALG), NegativeIntegerObject::create(-16)),
+        ]);
+        $unprotectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_LOCATION), TextStringObject::create('https://sbom.example/manifest.spdx.json')),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header), $unprotectedHeader)
+        );
+
+        // Then
+        static::assertSame(-16, $headers->getPayloadHashAlg());
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "payload-location" header parameter. It shall not be present in the unprotected header (RFC 9995 section 4).');
+        $headers->getPayloadLocation();
+    }
+
+    /**
+     * RFC 9995 section 4: "Label 3 (content_type) MUST NOT be present in the protected or unprotected headers" of a
+     * hash envelope. Either bucket, and every one of the three accessors.
+     *
+     * @param array<int, CBORObject> $protected label => value
+     * @param array<int, CBORObject> $unprotected label => value
+     */
+    #[Test]
+    #[DataProvider('getEnvelopesWithAContentType')]
+    public function aContentTypeAlongsidePayloadHashAlgIsRejected(
+        array $protected,
+        array $unprotected,
+        string $accessor
+    ): void {
+        // Given
+        $toMap = static fn (array $entries): MapObject => MapObject::create(array_map(
+            static fn (int $label, CBORObject $value): MapItem => MapItem::create(UnsignedIntegerObject::create($label), $value),
+            array_keys($entries),
+            $entries
+        ));
+        $headers = CoseHeaders::fromMessage(self::message(
+            CoseSign1Tag::class,
+            ByteStringObject::create((string) $toMap($protected)),
+            $toMap($unprotected)
+        ));
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The "content type" header parameter (label 3) shall not be present in the protected or unprotected header of a message carrying "payload-hash-alg" (RFC 9995 section 4)');
+        $headers->{$accessor}();
+    }
+
+    /**
+     * @return iterable<string, array{array<int, CBORObject>, array<int, CBORObject>, string}>
+     */
+    public static function getEnvelopesWithAContentType(): iterable
+    {
+        $envelope = [
+            CoseHeaders::LABEL_PAYLOAD_HASH_ALG => NegativeIntegerObject::create(-16),
+            CoseHeaders::LABEL_PREIMAGE_CONTENT_TYPE => TextStringObject::create('application/spdx+json'),
+            CoseHeaders::LABEL_PAYLOAD_LOCATION => TextStringObject::create('https://sbom.example/manifest.spdx.json'),
+        ];
+        $contentType = [
+            CoseHeaders::LABEL_CONTENT_TYPE => TextStringObject::create('application/octet-stream'),
+        ];
+        foreach (['getPayloadHashAlg', 'getPreimageContentType', 'getPayloadLocation'] as $accessor) {
+            yield $accessor . ', content type protected' => [$envelope + $contentType, [], $accessor];
+            yield $accessor . ', content type unprotected' => [$envelope, $contentType, $accessor];
+            yield $accessor . ', content type 60 protected' => [
+                $envelope + [
+                    CoseHeaders::LABEL_CONTENT_TYPE => UnsignedIntegerObject::create(60),
+                ],
+                [],
+                $accessor,
+            ];
+        }
+    }
+
+    /**
+     * "payload_hash_alg: int" (RFC 9995 section 4): anything else is malformed.
+     */
+    #[Test]
+    #[DataProvider('getInvalidPayloadHashAlgValues')]
+    public function aMalformedPayloadHashAlgIsRejected(CBORObject $value, string $message): void
+    {
+        // Given
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_HASH_ALG), $value),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($message);
+        $headers->getPayloadHashAlg();
+    }
+
+    /**
+     * @return iterable<string, array{CBORObject, string}>
+     */
+    public static function getInvalidPayloadHashAlgValues(): iterable
+    {
+        yield 'a text string' => [
+            TextStringObject::create('SHA-256'),
+            'Invalid "payload-hash-alg" header parameter. The value shall be an integer (RFC 9995 section 4), got "CBOR\TextStringObject".',
+        ];
+        yield 'a byte string' => [
+            ByteStringObject::create("\xf0"),
+            'Invalid "payload-hash-alg" header parameter. The value shall be an integer (RFC 9995 section 4)',
+        ];
+        yield 'an integer beyond the platform range' => [
+            NegativeIntegerObject::createFromString('-18446744073709551616'),
+            'Invalid "payload-hash-alg" header parameter. The integer value exceeds the platform integer range.',
+        ];
+    }
+
+    /**
+     * "payload_preimage_content_type: uint / tstr", with the value syntax of "content type" (RFC 9052 section 3.1):
+     * a bare "cwt" is not a media type name, and 65536 is not a CoAP Content-Format.
+     */
+    #[Test]
+    #[DataProvider('getInvalidPreimageContentTypeValues')]
+    public function aMalformedPreimageContentTypeIsRejected(CBORObject $value, string $message): void
+    {
+        // Given
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_HASH_ALG), NegativeIntegerObject::create(-16)),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PREIMAGE_CONTENT_TYPE), $value),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($message);
+        $headers->getPreimageContentType();
+    }
+
+    /**
+     * @return iterable<string, array{CBORObject, string}>
+     */
+    public static function getInvalidPreimageContentTypeValues(): iterable
+    {
+        yield 'a bare subtype' => [
+            TextStringObject::create('spdx+json'),
+            'Invalid "preimage-content-type" header parameter. A text value shall be a media type name',
+        ];
+        yield 'a negative integer' => [
+            NegativeIntegerObject::create(-1),
+            'Invalid "preimage-content-type" header parameter. The value shall be an unsigned integer or a text string',
+        ];
+        yield 'an integer beyond the CoAP registry' => [
+            UnsignedIntegerObject::create(65536),
+            'Invalid "preimage-content-type" header parameter. An integer value shall be a CoAP Content-Format identifier, in the range 0-65535',
+        ];
+        yield 'a byte string' => [
+            ByteStringObject::create('application/spdx+json'),
+            'Invalid "preimage-content-type" header parameter. The value shall be an unsigned integer or a text string',
+        ];
+    }
+
+    /**
+     * "payload_location: tstr" (RFC 9995 section 4).
+     */
+    #[Test]
+    #[DataProvider('getInvalidPayloadLocationValues')]
+    public function aMalformedPayloadLocationIsRejected(CBORObject $value): void
+    {
+        // Given
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_HASH_ALG), NegativeIntegerObject::create(-16)),
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_PAYLOAD_LOCATION), $value),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header))
+        );
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "payload-location" header parameter. The value shall be a text string (RFC 9995 section 4)');
+        $headers->getPayloadLocation();
+    }
+
+    /**
+     * @return iterable<string, array{CBORObject}>
+     */
+    public static function getInvalidPayloadLocationValues(): iterable
+    {
+        yield 'a byte string' => [ByteStringObject::create('https://sbom.example/manifest.spdx.json')];
+        yield 'an integer' => [UnsignedIntegerObject::create(1)];
+        yield 'a tagged URI' => [UriTag::create(TextStringObject::create('https://sbom.example/manifest.spdx.json'))];
     }
 
     /**

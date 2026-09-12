@@ -55,11 +55,16 @@ final class CoseWgParty
 
     /**
      * The algorithm name the generator used for this party, wherever the fixture wrote it: as an "alg" of its own,
-     * or only inside one of its header buckets.
+     * only inside one of its header buckets, or -- for an abbreviated countersigner, which has no header bucket --
+     * among the values it used without sending.
      */
     public function algorithmName(): ?string
     {
-        $name = $this->input['alg'] ?? $this->protectedHeader()['alg'] ?? $this->unprotectedHeader()['alg'] ?? null;
+        $name = $this->input['alg']
+            ?? $this->protectedHeader()['alg']
+            ?? $this->unprotectedHeader()['alg']
+            ?? $this->unsentHeader()['alg']
+            ?? null;
 
         return is_string($name) ? $name : null;
     }
@@ -239,6 +244,54 @@ final class CoseWgParty
             ),
             array_keys($recipients),
             $recipients
+        ));
+    }
+
+    /**
+     * The full countersigners of this party: the "countersign.signers" list of the fixture, each with its key and
+     * headers, paired with the "countersigners" intermediates. Empty when the party is not countersigned.
+     *
+     * @return list<self>
+     */
+    public function countersigners(): array
+    {
+        return $this->countersignerParties('countersign', 'countersigners');
+    }
+
+    /**
+     * The abbreviated countersigners of this party: the "countersign0.signers" list, whose algorithm is among the
+     * "unsent" values, paired with the "countersign0" intermediates.
+     *
+     * @return list<self>
+     */
+    public function countersigners0(): array
+    {
+        return $this->countersignerParties('countersign0', 'countersign0');
+    }
+
+    /**
+     * @return list<self>
+     */
+    private function countersignerParties(string $block, string $intermediatesList): array
+    {
+        $signers = $this->object($block)['signers'] ?? [];
+        $intermediates = $this->intermediates[$intermediatesList] ?? [];
+        if (! is_array($signers) || ! is_array($intermediates)) {
+            throw new LogicException(sprintf('%s: the %s signers are not a list', $this->name, $block));
+        }
+        /** @var array<int, array<string, mixed>|mixed> $signers */
+        /** @var array<int, array<string, mixed>|mixed> $intermediates */
+
+        return array_values(array_map(
+            fn (int $index, mixed $signer): self => self::create(
+                sprintf('%s %s[%d]', $this->name, $block, $index),
+                is_array($signer) ? $signer : throw new LogicException(
+                    sprintf('%s: the %s signer %d is not an object', $this->name, $block, $index)
+                ),
+                is_array($intermediates[$index] ?? null) ? $intermediates[$index] : []
+            ),
+            array_keys($signers),
+            $signers
         ));
     }
 

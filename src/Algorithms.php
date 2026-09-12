@@ -165,6 +165,19 @@ abstract class Algorithms
     final public const COSE_ALGORITHM_ED448 = -53;
 
     /**
+     * ML-DSA (FIPS 204), the module-lattice signature scheme RFC 9964 registers for COSE, one identifier per
+     * parameter set. Each is a pure signature - no HashML-DSA, an empty context string - over a key of the AKP type
+     * (Cose\Key\AkpKey, "kty" 7). Absent from the two maps below: ML-DSA hashes the message itself, like EdDSA.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9964.html#section-5
+     */
+    final public const COSE_ALGORITHM_ML_DSA_44 = -48;
+
+    final public const COSE_ALGORITHM_ML_DSA_65 = -49;
+
+    final public const COSE_ALGORITHM_ML_DSA_87 = -50;
+
+    /**
      * Hash algorithms (RFC 9054). They are algorithms in the registry's sense - "x5t" (RFC 9360) and the COSE Key
      * Thumbprint (RFC 9679) name the hash by one of these identifiers - and the Cose\Algorithm\Hash classes
      * implement them. They are absent from the two maps below on purpose: those describe the digest a signature
@@ -196,10 +209,11 @@ abstract class Algorithms
      * for those only.
      *
      * openssl_verify() called with an OPENSSL_ALGO_* digest implies PKCS #1 v1.5 padding, so PS256, PS384 and PS512
-     * (RSASSA-PSS) are deliberately absent, and so are EdDSA (-8), Ed25519 (-19) and Ed448 (-53), which are one-shot
-     * schemes that hash the message themselves. Verifying with one of those identifiers goes through the matching
-     * Cose\Algorithm\Signature\Signature class instead - Cose\Algorithm\Signature\CertificateSignatureVerifier
-     * does exactly that for a signature made by the key of an X.509 certificate.
+     * (RSASSA-PSS) are deliberately absent, and so are EdDSA (-8), Ed25519 (-19), Ed448 (-53) and the three ML-DSA
+     * identifiers (-48, -49, -50), which are one-shot schemes that hash the message themselves. Verifying with one of
+     * those identifiers goes through the matching Cose\Algorithm\Signature\Signature class instead -
+     * Cose\Algorithm\Signature\CertificateSignatureVerifier does exactly that for a signature made by the key of an
+     * X.509 certificate.
      *
      * @internal this constant bypasses getOpensslAlgorithmFor() and the acknowledgement it requires for RS1; it will
      * become private in the next major version

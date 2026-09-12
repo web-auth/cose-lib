@@ -58,6 +58,9 @@ use Cose\Algorithm\Signature\FullySpecified\ESB512;
 use Cose\Algorithm\Signature\FullySpecified\ESP256;
 use Cose\Algorithm\Signature\FullySpecified\ESP384;
 use Cose\Algorithm\Signature\FullySpecified\ESP512;
+use Cose\Algorithm\Signature\MLDSA\MLDSA44;
+use Cose\Algorithm\Signature\MLDSA\MLDSA65;
+use Cose\Algorithm\Signature\MLDSA\MLDSA87;
 use Cose\Algorithm\Signature\RSA\PS256;
 use Cose\Algorithm\Signature\RSA\PS384;
 use Cose\Algorithm\Signature\RSA\PS512;
@@ -106,6 +109,10 @@ final class CoseWgAlgorithms
         'ESP512' => Algorithms::COSE_ALGORITHM_ESP512,
         'Ed25519' => Algorithms::COSE_ALGORITHM_ED25519,
         'Ed448' => Algorithms::COSE_ALGORITHM_ED448,
+        // The ML-DSA identifiers of RFC 9964, named as tests/fixtures/rfc9964 writes them (the IANA names).
+        'ML-DSA-44' => Algorithms::COSE_ALGORITHM_ML_DSA_44,
+        'ML-DSA-65' => Algorithms::COSE_ALGORITHM_ML_DSA_65,
+        'ML-DSA-87' => Algorithms::COSE_ALGORITHM_ML_DSA_87,
         'RSA-PSS-256' => Algorithms::COSE_ALGORITHM_PS256,
         'RSA-PSS-384' => Algorithms::COSE_ALGORITHM_PS384,
         'RSA-PSS-512' => Algorithms::COSE_ALGORITHM_PS512,
@@ -182,8 +189,8 @@ final class CoseWgAlgorithms
      * Every algorithm this library implements, under its own identifier.
      *
      * RS1, Ed256 and Ed512 are left out on purpose: each needs an explicit acknowledgement to be built, and no fixture
-     * uses them. Ed448, the Brainpool ESB* algorithms, AES-CCM and ChaCha20/Poly1305 are added only where the
-     * platform can compute them. The key management algorithms of RFC 9053 sections 5 and 6 are all there; the RSAES-OAEP
+     * uses them. Ed448, the Brainpool ESB* algorithms, ML-DSA, AES-CCM and ChaCha20/Poly1305 are added only where
+     * the platform can compute them. The key management algorithms of RFC 9053 sections 5 and 6 are all there; the RSAES-OAEP
      * ones (-40, -41, -42) are not implemented and their fixtures stay skipped.
      */
     public static function manager(): Manager
@@ -241,6 +248,9 @@ final class CoseWgAlgorithms
             if ($brainpool::isSupported()) {
                 $manager->add($brainpool::create());
             }
+        }
+        if (MLDSA44::isSupported()) {
+            $manager->add(MLDSA44::create(), MLDSA65::create(), MLDSA87::create());
         }
         if (A128CCM_16_64::isSupported()) {
             $manager->add(

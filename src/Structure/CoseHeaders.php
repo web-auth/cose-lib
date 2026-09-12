@@ -4,22 +4,26 @@ declare(strict_types=1);
 
 namespace Cose\Structure;
 
+use function array_map;
 use CBOR\ByteStringObject;
 use CBOR\CBORObject;
 use CBOR\DecoderInterface;
 use CBOR\IndefiniteLengthByteStringObject;
 use CBOR\IndefiniteLengthListObject;
 use CBOR\IndefiniteLengthMapObject;
+use CBOR\IndefiniteLengthTextStringObject;
 use CBOR\ListObject;
 use CBOR\MapObject;
 use CBOR\NegativeIntegerObject;
 use CBOR\Tag;
 use CBOR\Tag\AbstractCoseTag;
 use CBOR\Tag\CoseSign1Tag;
+use CBOR\TextStringObject;
 use CBOR\UnsignedIntegerObject;
 use Cose\Key\Ec2Key;
 use Cose\Key\Key;
 use Cose\Key\OkpKey;
+use Cose\Signature\CoseSignature;
 use Cose\Structure\X509\CoseCertHash;
 use Cose\Structure\X509\X5Bag;
 use Cose\Structure\X509\X5Chain;
@@ -49,6 +53,8 @@ use Throwable;
  * $claims = $headers->getCwtClaims();                // RFC 9597: the claims map, or null
  * $chain = $headers->getX5Chain();                   // RFC 9360: the certificate chain, end-entity first, or null
  * $epk = $recipient->headers()->getEphemeralKey();   // RFC 9053: the sender's ephemeral public key of an ECDH-ES recipient
+ * $hashAlg = $headers->getPayloadHashAlg();          // RFC 9995: -16 when the payload is the SHA-256 of the content
+ * $countersignatures = $headers->getCountersignatures(); // RFC 9338: the COSE_Countersignature entries of label 11
  * $receipts = $headers->getReceipts();               // RFC 9942: the COSE receipts, each a CBOR\Tag\CoseSign1Tag
  * ```
  *
@@ -60,13 +66,22 @@ use Throwable;
  * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
  * @see https://www.rfc-editor.org/rfc/rfc9053#section-5.2
  * @see https://www.rfc-editor.org/rfc/rfc9053#section-6.3.1
+ * @see https://www.rfc-editor.org/rfc/rfc9995#section-4
+ * @see https://www.rfc-editor.org/rfc/rfc9338#section-2
  * @see https://www.rfc-editor.org/rfc/rfc9942#section-2
  * @see https://github.com/web-auth/cose-lib/issues/166
  * @see \Cose\Tests\Structure\CoseHeadersTest
+ * @see \Cose\Tests\Structure\CountersignatureHeadersTest
  */
 final class CoseHeaders
 {
     public const DEFAULT_PROTECTED_HEADER_MAX_DEPTH = HeaderMapHelper::DEFAULT_PROTECTED_HEADER_MAX_DEPTH;
+
+    /**
+     * The "content type" header parameter of RFC 9052 section 3.1: the type of the payload, as a CoAP Content-Format
+     * number or a media type name. A hash envelope (RFC 9995) must not carry it, {@see getPayloadHashAlg()}.
+     */
+    public const LABEL_CONTENT_TYPE = 3;
 
     /**
      * The "CWT Claims" header parameter of RFC 9597: a map of CWT claims, so that they can be read before the
@@ -79,6 +94,19 @@ final class CoseHeaders
      * (label 3), which is the type of its payload.
      */
     public const LABEL_TYP = 16;
+
+    /**
+     * The "Countersignature version 2" header parameter of RFC 9338: one COSE_Countersignature, or an array of
+     * them, in the unprotected bucket. Labels 7 and 9 -- the countersignatures of RFC 8152 -- are Deprecated at IANA
+     * and have no constant here.
+     */
+    public const LABEL_COUNTERSIGNATURE_V2 = 11;
+
+    /**
+     * The "Countersignature0 version 2" header parameter of RFC 9338: an abbreviated countersignature, a bare
+     * signature value, in the unprotected bucket.
+     */
+    public const LABEL_COUNTERSIGNATURE0_V2 = 12;
 
     /**
      * The "x5bag" header parameter of RFC 9360: an unordered bag of X.509 certificates, a COSE_X509.
@@ -100,6 +128,26 @@ final class CoseHeaders
      * The "x5u" header parameter of RFC 9360: a URI pointing to an X.509 certificate.
      */
     public const LABEL_X5U = 35;
+
+    /**
+     * The "payload-hash-alg" header parameter of RFC 9995: the hash algorithm, by its COSE Algorithms identifier,
+     * whose output the payload of the hash envelope is. Protected bucket only.
+     */
+    public const LABEL_PAYLOAD_HASH_ALG = 258;
+
+    /**
+     * The "preimage-content-type" header parameter of RFC 9995 ("payload_preimage_content_type" in the CDDL of
+     * section 4): the content type of the bytes that were hashed to produce the payload, as a CoAP Content-Format
+     * number or a media type name. Protected bucket only.
+     */
+    public const LABEL_PREIMAGE_CONTENT_TYPE = 259;
+
+    /**
+     * The "payload-location" header parameter of RFC 9995 ("payload_location" in the CDDL of section 4): a string,
+     * typically a URI, hinting at where the hashed bytes can be retrieved. Protected bucket only, and never
+     * dereferenced by this library.
+     */
+    public const LABEL_PAYLOAD_LOCATION = 260;
 
     /**
      * The "receipts" header parameter of RFC 9942: a "Priority ordered sequence of CBOR encoded Receipts", each a
@@ -358,6 +406,140 @@ final class CoseHeaders
         }
 
         return HeaderMapHelper::assertValidClaimLabels($claims);
+    }
+
+    /**
+     * The "payload-hash-alg" header parameter (RFC 9995), or null when the message is not a hash envelope.
+     *
+     * A hash envelope is a COSE_Sign, COSE_Sign1, COSE_Mac or COSE_Mac0 whose payload is the digest of the content
+     * rather than the content itself, and this parameter names the hash function that produced it, by its identifier
+     * in the IANA COSE Algorithms registry -- the RFC 9054 identifiers, which {@see \Cose\Algorithm\Hash} implements.
+     * The identifier is handed back as carried: resolving it, and refusing the ones IANA marks "Filter Only", is
+     * what {@see HashEnvelope} does with the registry of the application.
+     *
+     * RFC 9995 section 4 places the parameter: "Label 258 (payload_hash_alg) MUST be present in the protected header
+     * and MUST NOT be present in the unprotected header", and adds, of the envelope as a whole, "Label 3
+     * (content_type) MUST NOT be present in the protected or unprotected headers" -- label 3 would describe the
+     * digest, and label 259 already describes the preimage. This accessor reads the protected bucket only and rejects
+     * a message that carries the label in the unprotected one, or that carries "content type" in either bucket
+     * alongside it. The raw lookup, getProtectedHeaderParameter(CoseHeaders::LABEL_PAYLOAD_HASH_ALG), is the lenient
+     * form.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9995#section-3
+     * @see https://www.rfc-editor.org/rfc/rfc9995#section-4
+     */
+    public function getPayloadHashAlg(): ?int
+    {
+        $value = $this->hashEnvelopeParameter(self::LABEL_PAYLOAD_HASH_ALG, 'payload-hash-alg');
+
+        return $value === null ? null : self::integerValue($value, 'payload-hash-alg', 'RFC 9995 section 4');
+    }
+
+    /**
+     * The "preimage-content-type" header parameter (RFC 9995), or null when the message does not carry one.
+     *
+     * IANA and the table of RFC 9995 section 6.1 call the parameter "preimage-content-type"; the CDDL of section 4
+     * calls it "payload_preimage_content_type". It is the content type of the bytes that were hashed to produce the
+     * payload, "given as a content-format number (Section 12.3 of [RFC7252]) or as a media-type name optionally with
+     * parameters (Section 8.3 of [RFC9110])" (section 3) -- the value syntax of "content type" (RFC 9052 section
+     * 3.1), applied by {@see HeaderMapHelper::assertContentTypeValue()}. Not to be confused with "content type"
+     * (label 3), which "is used to identify the content format associated with payload", the digest, and which a hash
+     * envelope must not carry.
+     *
+     * Section 4: "Label 259 (payload_preimage_content_type) MAY be present in the protected header and MUST NOT be
+     * present in the unprotected header." Protected bucket only; a message carrying the label in the unprotected one
+     * is rejected, as is one carrying "content type" next to "payload-hash-alg".
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9995#section-3
+     * @see https://www.rfc-editor.org/rfc/rfc9995#section-4
+     */
+    public function getPreimageContentType(): int|string|null
+    {
+        $value = $this->hashEnvelopeParameter(self::LABEL_PREIMAGE_CONTENT_TYPE, 'preimage-content-type');
+
+        return $value === null ? null : HeaderMapHelper::assertContentTypeValue($value, 'preimage-content-type');
+    }
+
+    /**
+     * The "payload-location" header parameter (RFC 9995), or null when the message does not carry one.
+     *
+     * "An identifier enabling retrieval of the original resource (preimage) identified by the payload" (section 3),
+     * registered as "The string or URI hint for the location of the data hashed to produce the payload": a text
+     * string, which is all that is checked -- unlike "x5u", the value is not required to be a URI. It is returned as
+     * text and nothing else: this library never dereferences it. Section 5.3 leaves fetching the content to the
+     * verifier, which "can choose to" do it and confirm the digest, and {@see HashEnvelope::matches()} is the
+     * confirmation step once the bytes are in hand, wherever they came from.
+     *
+     * Section 4: "Label 260 (payload_location) MAY be present in the protected header and MUST NOT be present in
+     * the unprotected header." Protected bucket only, with the same rejections as {@see getPreimageContentType()}.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9995#section-3
+     * @see https://www.rfc-editor.org/rfc/rfc9995#section-5.3
+     */
+    public function getPayloadLocation(): ?string
+    {
+        $value = $this->hashEnvelopeParameter(self::LABEL_PAYLOAD_LOCATION, 'payload-location');
+        if ($value === null) {
+            return null;
+        }
+        if (! $value instanceof TextStringObject && ! $value instanceof IndefiniteLengthTextStringObject) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "payload-location" header parameter. The value shall be a text string (RFC 9995 section 4), got "%s".',
+                get_debug_type($value)
+            ));
+        }
+
+        return $value->getValue();
+    }
+
+    /**
+     * The full countersignatures of RFC 9338 the message carries (label 11), as COSE_Signature views, in the order
+     * of the wire; empty when it carries none.
+     *
+     * RFC 9338 section 2 types the value as "COSE_Countersignature / [+ COSE_Countersignature]": a single
+     * countersignature, or an array of one or more, and this reads both into one list. Each is "COSE_Countersignature
+     * = COSE_Signature" (section 3.1), a [protected, unprotected, signature] entry with a header bucket of its own --
+     * its algorithm, its key identifier, and possibly countersignatures of its own -- carried tagged 19 or bare.
+     *
+     * Section 2: the parameter "can occur as an unprotected attribute" of a COSE_Sign1, COSE_Signature, COSE_Encrypt,
+     * COSE_recipient, COSE_Encrypt0, COSE_Mac or COSE_Mac0. Only the unprotected bucket is read, and a message that
+     * carries the label in the protected one is rejected wherever else it appears: a countersignature is applied
+     * after the target is finalized, so it cannot be under the target's own signature or tag.
+     *
+     * Nothing is verified here. {@see \Cose\Signature\Countersigner::verify()} does, against the
+     * {@see \Cose\Signature\CountersignTarget} the message is.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9338#section-2
+     * @return list<CoseSignature>
+     */
+    public function getCountersignatures(): array
+    {
+        $this->assertUnprotectedOnly(self::LABEL_COUNTERSIGNATURE_V2, 'Countersignature version 2');
+        $value = $this->getUnprotectedHeaderParameter(self::LABEL_COUNTERSIGNATURE_V2);
+        if ($value === null) {
+            return [];
+        }
+
+        return array_map(
+            CoseSignature::create(...),
+            HeaderMapHelper::countersignatureItems($value, 'Countersignature version 2')
+        );
+    }
+
+    /**
+     * The abbreviated countersignature of RFC 9338 the message carries (label 12), the bare signature value of
+     * section 3.2, or null when it carries none. The parameters that computed it -- the algorithm, the key -- are
+     * "provided by the same context used to describe the encryption, signature, or MAC processing": the application
+     * knows them. Unprotected bucket only, under the rule of {@see getCountersignatures()}.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9338#section-3.2
+     */
+    public function getCountersignature0(): ?string
+    {
+        $this->assertUnprotectedOnly(self::LABEL_COUNTERSIGNATURE0_V2, 'Countersignature0 version 2');
+        $value = $this->getUnprotectedHeaderParameter(self::LABEL_COUNTERSIGNATURE0_V2);
+
+        return $value === null ? null : self::byteStringValue($value, 'Countersignature0 version 2');
     }
 
     /**
@@ -737,6 +919,70 @@ final class CoseHeaders
         $value = $this->getHeaderParameter(self::LABEL_PARTY_V_OTHER);
 
         return $value === null ? null : self::byteStringValue($value, 'PartyV other');
+    }
+
+    /**
+     * One of the three header parameters of RFC 9995, read under the placement rules of its section 4: the value
+     * from the protected bucket, or null; an exception when the label sits in the unprotected bucket, and, once the
+     * message announces itself as a hash envelope by carrying "payload-hash-alg" in the protected bucket, when
+     * "content type" (label 3) is present in either bucket.
+     */
+    private function hashEnvelopeParameter(int $label, string $parameter): ?CBORObject
+    {
+        if (HeaderMapHelper::findLabel($this->unprotectedHeader, $label) !== null) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. It shall not be present in the unprotected header (RFC 9995 section 4).',
+                $parameter
+            ));
+        }
+        if ($this->getProtectedHeaderParameter(self::LABEL_PAYLOAD_HASH_ALG) !== null
+            && $this->getHeaderParameter(self::LABEL_CONTENT_TYPE) !== null
+        ) {
+            throw new InvalidArgumentException(
+                'Invalid hash envelope. The "content type" header parameter (label 3) shall not be present in the protected or unprotected header of a message carrying "payload-hash-alg" (RFC 9995 section 4); the type of the hashed bytes is "preimage-content-type" (label 259).'
+            );
+        }
+
+        return $this->getProtectedHeaderParameter($label);
+    }
+
+    /**
+     * An integer-valued header parameter, within the platform integer range.
+     */
+    private static function integerValue(CBORObject $value, string $parameter, string $reference): int
+    {
+        if (! $value instanceof UnsignedIntegerObject && ! $value instanceof NegativeIntegerObject) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The value shall be an integer (%s), got "%s".',
+                $parameter,
+                $reference,
+                get_debug_type($value)
+            ));
+        }
+        $normalized = $value->normalize();
+        // A 64-bit value beyond PHP_INT_MAX normalizes to a numeric string; no registered identifier is that large.
+        if ((string) (int) $normalized !== $normalized) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The integer value exceeds the platform integer range.',
+                $parameter
+            ));
+        }
+
+        return (int) $normalized;
+    }
+
+    /**
+     * RFC 9338 section 2 places the countersignature parameters in the unprotected bucket; one found in the protected
+     * bucket is a malformed message, not a stronger one.
+     */
+    private function assertUnprotectedOnly(int $label, string $parameter): void
+    {
+        if ($this->getProtectedHeaderParameter($label) !== null) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. It shall occur as an unprotected attribute only (RFC 9338 section 2).',
+                $parameter
+            ));
+        }
     }
 
     /**

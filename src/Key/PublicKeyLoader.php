@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cose\Key;
 
 use function array_key_exists;
+use Cose\Algorithms;
 use function in_array;
 use function intdiv;
 use InvalidArgumentException;
@@ -60,6 +61,18 @@ final class PublicKeyLoader
         '1.3.101.111' => OkpKey::CURVE_X448,
         '1.3.101.112' => OkpKey::CURVE_ED25519,
         '1.3.101.113' => OkpKey::CURVE_ED448,
+    ];
+
+    /**
+     * id-ml-dsa-44, id-ml-dsa-65 and id-ml-dsa-87 (RFC 9881, section 3), whose subjectPublicKey is the encoded
+     * ML-DSA public key itself, and the COSE algorithm each one maps to (RFC 9964, section 5). The key produced is
+     * an AKP key carrying that algorithm as its "alg", which RFC 9964 section 3 requires and the OID is the only
+     * source of.
+     */
+    private const ML_DSA_OID_TO_COSE_ALGORITHM = [
+        '2.16.840.1.101.3.4.3.17' => Algorithms::COSE_ALGORITHM_ML_DSA_44,
+        '2.16.840.1.101.3.4.3.18' => Algorithms::COSE_ALGORITHM_ML_DSA_65,
+        '2.16.840.1.101.3.4.3.19' => Algorithms::COSE_ALGORITHM_ML_DSA_87,
     ];
 
     /**
@@ -131,6 +144,14 @@ final class PublicKeyLoader
         }
         if ($oid === self::OID_EC_PUBLIC_KEY && $algorithm instanceof ECPublicKeyAlgorithmIdentifier) {
             return self::ec2Key($algorithm->namedCurve(), $publicKey);
+        }
+        if (array_key_exists($oid, self::ML_DSA_OID_TO_COSE_ALGORITHM)) {
+            // AkpKey rejects a public key whose length is not the one of the parameter set.
+            return AkpKey::create([
+                Key::TYPE => Key::TYPE_AKP,
+                Key::ALG => self::ML_DSA_OID_TO_COSE_ALGORITHM[$oid],
+                AkpKey::DATA_PUB => $publicKey,
+            ]);
         }
 
         throw new InvalidArgumentException(sprintf('Unsupported public key algorithm "%s"', $oid));

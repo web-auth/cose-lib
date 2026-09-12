@@ -37,8 +37,14 @@ are rejected.
 
 ## Directories
 
-Upstream directories that concern specifications this library does not target (`countersign/`, `countersign1/`,
-`hashsig/`) are not vendored.
+The one upstream directory that concerns a specification this library does not target (`hashsig/`, RFC 8778) is not
+vendored. `countersign/` and `countersign1/` are: they predate RFC 9338 and every one of their messages carries the
+RFC 8152 countersignature labels 7 or 9, deprecated at IANA, which this library does not read. The harness reports
+each of them as skipped under that reason ("Deprecated, RFC 8152") rather than verifying the primary signature and
+ignoring the countersignature — `RFC8152/Appendix_C_1_3` and `RFC8152/Appendix_C_3_3`, the two examples of RFC 8152
+that carry a label 7, are skipped the same way (their primary messages are `Appendix_C_1_1` and `Appendix_C_3_1`,
+which run). The version 2 countersignatures of RFC 9338 are verified against the examples of the RFC itself, under
+[`../rfc9338/`](../rfc9338/), two of which are these very messages with the label changed.
 
 | Directory | Content | Specification |
 |---|---|---|
@@ -64,5 +70,7 @@ Upstream directories that concern specifications this library does not target (`
 | `ecdh-wrap-examples/` | ECDH-ES and ECDH-SS with AES Key Wrap, P-256 and P-521 | RFC 9053 §6.4 |
 | `X25519-tests/` | ECDH-ES and ECDH-SS over X25519 | RFC 9053 §6.3, RFC 7748 |
 | `rsa-oaep-examples/` | RSAES-OAEP recipients | RFC 8230 §3 |
+| `countersign/` | RFC 8152 countersignatures (label 7, `counter signature`) on every message type, on a signer and on a recipient — Deprecated, reported as skipped | RFC 8152 §4.5 |
+| `countersign1/` | RFC 8152 abbreviated countersignatures (label 9, `CounterSignature0`) — Deprecated, reported as skipped | RFC 8152 §4.5 |
 | `RFC8152/` | The examples of RFC 8152 Appendix B and Appendix C, unchanged in RFC 9052 Appendix C | RFC 9052 Appendix C |
 | `CWT/` | The examples of RFC 8392 Appendix A | RFC 8392 |

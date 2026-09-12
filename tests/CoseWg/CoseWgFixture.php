@@ -12,22 +12,30 @@ use function array_values;
 use function basename;
 use CBOR\CBORObject;
 use CBOR\Decoder;
+use CBOR\IndefiniteLengthMapObject;
+use CBOR\MapObject;
 use CBOR\StringStream;
+use CBOR\Tag\AbstractCoseTag;
 use CBOR\Tag\CoseEncrypt0Tag;
 use CBOR\Tag\CoseEncryptTag;
 use CBOR\Tag\CoseMac0Tag;
 use CBOR\Tag\CoseMacTag;
 use CBOR\Tag\CoseSign1Tag;
 use CBOR\Tag\CoseSignTag;
+use Cose\Signature\CoseSignature;
+use Cose\Structure\CoseRecipient;
+use Cose\Structure\HeaderMapHelper;
 use function count;
 use function dirname;
 use function file_get_contents;
 use function hex2bin;
+use InvalidArgumentException;
 use function is_array;
 use function is_string;
 use function json_decode;
 use const JSON_THROW_ON_ERROR;
 use LogicException;
+use function sort;
 use function sprintf;
 use function strtolower;
 
@@ -77,6 +85,12 @@ final class CoseWgFixture
         self::ENCRYPT => CoseEncryptTag::class,
         self::ENCRYPT0 => CoseEncrypt0Tag::class,
     ];
+
+    /**
+     * The "counter signature" (7) and "CounterSignature0" (9) header parameters of RFC 8152 section 4.5, both marked
+     * "(Deprecated by RFC 9338)" in the IANA COSE Header Parameters registry.
+     */
+    public const DEPRECATED_COUNTERSIGNATURE_LABELS = [7, 9];
 
     /**
      * @var array<string, mixed>
@@ -309,7 +323,8 @@ final class CoseWgFixture
 
     /**
      * Every algorithm identifier the fixture needs answered to be verified end to end: the content algorithm, the one
-     * of each signer and the one of each recipient, nested recipients included. "direct" is left out for a COSE_Mac0
+     * of each signer, the one of each recipient, nested recipients included, and the one of every countersigner of
+     * the message, of a signer or of a recipient. "direct" is left out for a COSE_Mac0
      * and a COSE_Encrypt0, whose fixtures name it for a recipient that is not on the wire; on a COSE_Mac and a
      * COSE_Encrypt the recipient is on the wire and "direct" is required like any other algorithm.
      *
@@ -336,6 +351,9 @@ final class CoseWgFixture
                 $collect($signer);
             }
         }
+        foreach ($this->countersignerParties() as $countersigner) {
+            $collect($countersigner);
+        }
 
         if ($this->messageType === self::MAC0 || $this->messageType === self::ENCRYPT0) {
             $required = array_filter(
@@ -345,6 +363,83 @@ final class CoseWgFixture
         }
 
         return array_values(array_unique($required));
+    }
+
+    /**
+     * The full countersigners of the message itself: the "countersign.signers" of the message block. Those of a
+     * signer or of a recipient are read from the party, see {@see CoseWgParty::countersigners()}.
+     *
+     * @return list<CoseWgParty>
+     */
+    public function countersigners(): array
+    {
+        return $this->body()
+            ->countersigners();
+    }
+
+    /**
+     * The abbreviated countersigners of the message itself, see {@see CoseWgParty::countersigners0()}.
+     *
+     * @return list<CoseWgParty>
+     */
+    public function countersigners0(): array
+    {
+        return $this->body()
+            ->countersigners0();
+    }
+
+    /**
+     * The RFC 8152 countersignature labels the output carries in any of its unprotected buckets -- 7 ("counter
+     * signature") and 9 ("CounterSignature0"), both Deprecated at IANA since RFC 9338 -- distinct and sorted; empty
+     * when it carries none, or when the output does not decode to a COSE message (a fail fixture may have no
+     * readable shape at all).
+     *
+     * The countersign/ and countersign1/ directories of cose-wg/Examples were written for RFC 8152 and carry those
+     * labels; this library implements the version 2 countersignatures of RFC 9338 (labels 11 and 12) and reads
+     * neither, so such a fixture is reported as skipped rather than verified.
+     *
+     * @return list<int>
+     */
+    public function deprecatedCountersignatureLabels(): array
+    {
+        try {
+            $decoded = $this->decodeOutput();
+        } catch (InvalidArgumentException) {
+            // A fail fixture whose generator broke the shape of the message: there is no bucket to scan, and the
+            // rejection is what the suite asserts of it.
+            return [];
+        }
+        if (! $decoded instanceof AbstractCoseTag) {
+            return [];
+        }
+
+        $found = [];
+        $scan = static function (MapObject|IndefiniteLengthMapObject $unprotected) use (&$found): void {
+            foreach (self::DEPRECATED_COUNTERSIGNATURE_LABELS as $label) {
+                if (HeaderMapHelper::findLabel($unprotected, $label) !== null) {
+                    $found[$label] = $label;
+                }
+            }
+        };
+        $scanRecipients = static function (array $recipients) use (&$scanRecipients, $scan): void {
+            foreach ($recipients as $recipient) {
+                $scan($recipient->getUnprotectedHeader());
+                $scanRecipients($recipient->getRecipients());
+            }
+        };
+
+        $scan($decoded->getUnprotectedHeader());
+        if ($decoded instanceof CoseSignTag) {
+            foreach (CoseSignature::all($decoded->getSignatures()) as $signature) {
+                $scan($signature->getUnprotectedHeader());
+            }
+        }
+        if ($decoded instanceof CoseMacTag || $decoded instanceof CoseEncryptTag) {
+            $scanRecipients(CoseRecipient::all($decoded->getRecipients()));
+        }
+        sort($found);
+
+        return array_values($found);
     }
 
     // --- intermediates ----------------------------------------------------------------------------------------------
@@ -437,6 +532,36 @@ final class CoseWgFixture
         }
 
         return $bytes;
+    }
+
+    /**
+     * Every countersigner the fixture declares, full and abbreviated, of the message, of its signers and of its
+     * recipients at any depth.
+     *
+     * @return list<CoseWgParty>
+     */
+    private function countersignerParties(): array
+    {
+        $parties = [];
+        $collect = static function (CoseWgParty $party) use (&$parties, &$collect): void {
+            foreach ([...$party->countersigners(), ...$party->countersigners0()] as $countersigner) {
+                $parties[] = $countersigner;
+                // A countersignature can itself be countersigned (RFC 9338 section 3.1).
+                $collect($countersigner);
+            }
+            foreach ($party->recipients() as $recipient) {
+                $collect($recipient);
+            }
+        };
+
+        $collect($this->body());
+        if ($this->messageType === self::SIGN) {
+            foreach ($this->signers() as $signer) {
+                $collect($signer);
+            }
+        }
+
+        return $parties;
     }
 
     /**

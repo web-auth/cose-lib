@@ -131,6 +131,29 @@ with the missing identifier. Two behaviours changed on the way, both additive:
   `tests/RfcReferencesTest.php` keeps those tables in step with the classes and with the IANA registry. The
   `keywords` of `composer.json` replace the obsolete `RFC8152` with the five RFCs implemented. No code changed.
 
+**The version 2 countersignatures of RFC 9338 are implemented.** `Cose\Signature\Countersign` is the
+`Countersign_structure` of §3.3, on the same `CoseStructure` base as `Signature1`, and `CountersignTarget` derives
+its fields — the payload slot, the `other_fields` array, hence the context string — from each of the eight targets
+the RFC names: `COSE_Sign1`, `COSE_Sign`, `COSE_Signature` (a countersignature included), `COSE_Encrypt`,
+`COSE_Encrypt0`, `COSE_recipient`, `COSE_Mac` and `COSE_Mac0`, with a detached payload or ciphertext supplied by the
+application. `Countersigner::sign()` / `verify()` compute and check the full form (label 11, a `COSE_Countersignature`
+with headers of its own, tagged 19 or bare), `sign0()` / `verify0()` the abbreviated one (label 12, the bare
+signature value, no `sign_protected` field), `attach()` / `attach0()` write them into the unprotected bucket of the
+target — the value of label 11 becoming an array from the second countersignature on — and `tagged()` wraps one
+under the CBOR tag 19, as a `GenericTag` of cbor-php until it ships a dedicated class. `CoseHeaders` gains
+`LABEL_COUNTERSIGNATURE_V2` (11), `LABEL_COUNTERSIGNATURE0_V2` (12), `getCountersignatures()` and
+`getCountersignature0()`, which read the unprotected bucket only and reject a message carrying either label in the
+protected one (§2); `HeaderMapHelper::countersignatureItems()` is the shape check and `tagNumberOf()` reads a tag
+number. The six examples of RFC 9338 Appendix A are fixtures (`tests/fixtures/rfc9338/`) and verify. Points to
+know:
+
+- **The RFC 8152 countersignatures (labels 7 and 9) are not implemented**: both are Deprecated at IANA. The
+  `countersign/` and `countersign1/` directories of cose-wg/Examples are now vendored and reported as skipped with
+  that reason; their messages verify the per-target derivation all the same, since for a two-field target the
+  version 2 value is the RFC 8152 one (RFC 9338 §1).
+- **A countersignature over a MAC or an encryption is worth the tag it covers.** RFC 9338 §6 requires a tag of at
+  least 256 bits for 128-bit security; nothing checks it. See [Countersignatures](doc/Usage.md#countersignatures).
+
 **New: the AES-CBC-MAC algorithms of RFC 9053 §3.2.** `Cose\Algorithm\Mac\AESMAC128_64` (14), `AESMAC256_64` (15),
 `AESMAC128_128` (25) and `AESMAC256_128` (26), on the `AesCbcMac` base, implement the existing `Mac` interface and
 enforce the key restrictions like every other algorithm. The key must be exactly 16 or 32 bytes long, as the
@@ -163,12 +186,59 @@ validation, revocation and trust anchors are the application's, as is dereferenc
 string. `HeaderMapHelper::assertUriValue()` is the value check behind it (a text string, tagged 32 or not, with a
 scheme). Nothing existing changes. See [doc/Usage.md](doc/Usage.md#x509-header-parameters).
 
+**ML-DSA (RFC 9964) is implemented, over the new AKP key type.** `Cose\Algorithm\Signature\MLDSA\MLDSA44` (-48),
+`MLDSA65` (-49) and `MLDSA87` (-50), on the `MLDSA` base, implement `Signature` and enforce the key restrictions like
+every other signature algorithm; `Algorithms::COSE_ALGORITHM_ML_DSA_44/65/87` name the identifiers. They are pure
+ML-DSA (FIPS 204 algorithm 2) with the empty context string, which is all the RFC allows; HashML-DSA is not
+registered and not offered. The computation is OpenSSL's, which ships ML-DSA in its default provider as of 3.5,
+through the digest-less `openssl_sign()` PHP offers as of 8.4: `MLDSA44::isSupported()` — one gate for the three
+classes — probes the OpenSSL library actually loaded at runtime, and `create()` throws a `RuntimeException` naming
+the missing piece, the way `Ed448` and the Brainpool `ESB*` algorithms do. `Cose\Key\AkpKey` is the Algorithm Key
+Pair type of RFC 9964 §3: `kty` 7 (`Key::TYPE_AKP`, name `AKP`, dispatched by `Key::createFromData()`), `pub` (-1)
+and `priv` (-2), with `alg` a required parameter of the type. For ML-DSA, `priv` is the 32-byte seed of FIPS 204 and
+nothing else — §4 deliberately excludes the expanded private key — and `pub` the encoded public key, 1312, 1952 or
+2592 bytes; both sizes are checked against `alg` when the key is built. `MLDSA::keyPairFromSeed()` expands a seed
+into the key pair, `AkpKey::asPEM()` writes the RFC 9881 forms (a seed-only PrivateKeyInfo, a SubjectPublicKeyInfo),
+`PublicKeyLoader` reads an ML-DSA SubjectPublicKeyInfo — bare, or from the certificate a classical CA issued for the
+key — into an `AkpKey` carrying the `alg` its OID names, and `Thumbprint` computes the AKP thumbprint of §6 over
+`kty`, `alg` and `pub`. The vectors of RFC 9964 Appendix A (whose `kid` values are reproduced), of the OpenSSL command
+line and of NIST ACVP (FIPS 204 key generation and pure-mode signatures) are in the test suite; the CI runs both
+sides of the gate. Points to know:
+
+- **An AKP key without `alg` is built but unusable.** RFC 9964 §3 makes `alg` REQUIRED, because the type says nothing
+  about the algorithm; the class accepts its absence so that a map read from the wire can be inspected, and the
+  signature algorithms, `Thumbprint::of()` and `asPEM()` refuse the key. An AKP key whose `alg` is another parameter
+  set is refused by the algorithm whether or not the key restrictions are enforced — for this type, `alg` is what
+  `crv` is to an EC2 key.
+- **A mismatched key pair is refused.** When a key carries both `pub` and `priv`, the public key is recomputed from
+  the seed and compared in constant time before any operation (RFC 9964 §7.4).
+- **`alg` is part of an AKP thumbprint**, the one exception to the "kid, alg, key_ops make no difference" rule of
+  RFC 9679; every other key type is unchanged.
+- A certificate *signed* with ML-DSA cannot be read by `PublicKeyLoader` yet: spomky-labs/pki-framework does not
+  know the ML-DSA signature algorithm identifiers. A certificate holding an ML-DSA key and signed by a classical CA
+  is.
+- **ML-DSA is unavailable on PHP 8.1 to 8.3, whatever the OpenSSL version**, and on any PHP running on OpenSSL
+  older than 3.5. Nothing else of the library is affected. See [doc/Usage.md](doc/Usage.md#ml-dsa).
+
 - **The spomky-labs/pki-framework floor moves to 1.6.2** (`^1.6.2`, was `^1.0`). Every earlier release verifies a
   certificate signature over a re-encoded `tbsCertificate`, so a certificate that is not strict DER -- the cose-wg
   ones, whose `keyUsage` BIT STRING carries a spare byte -- fails path validation; 1.6.2 verifies the bytes as
   carried. It is also the only supported line: its release notes close 27 security advisories affecting `<= 1.6.1`
   and declare `1.0.x` through `1.5.x` end of life. The API this library uses is unchanged across the range.
 
+**The COSE hash envelope of RFC 9995 is implemented.** `CoseHeaders::getPayloadHashAlg()`,
+`getPreimageContentType()` and `getPayloadLocation()` read `payload-hash-alg` (258), `preimage-content-type` (259) and
+`payload-location` (260) from the protected bucket only, return `null` when absent, and apply the placement rules of
+RFC 9995 §4: any of the three in the unprotected bucket is rejected, and so is `content type` (3) in either bucket of
+a message carrying `payload-hash-alg`. The labels are `CoseHeaders::LABEL_PAYLOAD_HASH_ALG` and siblings, plus
+`LABEL_CONTENT_TYPE` (3). `Cose\Structure\HashEnvelope` is the envelope itself: `protectedHeaderFor(Hash, $contentType,
+$location)` returns the header entries, `payloadFor(Hash, $preimage)` the digest that becomes the payload, and
+`matches(CoseHeaders, $payload, $preimage)` recomputes the digest with the algorithm the header names — resolved
+through the `Manager` of the application, and refused unless it is a `Hash`: SHA-1 and SHA-256/64 are *Filter Only*
+(RFC 9054 §2) and a payload standing for the content is not a filter — and compares with `hash_equals()`. **The
+library never fetches `payload-location`** (RFC 9995 §5.3), verifies no signature on the envelope's behalf, and
+leaves `COSE_Encrypt` out, as §5.2 does. Nothing existing changes. See [doc/Usage.md](doc/Usage.md#hash-envelope) and
+`examples/14-hash-envelope.php`.
 **The COSE receipts of RFC 9942 have typed accessors, and the `RFC9162_SHA256` proofs verify.**
 `CoseHeaders::getReceipts()` reads `receipts` (394) as a list of `CBOR\Tag\CoseSign1Tag` — protected bucket first,
 an empty list when absent, and an entry that is not a byte string wrapping exactly one tagged `COSE_Sign1` rejected,

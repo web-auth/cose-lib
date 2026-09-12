@@ -7,6 +7,7 @@ namespace Cose\Tests\CoseWg;
 use function array_keys;
 use function bin2hex;
 use CBOR\ByteStringObject;
+use CBOR\Tag\AbstractCoseTag;
 use CBOR\Tag\CoseSign1Tag;
 use Cose\Algorithm\Mac\HS256;
 use Cose\Algorithm\Manager;
@@ -17,8 +18,10 @@ use Cose\Key\Key;
 use Cose\Key\OkpKey;
 use Cose\Key\RsaKey;
 use Cose\Key\SymmetricKey;
+use Cose\Signature\CountersignTarget;
 use function file_get_contents;
 use function hex2bin;
+use function implode;
 use function is_string;
 use LogicException;
 use PHPUnit\Framework\AssertionFailedError;
@@ -27,6 +30,8 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\SkippedWithMessageException;
 use function sprintf;
 use function strlen;
+use function strpos;
+use function substr_replace;
 
 /**
  * The fixture harness, checked on its own: what it reads out of a fixture, how it translates keys and algorithm
@@ -490,6 +495,85 @@ final class CoseWgHarnessTest extends CoseWgFixtureTestCase
 
         // When / Then: as a fail fixture, it passes only if the library rejects it
         $this->assertFixture($flagged);
+    }
+
+    /**
+     * The countersign/ and countersign1/ directories of cose-wg/Examples were written for RFC 8152: every fixture
+     * carries the deprecated label 7 or 9, is reported as skipped with that reason, and yields no version 2
+     * countersignature to this library -- the day upstream rewrites them for RFC 9338, the skips turn into runs.
+     */
+    #[Test]
+    #[DataProvider('rfc8152CountersignatureFixtures')]
+    public function anRfc8152CountersignatureFixtureIsSkippedAsDeprecatedAndNotRead(string $name): void
+    {
+        // Given
+        $fixture = CoseWgFixture::load(sprintf('%s/%s.json', self::fixtureRoot(), $name));
+        $labels = $fixture->deprecatedCountersignatureLabels();
+
+        // Then: the label is one of the two, and the fixture is skipped for it
+        static::assertNotSame([], $labels, $name . ' carries no RFC 8152 countersignature label');
+        static::assertContains($labels[0], CoseWgFixture::DEPRECATED_COUNTERSIGNATURE_LABELS);
+        try {
+            $this->assertFixtureVerifiedOrRejected($fixture);
+            static::fail($name . ' was verified rather than skipped');
+        } catch (SkippedWithMessageException $skipped) {
+            static::assertStringContainsString('Deprecated, RFC 8152', $skipped->getMessage());
+            static::assertStringContainsString(sprintf('label(s) %s', implode(', ', $labels)), $skipped->getMessage());
+        }
+
+        // and nothing of it is a version 2 countersignature: the library reads labels 11 and 12 only
+        $message = $fixture->decodeOutput();
+        static::assertInstanceOf(AbstractCoseTag::class, $message);
+        static::assertSame([], CountersignTarget::of($message)->getCountersignatures());
+        static::assertNull(CountersignTarget::of($message)->getCountersignature0());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function rfc8152CountersignatureFixtures(): iterable
+    {
+        foreach (self::fixturesOf('countersign', 'countersign1') as $name => [$fixture]) {
+            yield $name => [$name];
+        }
+    }
+
+    /**
+     * The RFC 9338 fixtures of tests/fixtures/rfc9338 go through the countersignature checks: one whose
+     * countersignature no longer verifies fails the suite, and so does one whose input declares a countersigner the
+     * wire does not carry.
+     */
+    #[Test]
+    public function aBrokenCountersignatureFailsTheSuite(): void
+    {
+        // Given: the A.2.1 message with the last byte of the countersignature changed
+        $fixture = CoseWgFixture::load(Rfc9338FixtureTest::rfc9338FixtureRoot() . '/appendix-a/a-2-1-sign1.json');
+        $document = $fixture->document();
+        $cbor = $document['output']['cbor'];
+        static::assertTrue(is_string($cbor));
+        $offset = strpos($cbor, 'FBD1A5CF');
+        static::assertNotFalse($offset, 'the countersignature of A.2.1 ends with FBD1A5CF');
+        $document['output']['cbor'] = substr_replace($cbor, 'FBD1A5CE', $offset, 8);
+        $broken = CoseWgFixture::fromDocument($fixture->name(), $document);
+
+        // When / Then
+        try {
+            $this->assertFixture($broken);
+            static::fail('a broken countersignature was accepted');
+        } catch (AssertionFailedError $failure) {
+            static::assertStringContainsString('the countersignature does not verify', $failure->getMessage());
+        }
+
+        // and a countersigner declared but absent from the wire
+        $document = $fixture->document();
+        $document['input']['sign0']['countersign']['signers'][] = $document['input']['sign0']['countersign']['signers'][0];
+        $extra = CoseWgFixture::fromDocument($fixture->name(), $document);
+        try {
+            $this->assertFixture($extra);
+            static::fail('a missing countersignature was accepted');
+        } catch (AssertionFailedError $failure) {
+            static::assertStringContainsString('the countersignatures on the wire are not those of the input', $failure->getMessage());
+        }
     }
 
     /**

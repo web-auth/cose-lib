@@ -1,6 +1,6 @@
 # How to Use COSE Library
 
-This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature, MAC, content encryption and key management algorithms, the cryptographic structures a signature, a MAC or an encryption is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`), [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims), [RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html) (X.509 certificates: `x5bag`, `x5chain`, `x5t`, `x5u`) and [RFC 9942](https://www.rfc-editor.org/rfc/rfc9942.html) (COSE receipts: `receipts`, `vds`, `vdp`, with the `RFC9162_SHA256` Merkle proofs), the hash algorithms of [RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html) and the COSE Key Thumbprint of [RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html). Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
+This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature, MAC, content encryption and key management algorithms, the cryptographic structures a signature, a MAC or an encryption is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`), [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims) and [RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html) (X.509 certificates: `x5bag`, `x5chain`, `x5t`, `x5u`), [RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html) (the hash envelope: `payload-hash-alg`, `preimage-content-type`, `payload-location`) and [RFC 9942](https://www.rfc-editor.org/rfc/rfc9942.html) (COSE receipts: `receipts`, `vds`, `vdp`, with the `RFC9162_SHA256` Merkle proofs), the hash algorithms of [RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html), the COSE Key Thumbprint of [RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html) the version 2 countersignatures of [RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html) and the ML-DSA post-quantum signatures and AKP key type of [RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html). Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
 
 The six COSE message types themselves come from [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0 or later, as `CBOR\Tag\CoseSign1Tag` and its siblings. The `Cose\...Tag` classes this library used to ship are deprecated since 4.8.0 and removed in 5.0.0 — see [Upgrading from the Cose\...Tag classes](#upgrading-from-the-cosetag-classes).
 
@@ -14,10 +14,12 @@ The key management algorithms of RFC 9053 §5–6 — `direct`, HKDF, AES Key Wr
 - [Reading Headers](#reading-headers)
   - [`typ` and `CWT Claims`](#typ-and-cwt-claims)
   - [X.509 Header Parameters](#x509-header-parameters)
+  - [Hash Envelope](#hash-envelope)
   - [COSE Receipts](#cose-receipts)
 - [Signature Operations](#signature-operations)
   - [COSE_Sign1 (Single Signer)](#cose_sign1-single-signer)
   - [COSE_Sign (Multiple Signers)](#cose_sign-multiple-signers)
+  - [Countersignatures](#countersignatures)
 - [Encryption Operations](#encryption-operations)
   - [COSE_Encrypt0 (Single Recipient)](#cose_encrypt0-single-recipient)
   - [COSE_Encrypt (Multiple Recipients)](#cose_encrypt-multiple-recipients)
@@ -31,6 +33,7 @@ The key management algorithms of RFC 9053 §5–6 — `direct`, HKDF, AES Key Wr
 - [Upgrading from the Cose\...Tag classes](#upgrading-from-the-cosetag-classes)
 - [Supported Algorithms](#supported-algorithms)
   - [Fully-Specified Algorithms](#fully-specified-algorithms)
+  - [ML-DSA](#ml-dsa)
   - [Signature Verification Contract](#signature-verification-contract)
   - [Key Restrictions (alg and key_ops)](#key-restrictions-alg-and-key_ops)
   - [Key Types](#key-types)
@@ -101,6 +104,8 @@ builds; casting one to string yields the CBOR bytes to hand to the algorithm.
 | §5.3 `Enc_structure` | `RecipientStructure::forEncryptRecipient()` | `"Enc_Recipient"` | protected, external_aad |
 | §5.3 `Enc_structure` | `RecipientStructure::forMacRecipient()` | `"Mac_Recipient"` | protected, external_aad |
 | §5.3 `Enc_structure` | `RecipientStructure::forNestedRecipient()` | `"Rec_Recipient"` | protected, external_aad |
+| RFC 9338 §3.3 `Countersign_structure` | `Cose\Signature\Countersign::full()` | `"CounterSignature"` / `"CounterSignatureV2"` | body_protected, **sign_protected**, external_aad, payload, ? other_fields |
+| RFC 9338 §3.3 `Countersign_structure` | `Cose\Signature\Countersign::abbreviated()` | `"CounterSignature0"` / `"CounterSignature0V2"` | body_protected, external_aad, payload, ? other_fields |
 
 ```php
 use Cose\Mac\Mac0Structure;
@@ -330,6 +335,102 @@ certificates (a draft) are out of scope.
 [`examples/13-x509-header-parameters.php`](../examples/13-x509-header-parameters.php) runs the whole of this on the
 certificates of cose-wg/Examples.
 
+### Hash Envelope
+
+> [!IMPORTANT]
+> **`payload-location` is never fetched by this library.** [RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html)
+> §5.3 leaves it to the verifier, which "can choose to fetch the content and confirm that the digest of it [...]
+> matches the payload bytes"; how the content is obtained — from that location, from a cache, from a package
+> registry — is the application's, exactly as dereferencing an `x5u` is. `getPayloadLocation()` returns a string,
+> and `HashEnvelope::matches()` is the confirmation step once the bytes are in hand.
+
+A hash envelope is a `COSE_Sign`, `COSE_Sign1`, `COSE_Mac` or `COSE_Mac0` whose payload is the digest of the
+content rather than the content itself, so that a large artefact — a software bill of materials, a firmware image —
+is hashed once and its signature carried separately ([RFC 9995 §1](https://www.rfc-editor.org/rfc/rfc9995#section-1)).
+Nothing changes in how the message is signed or verified; three header parameters, all in the protected bucket, say
+what the payload is, and each has a typed accessor on `CoseHeaders`:
+
+| Name | Label | Type | Reference | Accessor |
+|---|---|---|---|---|
+| `payload-hash-alg` | 258 (`CoseHeaders::LABEL_PAYLOAD_HASH_ALG`) | `int` (COSE Algorithms) | [RFC 9995 §3](https://www.rfc-editor.org/rfc/rfc9995#section-3) | `getPayloadHashAlg(): ?int` |
+| `preimage-content-type` | 259 (`CoseHeaders::LABEL_PREIMAGE_CONTENT_TYPE`) | `uint / tstr` | [RFC 9995 §3](https://www.rfc-editor.org/rfc/rfc9995#section-3) | `getPreimageContentType(): int\|string\|null` |
+| `payload-location` | 260 (`CoseHeaders::LABEL_PAYLOAD_LOCATION`) | `tstr` | [RFC 9995 §3](https://www.rfc-editor.org/rfc/rfc9995#section-3) | `getPayloadLocation(): ?string` |
+
+`payload-hash-alg` names the hash function by its identifier in the IANA COSE Algorithms registry — the
+[RFC 9054 identifiers](#hash-algorithms), `-16` for SHA-256. `preimage-content-type` — IANA's name; the CDDL of
+[§4](https://www.rfc-editor.org/rfc/rfc9995#section-4) calls it `payload_preimage_content_type` — is the content type
+of the bytes that were hashed, with the value syntax of `content type` ([RFC 9052 §3.1](https://datatracker.ietf.org/doc/html/rfc9052#section-3.1)):
+a CoAP Content-Format number or a `<type-name>/<subtype-name>` media type name, parameters allowed.
+`payload-location` is "the string or URI hint for the location of the data hashed" — a text string, not required to
+be a URI.
+
+The placement rules of [RFC 9995 §4](https://www.rfc-editor.org/rfc/rfc9995#section-4) are what the accessors add
+to a raw lookup: "Label 258 (payload_hash_alg) MUST be present in the protected header and MUST NOT be present in
+the unprotected header", labels 259 and 260 "MAY be present in the protected header and MUST NOT be present in the
+unprotected header", and "Label 3 (content_type) MUST NOT be present in the protected or unprotected headers". Each
+accessor reads the protected bucket only, throws when its label is found in the unprotected one, and throws when a
+message carrying `payload-hash-alg` also carries `content type` in either bucket — label 3 would describe the
+digest, and 259 already describes the content. `getProtectedHeaderParameter(CoseHeaders::LABEL_PAYLOAD_HASH_ALG)`
+is the lenient form.
+
+`Cose\Structure\HashEnvelope` is the two ends of the envelope:
+
+```php
+use Cose\Algorithm\Hash\SHA256;
+use Cose\Algorithm\Manager;
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Signature\Signature1;
+use Cose\Structure\CoseHeaders;
+use Cose\Structure\HashEnvelope;
+use Cose\Structure\HeaderMapHelper;
+
+// --- Sender: the three entries spread next to "alg", the digest as the payload, an ordinary COSE_Sign1 otherwise.
+$hash = SHA256::create();
+$protectedHeader = HeaderMapHelper::encodeProtected(MapObject::create([
+    MapItem::create(UnsignedIntegerObject::create(1), NegativeIntegerObject::create(ES256::identifier())),
+    ...HashEnvelope::protectedHeaderFor($hash, 'application/spdx+json', 'https://sbom.example/manifest.spdx.json'),
+]));
+$payload = ByteStringObject::create(HashEnvelope::payloadFor($hash, $sbom));
+$signature = ES256::create()->sign((string) Signature1::create($protectedHeader, $payload), $privateKey);
+
+// --- Verifier: 1. the signature, as for any message; 2. what the digest is; 3. the content against the digest.
+$headers = CoseHeaders::fromMessage($coseSign1);
+$hashAlg = $headers->getPayloadHashAlg();             // -16
+$contentType = $headers->getPreimageContentType();    // "application/spdx+json"
+$location = $headers->getPayloadLocation();           // "https://sbom.example/manifest.spdx.json" — yours to fetch, or not
+
+$manager = Manager::create()->add(ES256::create(), SHA256::create());
+$envelope = HashEnvelope::create($manager);
+$isTheSignedContent = $envelope->matches($headers, $coseSign1->getPayload()->getValue(), $sbomYouObtained);
+```
+
+- **`protectedHeaderFor(Hash $hash, int|string|null $preimageContentType = null, ?string $payloadLocation = null)`**
+  returns the `MapItem` entries, typed as the CDDL writes them, the content type checked the way the accessor will
+  read it back. `$hash` is a `Hash`, not a `FilterOnlyHash`: the digest is going to stand for the content.
+- **`payloadFor(Hash $hash, string $preimage)`** is the digest, as raw bytes.
+- **`matches(CoseHeaders $headers, string $payload, string $preimage)`** recomputes the digest of `$preimage` with
+  the algorithm `payload-hash-alg` names and compares it with `$payload` using `hash_equals()`; `$payload` is the
+  payload as carried, or as the application holds it when it is detached. The identifier resolves through the
+  `Manager` the envelope was created with, like every identifier that comes from the wire, and **has to resolve to a
+  `Hash`**: SHA-1 (-14) and SHA-256/64 (-15) are *Filter Only* ([RFC 9054 §2](https://www.rfc-editor.org/rfc/rfc9054#section-2))
+  and a payload standing for the content is the integrity use, so they are refused here even when the same
+  `Manager` registers them for `x5t`. `payloadHashAlgorithm()` is the resolution on its own.
+
+Three points from the security considerations of the RFC:
+
+- **Verify the signature first, then confirm the content.** `matches()` verifies nothing: a matching digest proves
+  that the bytes in hand are the ones the header describes, and only the verified signature or MAC proves who said
+  so. A signature that verifies over a digest the content does not match says the content in hand is not the one
+  that was signed.
+- **The signature should be at least as strong as the hash** ([§5.1](https://www.rfc-editor.org/rfc/rfc9995#section-5.1):
+  "if the payload was produced with SHA-256, and is signed with ECDSA, use at least P-256 and SHA-256"). The
+  combinations an application accepts are its policy; the library does not rank them.
+- **`COSE_Encrypt` and `COSE_Encrypt0` are out of scope** ([§5.2](https://www.rfc-editor.org/rfc/rfc9995#section-5.2)),
+  in the RFC and here. The accessors read any message, since a header is a header, but nothing defines what a hashed
+  payload means under encryption.
+
+[`examples/14-hash-envelope.php`](../examples/14-hash-envelope.php) signs the SHA-256 of a file with the content type
+and location set, verifies the signature, confirms the file against the digest, and shows what the envelope refuses.
 ### COSE Receipts
 
 > [!IMPORTANT]
@@ -438,7 +539,7 @@ and it decides nothing about `crit` (RFC 9052 §3.1), the validity period (§7.2
 The verification is checked against the 186 inclusion and consistency probes of the Certificate Transparency
 implementation [transparency-dev/merkle](https://github.com/transparency-dev/merkle), vendored under
 [`tests/fixtures/rfc9162/`](../tests/fixtures/rfc9162/), and against proofs generated from the definitions of RFC
-9162 for every leaf of every tree size up to 40. [`examples/14-receipts.php`](../examples/14-receipts.php) issues and
+9162 for every leaf of every tree size up to 40. [`examples/17-receipts.php`](../examples/17-receipts.php) issues and
 verifies a receipt of inclusion and a receipt of consistency over the eight-leaf CT test tree.
 
 ## Signature Operations
@@ -660,6 +761,136 @@ foreach (CoseSignature::all($coseSign->getSignatures()) as $signer) {
 > RFC 9052 §4.1 writes the list as `[+ COSE_Signature]`: at least one entry, each a `[bstr, map, bstr]` array. The CBOR
 > layer only checks that the item is a list, so `CoseSignature::all()` is where that rule is applied — it rejects an
 > empty list and any entry of another shape.
+
+### Countersignatures
+
+[RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html) defines a second signature over a finalized COSE structure,
+carried in the unprotected bucket of that structure. It is what a notary or a timestamping service adds to a document
+somebody else signed, and the building block of long-term archives, where a countersignature is countersigned in
+turn. Any of the structures of RFC 9052 can be countersigned: a `COSE_Sign1`, a `COSE_Sign`, a `COSE_Signature`, a
+`COSE_Encrypt`, a `COSE_Encrypt0`, a `COSE_recipient`, a `COSE_Mac` or a `COSE_Mac0`.
+
+| Name | Label | Type | Reference | Accessor |
+|---|---|---|---|---|
+| `Countersignature version 2` | 11 (`CoseHeaders::LABEL_COUNTERSIGNATURE_V2`) | `COSE_Countersignature / [+ COSE_Countersignature]` | [RFC 9338 §2](https://www.rfc-editor.org/rfc/rfc9338#section-2) | `getCountersignatures(): CoseSignature[]` |
+| `Countersignature0 version 2` | 12 (`CoseHeaders::LABEL_COUNTERSIGNATURE0_V2`) | `COSE_Countersignature0` (`bstr`) | [RFC 9338 §2](https://www.rfc-editor.org/rfc/rfc9338#section-2) | `getCountersignature0(): ?string` |
+
+The **full form** (label 11) is a `COSE_Countersignature`, which is a `COSE_Signature` (§3.1): a `[protected,
+unprotected, signature]` entry with headers of its own — its algorithm, its key identifier — carried bare or under
+the CBOR tag 19. The value of the parameter is one of them or an array of one or more; `getCountersignatures()`
+reads both into a list of `CoseSignature`. The **abbreviated form** (label 12) is the bare signature value: no
+headers, "the parameters for computing or verifying the abbreviated countersignature are provided by the same
+context used to describe the encryption, signature, or MAC processing" (§3.2).
+
+#### Countersigning
+
+```php
+use CBOR\ByteStringObject;
+use CBOR\MapItem;
+use CBOR\MapObject;
+use CBOR\NegativeIntegerObject;
+use CBOR\UnsignedIntegerObject;
+use Cose\Algorithm\Signature\ECDSA\ES256;
+use Cose\Signature\Countersigner;
+use Cose\Signature\CountersignTarget;
+use Cose\Structure\CoseHeaders;
+use Cose\Structure\HeaderMapHelper;
+
+// The target: a finalized message. Its signature, tag or ciphertext is already computed.
+$target = CountersignTarget::of($coseSign1);
+
+// The countersigner's own headers: the algorithm in the protected bucket, as RFC 9052 §3.1 asks, and a key id.
+$notaryHeaders = CoseHeaders::of(
+    HeaderMapHelper::encodeProtected(MapObject::create([
+        MapItem::create(UnsignedIntegerObject::create(1), NegativeIntegerObject::create(ES256::identifier())),
+    ])),
+    MapObject::create([MapItem::create(UnsignedIntegerObject::create(4), ByteStringObject::create('notary'))]),
+);
+
+$countersignature = Countersigner::sign($target, ES256::create(), $notaryPrivateKey, $notaryHeaders); // CoseSignature
+
+// Into the unprotected bucket of the target, under label 11. The bucket is modified in place -- it is the one the
+// message carries -- and the target's own signature does not cover it, so nothing else changes.
+Countersigner::attach($coseSign1->getUnprotectedHeader(), $countersignature);
+```
+
+`attach()` writes the first countersignature on its own, turns the value into an array with the second, and appends
+the following ones; `attach($bucket, $countersignature, tagged: true)` writes it under tag 19
+(`Countersigner::tagged()` builds that on its own). `sign()` checks that an `alg` the headers carry is the algorithm
+given. The abbreviated form is `sign0()`, which returns the bare value, and `attach0()`, which writes it under label
+12:
+
+```php
+Countersigner::attach0($coseMac0->getUnprotectedHeader(), Countersigner::sign0($target, ES256::create(), $notaryPrivateKey));
+```
+
+#### Verifying
+
+```php
+$target = CountersignTarget::of($decoded);                  // the same derivation, from the decoded message
+foreach ($target->getCountersignatures() as $countersignature) {
+    $alg = $manager->get((int) $countersignature->headers()->getHeaderParameter(1)->normalize());
+    $kid = $countersignature->headers()->getHeaderParameter(4)?->normalize();
+    $isValid = Countersigner::verify($target, $countersignature, $alg, $keyOf($kid));
+}
+
+$countersignature0 = $target->getCountersignature0();       // label 12, or null
+$isValid = Countersigner::verify0($target, $countersignature0, $algorithmOfTheContext, $keyOfTheContext);
+```
+
+Both take the optional `external_aad` of RFC 9052 §4.4 as their last argument. `verify()` refuses a countersignature
+whose `alg` differs from the algorithm given, and yields `false` for what does not verify; after it, RFC 9338 §3.3
+leaves to the application the check "that the key is correctly paired with the signing identity and that the signing
+identity is authorized" — the `kid` is a hint, not a proof.
+
+#### What is signed
+
+The `Countersign_structure` of §3.3 depends on the target, and `CountersignTarget` encodes that rule once: the
+second byte string of the target takes the `payload` slot, every later byte string goes into `other_fields`, and the
+context string says whether `other_fields` is present:
+
+| Target | payload | other_fields | Full context | Abbreviated context |
+|---|---|---|---|---|
+| `COSE_Sign1` | payload | `[signature]` | `CounterSignatureV2` | `CounterSignature0V2` |
+| `COSE_Sign` | payload | — | `CounterSignature` | `CounterSignature0` |
+| `COSE_Signature` (a countersignature too) | signature | — | `CounterSignature` | `CounterSignature0` |
+| `COSE_Encrypt` | ciphertext | — | `CounterSignature` | `CounterSignature0` |
+| `COSE_Encrypt0` | ciphertext | — | `CounterSignature` | `CounterSignature0` |
+| `COSE_recipient` | ciphertext | — | `CounterSignature` | `CounterSignature0` |
+| `COSE_Mac` | payload | `[tag]` | `CounterSignatureV2` | `CounterSignature0V2` |
+| `COSE_Mac0` | payload | `[tag]` | `CounterSignatureV2` | `CounterSignature0V2` |
+
+A detached payload or ciphertext is supplied by the application, `CountersignTarget::of($message, $detached)`, as
+for the other structures. The abbreviated structure has no `sign_protected` field at all (§3.3: "This field is
+omitted for the Countersignature0V2 attribute"), and the four context strings keep the forms apart: "the converted
+structure will fail signature validation" (§3). For a target with two byte string fields the version 2 value is the
+one an RFC 8152 countersigner produced — RFC 9338 §1 designed it so — which the `countersign/` fixtures of
+cose-wg/Examples confirm; for the three-field targets the two differ, which is the point of the new version. The
+to-be-signed bytes use the deterministic encoding RFC 9052 §9 narrows, as §4 requires, through the same
+`CoseStructure` base as `Signature1`.
+
+> [!IMPORTANT]
+> Both labels are read from the **unprotected bucket only**, as §2 places them: a countersignature is applied after
+> the target is finalized, so it cannot be under the target's own signature or tag. A message carrying label 11 or
+> 12 in the protected bucket is rejected by the accessors. The RFC 8152 countersignatures (labels 7 and 9) are
+> Deprecated at IANA and are not read; the `countersign/` and `countersign1/` fixtures of cose-wg/Examples, written
+> for them, are reported as skipped by the test suite.
+
+> [!WARNING]
+> A countersignature over a `COSE_Mac`, `COSE_Mac0`, `COSE_Encrypt` or `COSE_Encrypt0` attests to the tag or the
+> ciphertext, not to the plaintext (§3: "there is a distinction between attesting to the encrypted data as opposed to
+> attesting to the unencrypted data"), and gives no more integrity than the tag has. RFC 9338 §6: "To provide 128-bit
+> security against collision attacks, the tag length MUST be at least 256 bits. A countersignature of a COSE_Mac with
+> AES-MAC (using a 128-bit key or larger) provides at most 64 bits of integrity protection. Similarly, a
+> countersignature of a COSE_Encrypt with AES-CCM-16-64-128 provides at most 32 bits of integrity protection."
+> Nothing in this library checks the tag length of the target: HMAC 256/256 and the AES-GCM algorithms qualify, the
+> truncated HMAC 256/64, every AES-CBC-MAC and the 64-bit AES-CCM variants do not.
+
+Only a signature algorithm *with appendix* can countersign (§3.1), the target having to be processed without the
+countersignature; every signature algorithm of this library is one. The six examples of RFC 9338 Appendix A are
+verified by `tests/CoseWg/Rfc9338FixtureTest.php`, and [`examples/15-countersignatures.php`](../examples/15-countersignatures.php)
+runs the whole of this: a notary countersigning a `COSE_Sign1`, an archive countersigning the countersignature, an
+abbreviated countersignature on a `COSE_Mac0`.
 
 ## Encryption Operations
 
@@ -1253,6 +1484,109 @@ $manager = Manager::create()->add(
 );
 ```
 
+### ML-DSA
+
+[RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html) registers ML-DSA, the module-lattice signature scheme of
+FIPS 204, for COSE — the first post-quantum signature in the registry — together with the key type it is carried
+in, AKP (see [Key Types](#key-types)). The three parameter sets live in the `Cose\Algorithm\Signature\MLDSA`
+namespace.
+
+| Algorithm | Identifier | Description | Reference |
+|-----------|------------|-------------|-----------|
+| ML-DSA-44 | -48 | ML-DSA with the FIPS 204 parameter set of security category 2 — 1312-byte public key, 2420-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
+| ML-DSA-65 | -49 | ML-DSA with the parameter set of security category 3 — 1952-byte public key, 3309-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
+| ML-DSA-87 | -50 | ML-DSA with the parameter set of security category 5 — 2592-byte public key, 4627-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
+
+The three are *pure* ML-DSA (FIPS 204 algorithm 2) with the empty context string, which is all RFC 9964 allows:
+HashML-DSA is not registered (§7.2 explains why), and a non-empty `ctx` is forbidden (§5). The private key is the
+32-byte seed of FIPS 204 (§4) and nothing else: the expanded private key of FIPS 204 is not a representation the RFC
+allows, and `AkpKey` refuses a `priv` of that size.
+
+#### Keys
+
+An ML-DSA key is an `AkpKey`: `kty` 7, the **required** `alg` naming the parameter set, `pub` (-1) holding the
+encoded public key of FIPS 204 §7.2, and, on the signing side, `priv` (-2) holding the seed. The algorithm expands
+a seed into the key pair, which is how a key is generated — from `random_bytes(32)` — and how a stored seed is
+turned back into a key:
+
+```php
+use Cose\Algorithm\Signature\MLDSA\MLDSA65;
+use Cose\Key\AkpKey;
+use Cose\Key\Key;
+
+$algorithm = MLDSA65::create();
+
+$key = $algorithm->keyPairFromSeed(random_bytes(32));   // AkpKey: alg -49, pub (1952 bytes), priv (the seed)
+$key->pub();                                            // FIPS 204 pkEncode() output
+$key->priv();                                           // the 32-byte seed
+$key->toPublic();                                       // the same key without "priv"
+
+// The key as it travels, or as a stored credential is rebuilt:
+$key = AkpKey::create([
+    Key::TYPE => Key::TYPE_AKP,
+    Key::ALG => MLDSA65::ID,
+    AkpKey::DATA_PUB => $pub,
+    AkpKey::DATA_PRIV => $seed,   // omitted on the verifying side
+]);
+```
+
+`Key::createFromData()` dispatches `kty` 7 — as the integer, the `'7'` string cbor-php decodes it to, or the name
+`AKP` — to `AkpKey`. `asPEM()` writes the RFC 9881 forms OpenSSL reads: a seed-only PrivateKeyInfo (the `seed [0]`
+choice of `ML-DSA-PrivateKey`) for a private key, a SubjectPublicKeyInfo for a public one. `PublicKeyLoader` reads
+the SubjectPublicKeyInfo back, from a bare structure or from the certificate a classical CA issued for the key, into
+an `AkpKey` carrying the `alg` the OID names. A certificate *signed* with ML-DSA cannot be read yet:
+spomky-labs/pki-framework does not know the ML-DSA signature algorithm identifiers.
+
+#### Signing and verifying
+
+```php
+$signature = $algorithm->sign((string) $toBeSigned, $key);                          // 3309 bytes for ML-DSA-65
+$isValid = $algorithm->verify((string) $toBeSigned, $key->toPublic(), $signature);  // bool
+```
+
+Signing is randomised (the *hedged* variant of FIPS 204, OpenSSL's default): two signatures over the same input
+differ, and both verify.
+
+#### What is checked before OpenSSL is called
+
+- `AkpKey` rejects, when the key is built, a `pub` whose length is not the one of the parameter set named by `alg`
+  and a `priv` that is not 32 bytes (RFC 9964 §4, §5, §7.3: "the seed length check MUST be performed"). A malformed
+  key is therefore refused when it is first seen, as the [verification contract](#signature-verification-contract)
+  promises for every key type.
+- The algorithm refuses an AKP key without `alg`: the type says nothing about the algorithm, and §3 makes the
+  parameter REQUIRED. It also refuses a key whose `alg` is another parameter set, whether or not the
+  [key restrictions](#key-restrictions-alg-and-key_ops) are enforced — for this key type, `alg` is what `crv` is to
+  an EC2 key, not a usage restriction laid over it. With the restrictions enforced, `key_ops` is checked as for any
+  algorithm.
+- When the key carries both halves, the public key is recomputed from the seed and compared in constant time: a
+  mismatched pair (§7.4, whose consequences "can range from operations failing to private key compromise") is
+  rejected on both `sign()` and `verify()`.
+- A signature of any length other than the table's is invalid (FIPS 204 algorithm 3, step 1) — `verify()` returns
+  `false` without loading the key.
+
+#### The platform gate
+
+ML-DSA is computed by OpenSSL, which ships it in its default provider as of **3.5**, and needs the digest-less
+`openssl_sign()` that PHP only offers as of **8.4**. `OPENSSL_VERSION_TEXT` reports the headers PHP was compiled
+against, not the library it loaded — a PHP built against 3.0 and running on 3.5 is common — so the OpenSSL check is
+a runtime probe: an ML-DSA key is loaded once per process. `MLDSA44::isSupported()`, which the three classes share,
+answers for both conditions; `create()` throws a `RuntimeException` naming the missing piece. Register the
+algorithms conditionally when the platform is not known in advance:
+
+```php
+use Cose\Algorithm\Signature\MLDSA\MLDSA44;
+use Cose\Algorithm\Signature\MLDSA\MLDSA65;
+use Cose\Algorithm\Signature\MLDSA\MLDSA87;
+
+if (MLDSA44::isSupported()) {
+    $manager->add(MLDSA44::create(), MLDSA65::create(), MLDSA87::create());
+}
+```
+
+The thumbprint of an AKP key is computed over `kty`, `alg` and `pub` (RFC 9964 §6), see
+[Key Thumbprints](#key-thumbprints). [`examples/16-ml-dsa.php`](../examples/16-ml-dsa.php) reproduces the
+COSE example of RFC 9964 Appendix A, thumbprint included, and signs a COSE_Sign1 with a fresh key.
+
 ### Signature Verification Contract
 
 `Cose\Algorithm\Signature\Signature::verify()` is total for every condition the governing specifications define as an
@@ -1362,7 +1696,7 @@ throws instead of being cast to `0`, an identifier no algorithm is registered un
 
 ### Key Types
 
-The `Cose\Key` classes cover the four key types of the IANA
+The `Cose\Key` classes cover the five key types of the IANA
 [COSE Key Types](https://www.iana.org/assignments/cose/cose.xhtml#key-type) registry that the algorithms above use.
 `Key::createFromData()` picks the class from `kty` (label 1), and the parameter labels are the `DATA_*` constants of
 each class — `Ec2Key::DATA_X` is -2, `RsaKey::DATA_N` is -1, and so on.
@@ -1373,6 +1707,13 @@ each class — `Ec2Key::DATA_X` is -2, `RsaKey::DATA_N` is -1, and so on.
 | EC2 | 2 | `Cose\Key\Ec2Key` | `crv` (-1), `x` (-2), `y` (-3), `d` (-4) | [RFC 9053 §7.1.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1.1) |
 | RSA | 3 | `Cose\Key\RsaKey` | `n` (-1), `e` (-2), `d` (-3), `p` (-4), `q` (-5), `dP` (-6), `dQ` (-7), `qInv` (-8), `other` (-9), `r_i` (-10), `d_i` (-11), `t_i` (-12) | [RFC 8230 §4](https://www.rfc-editor.org/rfc/rfc8230#section-4) |
 | Symmetric | 4 | `Cose\Key\SymmetricKey` | `k` (-1) | [RFC 9053 §7.3](https://www.rfc-editor.org/rfc/rfc9053#section-7.3) |
+| AKP | 7 | `Cose\Key\AkpKey` | `pub` (-1), `priv` (-2) | [RFC 9964 §3](https://www.rfc-editor.org/rfc/rfc9964#section-3) |
+
+An AKP key is a pair of byte strings whose format the algorithm decides, so `alg` is a **required** parameter of the
+type (RFC 9964 §3) rather than the optional restriction it is elsewhere; the class accepts a key without it, so that a
+map read from the wire can be inspected, and every consumer of the key refuses it. For the ML-DSA algorithms, `pub`
+is the encoded public key of FIPS 204 and `priv` the 32-byte seed, with the sizes checked against `alg` when the key
+is built — see [ML-DSA](#ml-dsa).
 
 The curves an `OkpKey` or an `Ec2Key` may carry in `crv`, with the `CURVE_*` constant naming each value:
 
@@ -1518,9 +1859,14 @@ the key was decoded from is never re-encoded, so:
 | EC2 | `kty` (1), `crv` (-1), `x` (-2), `y` (-3) | [RFC 9679 §4.2](https://www.rfc-editor.org/rfc/rfc9679#section-4.2) |
 | RSA | `kty` (1), `n` (-1), `e` (-2) | [RFC 9679 §4.3](https://www.rfc-editor.org/rfc/rfc9679#section-4.3) |
 | Symmetric | `kty` (1), `k` (-1) | [RFC 9679 §4.4](https://www.rfc-editor.org/rfc/rfc9679#section-4.4) |
+| AKP | `kty` (1), `alg` (3), `pub` (-1) | [RFC 9964 §6](https://www.rfc-editor.org/rfc/rfc9964#section-6) |
 
-A generic `Cose\Key\Key` of another type — HSS-LMS (5), AKP (7) — has no thumbprint here and `Thumbprint::of()`
-refuses it; RFC 9679 §4.6 defers those to the specifications of the types.
+The AKP row is the one place `alg` is part of the digest: RFC 9679 §4.6 defers the required parameters of any other
+key type to its own specification, and RFC 9964 §6 lists `alg` among them, because the AKP type alone does not say
+what the key is — the same `pub` bytes under another algorithm would be another key. An AKP key without `alg` has no
+thumbprint and `Thumbprint::of()` refuses it. The `kid` of every COSE example of RFC 9964 Appendix A.2 is that
+thumbprint. A generic `Cose\Key\Key` of a type this library has no class for — HSS-LMS (5) — has no thumbprint
+here either.
 
 ```php
 use Cose\Algorithm\Hash\SHA256;
@@ -2177,10 +2523,15 @@ The following header parameters are commonly used in COSE structures:
 | 6 | Partial IV | bstr | Partial Initialization Vector |
 | 15 | CWT Claims | map | CWT claims in the header (RFC 9597), `getCwtClaims()` |
 | 16 | typ | tstr / uint | Type of the COSE object (RFC 9596), `getTyp()` |
+| 11 | Countersignature version 2 | COSE_Countersignature / [+ COSE_Countersignature] | Full countersignatures, unprotected only (RFC 9338), `getCountersignatures()` |
+| 12 | Countersignature0 version 2 | bstr | Abbreviated countersignature, unprotected only (RFC 9338), `getCountersignature0()` |
 | 32 | x5bag | COSE_X509 | Unordered bag of X.509 certificates (RFC 9360), `getX5Bag()` |
 | 33 | x5chain | COSE_X509 | Ordered chain of X.509 certificates, end-entity first (RFC 9360), `getX5Chain()` |
 | 34 | x5t | COSE_CertHash | Thumbprint of the end-entity certificate (RFC 9360), `getX5T()` |
 | 35 | x5u | uri | URI of an X.509 certificate, never fetched by this library (RFC 9360), `getX5U()` |
+| 258 | payload-hash-alg | int | Hash algorithm of the payload of a hash envelope, protected only (RFC 9995), `getPayloadHashAlg()` |
+| 259 | preimage-content-type | uint / tstr | Content type of the hashed bytes, protected only (RFC 9995), `getPreimageContentType()` |
+| 260 | payload-location | tstr | Where the hashed bytes can be retrieved, never fetched by this library (RFC 9995), `getPayloadLocation()` |
 | 394 | receipts | [+ bstr .cbor Receipt] | COSE receipts, each a tagged COSE_Sign1 (RFC 9942), `getReceipts()` |
 | 395 | vds | int | Verifiable data structure of a receipt, protected bucket only (RFC 9942), `getVds()` |
 | 396 | vdp | map | Verifiable data structure proofs of a receipt, keyed by proof type (RFC 9942), `getVdp()` |
@@ -2229,7 +2580,10 @@ php examples/01-sign1.php
 | `examples/11-hash-algorithms.php` | RFC 9054: the hash identifiers, and why *Filter Only* is a type |
 | `examples/12-key-thumbprint.php` | RFC 9679: the COSE Key Thumbprint, and a compressed EC2 point |
 | `examples/13-x509-header-parameters.php` | RFC 9360: `x5chain`, `x5bag`, `x5t` and `x5u`, and where the library stops |
-| `examples/14-receipts.php` | RFC 9942: a receipt of inclusion and a receipt of consistency over the CT test tree, and where the library stops |
+| `examples/14-hash-envelope.php` | RFC 9995: a COSE_Sign1 over the SHA-256 of a file, verified, then confirmed against the file |
+| `examples/15-countersignatures.php` | RFC 9338: a notary countersigns a `COSE_Sign1`, an archive countersigns the countersignature, an abbreviated one on a `COSE_Mac0` |
+| `examples/16-ml-dsa.php` | RFC 9964: the ML-DSA example of the RFC reproduced, an AKP key from a seed, a COSE_Sign1 signed with ML-DSA-65, and the platform gate |
+| `examples/17-receipts.php` | RFC 9942: a receipt of inclusion and a receipt of consistency over the CT test tree, and where the library stops |
 
 The test suite is the rest of the examples, and every one of them is executed on each build:
 
@@ -2238,6 +2592,7 @@ The test suite is the rest of the examples, and every one of them is executed on
 | `tests/Signature/DocumentedVerifierTest.php` | The verifier documented above, run exactly as written |
 | `tests/Structure/CoseStructureTest.php` | The structures against the RFC 9052 Appendix C vectors |
 | `tests/Structure/CoseHeadersTest.php` | The header rules, on all six message types |
+| `tests/Structure/HashEnvelopeTest.php` | The hash envelope of RFC 9995: the §4.1 example round-tripped, signed and confirmed; SHA-1 refused as `payload-hash-alg` |
 | `tests/Structure/CoseSignatureTest.php` | Per-signer views of a `COSE_Sign` |
 | `tests/Structure/CoseRecipientTest.php` | Per-recipient views, nested recipients and detached ciphertext |
 | `tests/Encryption/EncryptStructureRoundTripTest.php` | Encrypting and decrypting through the `Enc_structure`, against RFC 9052 Appendix C.4 |
@@ -2246,6 +2601,10 @@ The test suite is the rest of the examples, and every one of them is executed on
 | `tests/Encryption/EncryptForTest.php` | `encryptFor()` for four recipients of three families, and each of them opening the message |
 | `tests/CoseWg/CoseWgFixtureTest.php` | Every fixture of cose-wg/Examples, encrypted ones included |
 | `tests/CoseWg/X509FixtureTest.php` | The x509-examples of cose-wg/Examples read through the RFC 9360 accessors, and verified with the certificate they carry |
+| `tests/CoseWg/Rfc9338FixtureTest.php` | The six examples of RFC 9338 Appendix A, primary signature, MAC or encryption and countersignature alike |
+| `tests/Signature/CountersignTest.php` | The `Countersign_structure` against the RFC 8152 fixtures: same bytes for the two-field targets, different ones for the others |
+| `tests/Signature/CountersignerTest.php` | Both forms on every target, a countersignature of a countersignature, `attach()` through the wire |
+| `tests/Algorithm/Signature/MLDSA/MLDSATest.php` | ML-DSA against the vectors of RFC 9964 Appendix A, of the OpenSSL command line and of NIST ACVP; every key check; both sides of the platform gate |
 | `tests/Structure/VerifiableDataStructure/Rfc9162FixtureTest.php` | The 186 Merkle proof probes of transparency-dev/merkle against the RFC9162_SHA256 proof classes |
 | `tests/Structure/VerifiableDataStructure/ReceiptVerifierTest.php` | The two-step verification of RFC 9942 §5.2 and §5.3.1 on receipts signed with ES256 |
 | `tests/Signature/CoseSign1CreateAndVerifyTest.php` | EU digital COVID certificate verification |
@@ -2263,6 +2622,11 @@ The test suite is the rest of the examples, and every one of them is executed on
 - [RFC 9054 - CBOR Object Signing and Encryption (COSE): Hash Algorithms](https://www.rfc-editor.org/rfc/rfc9054.html)
 - [RFC 9679 - CBOR Object Signing and Encryption (COSE) Key Thumbprint](https://www.rfc-editor.org/rfc/rfc9679.html)
 - [RFC 9360 - CBOR Object Signing and Encryption (COSE): Header Parameters for Carrying and Referencing X.509 Certificates](https://www.rfc-editor.org/rfc/rfc9360.html)
+- [RFC 9995 - CBOR Object Signing and Encryption (COSE) Hash Envelope](https://www.rfc-editor.org/rfc/rfc9995.html)
+- [RFC 9338 - CBOR Object Signing and Encryption (COSE): Countersignatures](https://www.rfc-editor.org/rfc/rfc9338.html)
+- [RFC 9964 - ML-DSA for JOSE and COSE](https://www.rfc-editor.org/rfc/rfc9964.html)
+- [RFC 9881 - Internet X.509 Public Key Infrastructure: Algorithm Identifiers for ML-DSA](https://www.rfc-editor.org/rfc/rfc9881.html)
+- [FIPS 204 - Module-Lattice-Based Digital Signature Standard](https://doi.org/10.6028/NIST.FIPS.204)
 - [RFC 9942 - CBOR Object Signing and Encryption (COSE) Receipts](https://www.rfc-editor.org/rfc/rfc9942.html)
 - [RFC 9162 - Certificate Transparency Version 2.0](https://www.rfc-editor.org/rfc/rfc9162.html)
 - [RFC 3394 - Advanced Encryption Standard (AES) Key Wrap Algorithm](https://www.rfc-editor.org/rfc/rfc3394.html)
