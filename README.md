@@ -23,6 +23,7 @@ This library implements:
 - **[RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html)** - COSE: Header Parameters for Carrying and Referencing
   X.509 Certificates
 - **[RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html)** - COSE Hash Envelope
+- **[RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html)** - COSE: Countersignatures (version 2, labels 11 and 12)
 
 Every algorithm and key type table below carries a *Reference* column naming the RFC and the section that define the
 row, so that a shipped identifier can be traced to its specification without leaving this page.
@@ -33,6 +34,8 @@ row, so that a shipped identifier can be traced to its specification without lea
 - `Sig_structure`: `Signature1` (§4.4) and `Signature`, which also covers the signer's own protected header
 - `MAC_structure`: `Mac0Structure` and `MacStructure` (§6.3) — a MAC tag covers this, never the bare payload
 - `Enc_structure`: `Encrypt0Structure`, `EncryptStructure` and `RecipientStructure` (§5.3)
+- `Countersign_structure`: `Countersign` ([RFC 9338 §3.3](https://www.rfc-editor.org/rfc/rfc9338#section-3.3)),
+  with `CountersignTarget` deriving the payload and `other_fields` of each of the eight targets
 - Each takes the optional `external_aad`, defaulting to the zero-length byte string the RFC prescribes, and writes
   an empty protected bucket as the zero-length byte string whether the message carries `h''` or `h'a0'` (§3, §4.4)
 
@@ -67,6 +70,15 @@ row, so that a shipped identifier can be traced to its specification without lea
   the algorithm the header names — resolved through the RFC 9054 registry, *Filter Only* hashes refused — and
   compares in constant time; **the library never fetches `payload-location`**; see
   [Hash Envelope](doc/Usage.md#hash-envelope)
+
+✅ **Countersignatures** ([RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html))
+- `Countersigner::sign()` / `verify()` for the full form (label 11, a `COSE_Countersignature` with headers of its
+  own, tagged 19 or bare) and `sign0()` / `verify0()` for the abbreviated one (label 12, the bare signature value),
+  on a `COSE_Sign1`, `COSE_Sign`, `COSE_Signature`, `COSE_Encrypt`, `COSE_Encrypt0`, `COSE_recipient`, `COSE_Mac`
+  or `COSE_Mac0` — a countersignature included, which is how one is countersigned in turn
+- `getCountersignatures()` and `getCountersignature0()` read the unprotected bucket and reject either label in the
+  protected one (§2); `Countersigner::attach()` writes one and normalises the value to an array from the second on
+- The six examples of RFC 9338 Appendix A verify; see [Countersignatures](doc/Usage.md#countersignatures)
 
 ✅ **COSE Tag Support** (via [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0)
 - `CBOR\Tag\CoseSign1Tag` (18), `CoseSignTag` (98), `CoseEncrypt0Tag` (16), `CoseEncryptTag` (96),
@@ -268,6 +280,7 @@ $encoded = (string) $coseSign1;
 - **[RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html)** - COSE Key Thumbprint
 - **[RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html)** - X.509 Certificates in COSE Headers
 - **[RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html)** - COSE Hash Envelope
+- **[RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html)** - COSE: Countersignatures
 - **[IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)** - The algorithm, key type and curve
   registries every identifier of this library is checked against
 
@@ -1047,6 +1060,56 @@ even when the registry knows them for `x5t`. `matches()` compares with `hash_equ
 a signature at least as strong as the payload hash; §5.2 leaves `COSE_Encrypt` out of the RFC, and so does this
 library. See [Hash Envelope](doc/Usage.md#hash-envelope) in the usage guide and
 [`examples/14-hash-envelope.php`](examples/14-hash-envelope.php).
+
+## Countersignatures
+
+A countersignature ([RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html)) is a second signature over a finalized
+COSE structure — what a notary or a timestamping service adds to a document somebody else signed — carried in the
+unprotected bucket of that structure. The full form is a `COSE_Countersignature`, which is a `COSE_Signature` with
+headers of its own; the abbreviated form is the bare signature value, the algorithm and key being the application's
+context.
+
+| Name | Label | Type | Reference | Accessor |
+|---|---|---|---|---|
+| `Countersignature version 2` | 11 (`CoseHeaders::LABEL_COUNTERSIGNATURE_V2`) | `COSE_Countersignature / [+ COSE_Countersignature]` | [RFC 9338 §2](https://www.rfc-editor.org/rfc/rfc9338#section-2) | `getCountersignatures(): CoseSignature[]` |
+| `Countersignature0 version 2` | 12 (`CoseHeaders::LABEL_COUNTERSIGNATURE0_V2`) | `COSE_Countersignature0` (`bstr`) | [RFC 9338 §2](https://www.rfc-editor.org/rfc/rfc9338#section-2) | `getCountersignature0(): ?string` |
+
+```php
+use Cose\Signature\Countersigner;
+use Cose\Signature\CountersignTarget;
+use Cose\Structure\CoseHeaders;
+
+// Countersigning: the target is the finalized message (or a COSE_Signature, or a COSE_recipient).
+$target = CountersignTarget::of($coseSign1);
+$countersignature = Countersigner::sign($target, ES256::create(), $notaryKey, CoseHeaders::of($protected, $unprotected));
+Countersigner::attach($coseSign1->getUnprotectedHeader(), $countersignature);   // label 11, in place
+
+// Verifying: read the countersignatures back, verify each against the decoded target.
+$target = CountersignTarget::of($decoded);
+foreach ($target->getCountersignatures() as $countersignature) {
+    $isValid = Countersigner::verify($target, $countersignature, $algorithm, $notaryPublicKey);
+}
+```
+
+`CountersignTarget` derives the fields of the `Countersign_structure` (§3.3) from the target — the second byte string
+of the structure is the payload, every later one goes into `other_fields`, and the context string follows — so that
+a `COSE_Sign1` is countersigned over its payload *and* its signature (`"CounterSignatureV2"`), a `COSE_Encrypt0` over
+its ciphertext (`"CounterSignature"`), a `COSE_Signature` over its signature value. The full and abbreviated forms are
+not interchangeable: the same bytes verify as one and not the other. A countersignature is a `COSE_Signature`, so
+`CountersignTarget::of($countersignature)` countersigns it in turn (§3.1). Both labels are read from the unprotected
+bucket only, as §2 places them; a message carrying one in the protected bucket is rejected. Any signature algorithm
+of this library can countersign (§3.1 requires a scheme with appendix, which they all are).
+
+> [!WARNING]
+> A countersignature over a `COSE_Mac`, `COSE_Mac0`, `COSE_Encrypt` or `COSE_Encrypt0` attests to the tag or the
+> ciphertext, not to the plaintext, and gives no more integrity than the tag has: RFC 9338 §6, "To provide 128-bit
+> security against collision attacks, the tag length MUST be at least 256 bits. A countersignature of a COSE_Mac with
+> AES-MAC [...] provides at most 64 bits of integrity protection [...] a COSE_Encrypt with AES-CCM-16-64-128 provides
+> at most 32 bits." Nothing here checks the tag length.
+
+See [Countersignatures](doc/Usage.md#countersignatures) in the usage guide and
+[`examples/15-countersignatures.php`](examples/15-countersignatures.php). The RFC 8152 countersignatures (labels 7
+and 9) are Deprecated at IANA and are not implemented.
 
 ## Registering Algorithms
 

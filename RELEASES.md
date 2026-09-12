@@ -131,6 +131,29 @@ with the missing identifier. Two behaviours changed on the way, both additive:
   `tests/RfcReferencesTest.php` keeps those tables in step with the classes and with the IANA registry. The
   `keywords` of `composer.json` replace the obsolete `RFC8152` with the five RFCs implemented. No code changed.
 
+**The version 2 countersignatures of RFC 9338 are implemented.** `Cose\Signature\Countersign` is the
+`Countersign_structure` of §3.3, on the same `CoseStructure` base as `Signature1`, and `CountersignTarget` derives
+its fields — the payload slot, the `other_fields` array, hence the context string — from each of the eight targets
+the RFC names: `COSE_Sign1`, `COSE_Sign`, `COSE_Signature` (a countersignature included), `COSE_Encrypt`,
+`COSE_Encrypt0`, `COSE_recipient`, `COSE_Mac` and `COSE_Mac0`, with a detached payload or ciphertext supplied by the
+application. `Countersigner::sign()` / `verify()` compute and check the full form (label 11, a `COSE_Countersignature`
+with headers of its own, tagged 19 or bare), `sign0()` / `verify0()` the abbreviated one (label 12, the bare
+signature value, no `sign_protected` field), `attach()` / `attach0()` write them into the unprotected bucket of the
+target — the value of label 11 becoming an array from the second countersignature on — and `tagged()` wraps one
+under the CBOR tag 19, as a `GenericTag` of cbor-php until it ships a dedicated class. `CoseHeaders` gains
+`LABEL_COUNTERSIGNATURE_V2` (11), `LABEL_COUNTERSIGNATURE0_V2` (12), `getCountersignatures()` and
+`getCountersignature0()`, which read the unprotected bucket only and reject a message carrying either label in the
+protected one (§2); `HeaderMapHelper::countersignatureItems()` is the shape check and `tagNumberOf()` reads a tag
+number. The six examples of RFC 9338 Appendix A are fixtures (`tests/fixtures/rfc9338/`) and verify. Points to
+know:
+
+- **The RFC 8152 countersignatures (labels 7 and 9) are not implemented**: both are Deprecated at IANA. The
+  `countersign/` and `countersign1/` directories of cose-wg/Examples are now vendored and reported as skipped with
+  that reason; their messages verify the per-target derivation all the same, since for a two-field target the
+  version 2 value is the RFC 8152 one (RFC 9338 §1).
+- **A countersignature over a MAC or an encryption is worth the tag it covers.** RFC 9338 §6 requires a tag of at
+  least 256 bits for 128-bit security; nothing checks it. See [Countersignatures](doc/Usage.md#countersignatures).
+
 **New: the AES-CBC-MAC algorithms of RFC 9053 §3.2.** `Cose\Algorithm\Mac\AESMAC128_64` (14), `AESMAC256_64` (15),
 `AESMAC128_128` (25) and `AESMAC256_128` (26), on the `AesCbcMac` base, implement the existing `Mac` interface and
 enforce the key restrictions like every other algorithm. The key must be exactly 16 or 32 bytes long, as the

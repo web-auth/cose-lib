@@ -20,6 +20,7 @@ use CBOR\StringStream;
 use CBOR\Tag;
 use CBOR\TextStringObject;
 use CBOR\UnsignedIntegerObject;
+use function get_debug_type;
 use function in_array;
 use InvalidArgumentException;
 use function is_int;
@@ -46,11 +47,19 @@ use function trim;
  * @see https://www.rfc-editor.org/rfc/rfc9052#section-3
  * @see https://www.rfc-editor.org/rfc/rfc9052#section-1.5
  * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
+ * @see https://www.rfc-editor.org/rfc/rfc9338#section-3.1
  * @see https://github.com/web-auth/cose-lib/issues/166
  * @see \Cose\Tests\Structure\HeaderMapHelperTest
  */
 final class HeaderMapHelper
 {
+    /**
+     * The CBOR tag number of a standalone COSE_Countersignature, RFC 9338 section 5.1: "COSE_Countersignature_Tagged
+     * = #6.19(COSE_Countersignature)". A countersignature carried in a header is accepted with or without it
+     * (section 3.1: "can be encoded as either tagged or untagged, depending on the context").
+     */
+    public const TAG_COUNTERSIGNATURE = 19;
+
     /**
      * A COSE header is a flat map of a handful of parameters whose values nest a couple of levels at most, so the
      * decoder built when none is given is bounded far below the cbor-php default of 1000: a protected header crafted
@@ -351,6 +360,75 @@ final class HeaderMapHelper
     }
 
     /**
+     * The COSE_Countersignature items a "Countersignature version 2" header parameter carries, each untagged and
+     * checked to be a COSE_Signature, in the order of the wire.
+     *
+     * RFC 9338 section 2 types the value as "COSE_Countersignature / [+ COSE_Countersignature]" -- one, or an array
+     * of one or more -- and section 3.1 as "COSE_Countersignature = COSE_Signature", "encoded as either tagged or
+     * untagged": a bare [bstr, map, bstr] or that list under the CBOR tag 19. The two readings of an array are told
+     * apart by its first item: a byte string opens a single COSE_Signature, a list or a tag opens the array form.
+     * An empty array satisfies neither. A tag other than 19 is refused, and so is a tag 19 wrapping anything but a
+     * COSE_Signature. The tag number is read from the head, so a GenericTag of cbor-php and a dedicated class of a
+     * later release pass the same check.
+     *
+     * @param string $name the name of the parameter, for the error messages
+     * @return list<ListObject|IndefiniteLengthListObject>
+     */
+    public static function countersignatureItems(CBORObject $value, string $name = 'Countersignature version 2'): array
+    {
+        if ($value instanceof Tag) {
+            return [self::untaggedCountersignature($value, $name)];
+        }
+        if (! self::isList($value)) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The value shall be a COSE_Countersignature or an array of them (RFC 9338 section 2), got "%s".',
+                $name,
+                get_debug_type($value)
+            ));
+        }
+        if ($value->count() === 0) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The array shall hold at least one COSE_Countersignature (RFC 9338 section 2).',
+                $name
+            ));
+        }
+        if (self::isByteString($value->get(0))) {
+            self::assertCountersignature($value, $name);
+
+            return [$value];
+        }
+
+        $items = [];
+        foreach ($value as $item) {
+            if ($item instanceof Tag) {
+                $items[] = self::untaggedCountersignature($item, $name);
+                continue;
+            }
+            if (! self::isList($item)) {
+                throw new InvalidArgumentException(sprintf(
+                    'Invalid "%s" header parameter. Each item of the array shall be a COSE_Countersignature (RFC 9338 section 2), got "%s".',
+                    $name,
+                    get_debug_type($item)
+                ));
+            }
+            self::assertCountersignature($item, $name);
+            $items[] = $item;
+        }
+
+        return $items;
+    }
+
+    /**
+     * The number of a CBOR tag, read from its head.
+     *
+     * @param string $name the name of what is being read, for the error messages
+     */
+    public static function tagNumberOf(Tag $tag, string $name): int
+    {
+        return self::tagNumber($tag->getAdditionalInformation(), $tag->getData(), $name);
+    }
+
+    /**
      * Check a "recipients" list against "recipients : [+COSE_recipient]" and "COSE_recipient = [ Headers,
      * ciphertext : bstr / nil, ? recipients : [+COSE_recipient] ]" (RFC 9052 section 5.1).
      *
@@ -389,6 +467,51 @@ final class HeaderMapHelper
                 }
                 self::assertRecipientList($nested, $name);
             }
+        }
+    }
+
+    /**
+     * The COSE_Signature under a tag 19, or the refusal of any other tag.
+     */
+    private static function untaggedCountersignature(Tag $tag, string $name): ListObject|IndefiniteLengthListObject
+    {
+        $number = self::tagNumberOf($tag, $name);
+        if ($number !== self::TAG_COUNTERSIGNATURE) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. A tagged COSE_Countersignature carries the CBOR tag %d (RFC 9338 section 3.1), got %d.',
+                $name,
+                self::TAG_COUNTERSIGNATURE,
+                $number
+            ));
+        }
+        $value = $tag->getValue();
+        if (! self::isList($value)) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The CBOR tag %d shall wrap a COSE_Countersignature (RFC 9338 section 3.1), got "%s".',
+                $name,
+                self::TAG_COUNTERSIGNATURE,
+                get_debug_type($value)
+            ));
+        }
+        self::assertCountersignature($value, $name);
+
+        return $value;
+    }
+
+    /**
+     * "COSE_Countersignature = COSE_Signature" (RFC 9338 section 3.1): a [bstr, map, bstr].
+     */
+    private static function assertCountersignature(ListObject|IndefiniteLengthListObject $item, string $name): void
+    {
+        if ($item->count() !== 3
+            || ! self::isByteString($item->get(0))
+            || ! self::isMap($item->get(1))
+            || ! self::isByteString($item->get(2))
+        ) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. A COSE_Countersignature is a COSE_Signature [bstr, map, bstr] (RFC 9338 section 3.1).',
+                $name
+            ));
         }
     }
 

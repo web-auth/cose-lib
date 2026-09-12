@@ -41,6 +41,9 @@ use Cose\Key\SymmetricKey;
 use Cose\Mac\Mac0Structure;
 use Cose\Mac\MacStructure;
 use Cose\Signature\CoseSignature;
+use Cose\Signature\Countersign;
+use Cose\Signature\Countersigner;
+use Cose\Signature\CountersignTarget;
 use Cose\Signature\Signature;
 use Cose\Signature\Signature1;
 use Cose\Structure\CoseHeaders;
@@ -48,6 +51,7 @@ use Cose\Structure\CoseRecipient;
 use Cose\Structure\CoseStructure;
 use function count;
 use function get_debug_type;
+use function implode;
 use InvalidArgumentException;
 use LogicException;
 use PHPUnit\Framework\TestCase;
@@ -92,6 +96,12 @@ use function strlen;
  * A fixture flagged "fail" goes through the same path, minus the intermediates, and has to be rejected somewhere
  * along it: an unexpected tag, an unknown algorithm, a signature that does not verify, a content that does not
  * decrypt.
+ *
+ * Every countersignature of RFC 9338 the input declares -- on the message, on a signer or on a recipient -- is then
+ * verified over the Countersign_structure this library builds, compared with the recorded one, and produced again.
+ * A fixture whose message carries an RFC 8152 countersignature (label 7 or 9, both Deprecated at IANA) is reported
+ * as skipped with that reason and is not verified: the countersign/ and countersign1/ directories of cose-wg/Examples
+ * predate RFC 9338, see {@see CoseWgFixture::deprecatedCountersignatureLabels()}.
  *
  * The algorithms come from {@see CoseWgAlgorithms::manager()}; a fixture needing one that is not registered there is
  * reported as skipped with the identifier, see {@see CoseWgFixtureProvider::skipUnlessSupported()}.
@@ -145,8 +155,30 @@ abstract class CoseWgFixtureTestCase extends TestCase
         if (array_key_exists($fixture->name(), self::KNOWN_DIVERGENCES)) {
             static::markTestSkipped(sprintf('%s: %s', $fixture->name(), self::KNOWN_DIVERGENCES[$fixture->name()]));
         }
+        $deprecated = $fixture->deprecatedCountersignatureLabels();
+        if ($deprecated !== []) {
+            static::markTestSkipped(sprintf(
+                '%s: %s',
+                $fixture->name(),
+                self::deprecatedCountersignatureReason($deprecated)
+            ));
+        }
 
         $this->assertFixture($fixture);
+    }
+
+    /**
+     * Why a fixture carrying an RFC 8152 countersignature is skipped: the label is Deprecated, and this library reads
+     * the version 2 parameters of RFC 9338 only.
+     *
+     * @param list<int> $labels
+     */
+    public static function deprecatedCountersignatureReason(array $labels): string
+    {
+        return sprintf(
+            'Deprecated, RFC 8152: the message carries the countersignature label(s) %s of RFC 8152 section 4.5, deprecated by RFC 9338; this library reads the version 2 labels 11 and 12 only',
+            implode(', ', $labels)
+        );
     }
 
     /**
@@ -160,6 +192,10 @@ abstract class CoseWgFixtureTestCase extends TestCase
             CoseWgFixture::ENCRYPT, CoseWgFixture::ENCRYPT0 => $this->assertEncryptedFixture($fixture),
             default => throw new LogicException(sprintf('%s: unknown message type', $fixture->name())),
         };
+
+        if (! $fixture->mustFail()) {
+            $this->assertCountersignatures($fixture);
+        }
     }
 
     /**
@@ -304,6 +340,160 @@ abstract class CoseWgFixtureTestCase extends TestCase
         }
 
         return $entries;
+    }
+
+    // --- countersignatures (RFC 9338) -------------------------------------------------------------------------------
+
+    /**
+     * Every countersignature the input declares -- on the message, on a signer, on a recipient at any depth -- is on
+     * the wire under label 11 (or 12 for the abbreviated form), verifies with the countersigner's key over the
+     * Countersign_structure this library builds, and that structure is the one the generator recorded when it
+     * recorded one. Then the round trip: countersigned again with the private key and the same headers, the value
+     * verifies, and for EdDSA it is the fixture's byte for byte.
+     */
+    private function assertCountersignatures(CoseWgFixture $fixture): void
+    {
+        $message = $this->decode($fixture);
+        $detached = $fixture->detachedContent();
+        $target = CountersignTarget::of($message, $detached === null ? null : ByteStringObject::create($detached));
+
+        $this->assertCountersignaturesOf($target, $fixture->countersigners(), $fixture->countersigners0(), $fixture->name());
+
+        if ($message instanceof CoseSignTag) {
+            $signers = $fixture->signers();
+            foreach (CoseSignature::all($message->getSignatures()) as $index => $entry) {
+                $signer = $signers[$index] ?? throw new LogicException(
+                    sprintf('%s: signer %d is on the wire but not in the input', $fixture->name(), $index)
+                );
+                $this->assertCountersignaturesOf(CountersignTarget::of($entry), $signer->countersigners(), $signer->countersigners0(), $signer->name());
+            }
+        }
+        if ($message instanceof CoseMacTag || $message instanceof CoseEncryptTag) {
+            $this->assertRecipientCountersignatures(CoseRecipient::all($message->getRecipients()), $fixture->recipients());
+        }
+    }
+
+    /**
+     * @param list<CoseRecipient> $wire
+     * @param list<CoseWgParty> $input
+     */
+    private function assertRecipientCountersignatures(array $wire, array $input): void
+    {
+        foreach ($wire as $index => $recipient) {
+            $party = $input[$index] ?? throw new LogicException(
+                sprintf('recipient %d is on the wire but not in the input', $index)
+            );
+            $this->assertCountersignaturesOf(CountersignTarget::of($recipient), $party->countersigners(), $party->countersigners0(), $party->name());
+            if ($recipient->hasRecipients()) {
+                $this->assertRecipientCountersignatures($recipient->getRecipients(), $party->recipients());
+            }
+        }
+    }
+
+    /**
+     * @param list<CoseWgParty> $countersigners the full countersigners the input declares for this target
+     * @param list<CoseWgParty> $countersigners0 the abbreviated ones
+     */
+    private function assertCountersignaturesOf(
+        CountersignTarget $target,
+        array $countersigners,
+        array $countersigners0,
+        string $what
+    ): void {
+        $wire = $target->getCountersignatures();
+        static::assertCount(
+            count($countersigners),
+            $wire,
+            sprintf('%s: the countersignatures on the wire are not those of the input', $what)
+        );
+        foreach ($wire as $index => $countersignature) {
+            $countersigner = $countersigners[$index];
+            $algorithm = $this->algorithm($countersignature->headers(), SignatureAlgorithm::class);
+            $key = $countersigner->key();
+            $structure = Countersign::full(
+                $target,
+                $countersignature->getProtectedHeader(),
+                ByteStringObject::create($countersigner->externalAad())
+            );
+
+            $expected = $countersigner->toBeSigned();
+            if ($expected !== null) {
+                static::assertSame(bin2hex($expected), bin2hex((string) $structure), sprintf(
+                    '%s: the Countersign_structure this library builds is not the one the generator signed (the structure diverged, not the primitive)',
+                    $countersigner->name()
+                ));
+            }
+            static::assertTrue(
+                Countersigner::verify($target, $countersignature, $algorithm, $key, $countersigner->externalAad()),
+                sprintf(
+                    '%s: the countersignature does not verify with %s although the Countersign_structure is the one the generator signed (the primitive diverged, not the structure)',
+                    $countersigner->name(),
+                    $algorithm::class
+                )
+            );
+
+            // The round trip: what this library countersigns, this library verifies.
+            $again = Countersigner::sign($target, $algorithm, $key, $countersignature->headers(), $countersigner->externalAad());
+            static::assertTrue(
+                Countersigner::verify($target, $again, $algorithm, $key, $countersigner->externalAad()),
+                sprintf('%s: the countersignature this library produces does not verify', $countersigner->name())
+            );
+            if ($algorithm instanceof EdDSA) {
+                static::assertSame(
+                    bin2hex($countersignature->getSignature()->getValue()),
+                    bin2hex($again->getSignature()->getValue()),
+                    sprintf('%s: EdDSA is deterministic, the countersignature must be the one of the fixture', $countersigner->name())
+                );
+            }
+
+            // The other form does not verify the same value: the context string differs (RFC 9338 section 3).
+            static::assertFalse(
+                Countersigner::verify0($target, $countersignature->getSignature()->getValue(), $algorithm, $key, $countersigner->externalAad()),
+                sprintf('%s: a full countersignature must not verify as an abbreviated one', $countersigner->name())
+            );
+        }
+
+        $countersignature0 = $target->getCountersignature0();
+        static::assertSame(
+            $countersigners0 !== [],
+            $countersignature0 !== null,
+            sprintf('%s: the abbreviated countersignature on the wire is not the one of the input', $what)
+        );
+        if ($countersignature0 === null) {
+            return;
+        }
+        static::assertCount(1, $countersigners0, sprintf('%s: label 12 carries one value', $what));
+        $countersigner = $countersigners0[0];
+        $identifier = $countersigner->algorithmIdentifier() ?? throw new LogicException(
+            sprintf('%s: the abbreviated countersigner names no algorithm', $countersigner->name())
+        );
+        $algorithm = $this->manager->get($identifier);
+        static::assertInstanceOf(SignatureAlgorithm::class, $algorithm);
+        $key = $countersigner->key();
+        $structure = Countersign::abbreviated($target, ByteStringObject::create($countersigner->externalAad()));
+
+        $expected = $countersigner->toBeSigned();
+        if ($expected !== null) {
+            static::assertSame(bin2hex($expected), bin2hex((string) $structure), sprintf(
+                '%s: the Countersign_structure this library builds is not the one the generator signed (the structure diverged, not the primitive)',
+                $countersigner->name()
+            ));
+        }
+        static::assertTrue(
+            Countersigner::verify0($target, $countersignature0, $algorithm, $key, $countersigner->externalAad()),
+            sprintf('%s: the abbreviated countersignature does not verify with %s', $countersigner->name(), $algorithm::class)
+        );
+        $again = Countersigner::sign0($target, $algorithm, $key, $countersigner->externalAad());
+        static::assertTrue(
+            Countersigner::verify0($target, $again, $algorithm, $key, $countersigner->externalAad()),
+            sprintf('%s: the abbreviated countersignature this library produces does not verify', $countersigner->name())
+        );
+        if ($algorithm instanceof EdDSA) {
+            static::assertSame(bin2hex($countersignature0), bin2hex($again), sprintf(
+                '%s: EdDSA is deterministic, the abbreviated countersignature must be the one of the fixture',
+                $countersigner->name()
+            ));
+        }
     }
 
     // --- MACs -------------------------------------------------------------------------------------------------------

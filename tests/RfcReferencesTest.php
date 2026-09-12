@@ -60,7 +60,7 @@ final class RfcReferencesTest extends TestCase
     /**
      * The RFCs the library implements, as the README and composer.json have to declare them.
      */
-    private const IMPLEMENTED_RFCS = [9052, 9053, 8230, 8812, 9864, 9596, 9597, 9054, 9679, 9360, 9995];
+    private const IMPLEMENTED_RFCS = [9052, 9053, 8230, 8812, 9864, 9596, 9597, 9054, 9679, 9360, 9995, 9338];
 
     /**
      * Identifier => [documented name, RFC number, section]. The section is the one the RFC itself defines the
