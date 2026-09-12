@@ -10,12 +10,19 @@ use CBOR\DecoderInterface;
 use CBOR\IndefiniteLengthByteStringObject;
 use CBOR\IndefiniteLengthMapObject;
 use CBOR\MapObject;
+use CBOR\NegativeIntegerObject;
 use CBOR\Tag\AbstractCoseTag;
+use CBOR\UnsignedIntegerObject;
+use Cose\Key\Ec2Key;
+use Cose\Key\Key;
+use Cose\Key\OkpKey;
 use Cose\Structure\X509\CoseCertHash;
 use Cose\Structure\X509\X5Bag;
 use Cose\Structure\X509\X5Chain;
+use function get_debug_type;
 use InvalidArgumentException;
 use function sprintf;
+use Throwable;
 
 /**
  * The two header buckets of a COSE message, read the way RFC 9052 defines them.
@@ -37,6 +44,7 @@ use function sprintf;
  * $typ = $headers->getTyp();                         // RFC 9596: "application/cwt" or 61, protected bucket only
  * $claims = $headers->getCwtClaims();                // RFC 9597: the claims map, or null
  * $chain = $headers->getX5Chain();                   // RFC 9360: the certificate chain, end-entity first, or null
+ * $epk = $recipient->headers()->getEphemeralKey();   // RFC 9053: the sender's ephemeral public key of an ECDH-ES recipient
  * ```
  *
  * The protected bucket is decoded once, on first use.
@@ -45,6 +53,8 @@ use function sprintf;
  * @see https://www.rfc-editor.org/rfc/rfc9596#section-2
  * @see https://www.rfc-editor.org/rfc/rfc9597#section-2
  * @see https://www.rfc-editor.org/rfc/rfc9360#section-2
+ * @see https://www.rfc-editor.org/rfc/rfc9053#section-5.2
+ * @see https://www.rfc-editor.org/rfc/rfc9053#section-6.3.1
  * @see https://github.com/web-auth/cose-lib/issues/166
  * @see \Cose\Tests\Structure\CoseHeadersTest
  */
@@ -87,22 +97,66 @@ final class CoseHeaders
 
     /**
      * The "x5t-sender" header algorithm parameter of RFC 9360 section 3: the thumbprint of the sender's key exchange
-     * certificate, a COSE_CertHash. Only meaningful with the ECDH-SS algorithms, hence no accessor until those exist
-     * (issue #201); {@see CoseCertHash::fromCBOR()} reads the value of a raw lookup.
+     * certificate, a COSE_CertHash. Only meaningful with the ECDH-SS algorithms; {@see getX5TSender()} reads it.
      */
     public const LABEL_X5T_SENDER = -27;
 
     /**
      * The "x5u-sender" header algorithm parameter of RFC 9360 section 3: a URI for the sender's key exchange
-     * certificate. ECDH-SS only; {@see HeaderMapHelper::assertUriValue()} reads the value of a raw lookup.
+     * certificate. ECDH-SS only; {@see getX5USender()} reads it.
      */
     public const LABEL_X5U_SENDER = -28;
 
     /**
      * The "x5chain-sender" header algorithm parameter of RFC 9360 section 3: the chain of the sender's key exchange
-     * certificate, a COSE_X509. ECDH-SS only; {@see X5Chain::fromCBOR()} reads the value of a raw lookup.
+     * certificate, a COSE_X509. ECDH-SS only; {@see getX5ChainSender()} reads it.
      */
     public const LABEL_X5CHAIN_SENDER = -29;
+
+    /**
+     * The "ephemeral key" header algorithm parameter of RFC 9053 section 6.3.1, table 15: the sender's ephemeral
+     * public key of an ECDH-ES recipient, a COSE_Key.
+     */
+    public const LABEL_EPHEMERAL_KEY = -1;
+
+    /**
+     * The "static key" header algorithm parameter of RFC 9053 section 6.3.1, table 15: the sender's static public
+     * key of an ECDH-SS recipient, a COSE_Key.
+     */
+    public const LABEL_STATIC_KEY = -2;
+
+    /**
+     * The "static key id" header algorithm parameter of RFC 9053 section 6.3.1, table 15: the identifier of the
+     * sender's static public key of an ECDH-SS recipient, a byte string the application resolves.
+     */
+    public const LABEL_STATIC_KEY_ID = -3;
+
+    /**
+     * The "salt" header algorithm parameter of RFC 9053 section 5.1, table 9: the salt of the HKDF extract step,
+     * a byte string.
+     */
+    public const LABEL_SALT = -20;
+
+    /**
+     * The "PartyU identity", "PartyU nonce" and "PartyU other" header algorithm parameters of RFC 9053 section 5.2,
+     * table 10: the PartyUInfo of the COSE_KDF_Context. The identity and the other information are byte strings;
+     * the nonce is a byte string or an integer.
+     */
+    public const LABEL_PARTY_U_IDENTITY = -21;
+
+    public const LABEL_PARTY_U_NONCE = -22;
+
+    public const LABEL_PARTY_U_OTHER = -23;
+
+    /**
+     * The "PartyV identity", "PartyV nonce" and "PartyV other" header algorithm parameters of RFC 9053 section 5.2,
+     * table 10: the PartyVInfo of the COSE_KDF_Context, typed like the PartyU ones.
+     */
+    public const LABEL_PARTY_V_IDENTITY = -24;
+
+    public const LABEL_PARTY_V_NONCE = -25;
+
+    public const LABEL_PARTY_V_OTHER = -26;
 
     private ?MapObject $decodedProtectedHeader = null;
 
@@ -353,5 +407,273 @@ final class CoseHeaders
         $value = $this->getHeaderParameter(self::LABEL_X5U);
 
         return $value === null ? null : HeaderMapHelper::assertUriValue($value, 'x5u');
+    }
+
+    /**
+     * The "x5t-sender" header algorithm parameter (RFC 9360 section 3), or null when the recipient does not carry
+     * one: the thumbprint of the sender's key exchange certificate, for an ECDH-SS recipient.
+     *
+     * Protected bucket first, then unprotected. Which certificate it names, and whether that certificate is trusted,
+     * is the application's to settle -- this library validates no chain -- before the key of that certificate is
+     * handed to the algorithm through {@see \Cose\Algorithm\KeyManagement\RecipientLayer::withSenderKey()}.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9360#section-3
+     */
+    public function getX5TSender(): ?CoseCertHash
+    {
+        $value = $this->getHeaderParameter(self::LABEL_X5T_SENDER);
+
+        return $value === null ? null : CoseCertHash::fromCBOR($value, 'x5t-sender');
+    }
+
+    /**
+     * The "x5u-sender" header algorithm parameter (RFC 9360 section 3) as a URI string, or null when the recipient
+     * does not carry one. Never dereferenced by this library, like {@see getX5U()}.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9360#section-3
+     */
+    public function getX5USender(): ?string
+    {
+        $value = $this->getHeaderParameter(self::LABEL_X5U_SENDER);
+
+        return $value === null ? null : HeaderMapHelper::assertUriValue($value, 'x5u-sender');
+    }
+
+    /**
+     * The "x5chain-sender" header algorithm parameter (RFC 9360 section 3), or null when the recipient does not
+     * carry one: the chain of the sender's key exchange certificate, end-entity first, for an ECDH-SS recipient.
+     *
+     * The chain is untrusted input, like "x5chain": the application validates the path, then loads the key of the
+     * end-entity certificate with {@see \Cose\Key\PublicKeyLoader::fromCertificate()} and hands it to the
+     * algorithm. Nothing here does either.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9360#section-3
+     */
+    public function getX5ChainSender(): ?X5Chain
+    {
+        $value = $this->getHeaderParameter(self::LABEL_X5CHAIN_SENDER);
+
+        return $value === null ? null : X5Chain::fromCBOR($value, 'x5chain-sender');
+    }
+
+    /**
+     * The "ephemeral key" header algorithm parameter (RFC 9053 section 6.3.1), or null when the recipient does not
+     * carry one: the sender's ephemeral public key of an ECDH-ES recipient, as an EC2 or an OKP key.
+     *
+     * Protected bucket first, then unprotected; RFC 9052 section 8.5.4 requires the parameter for the ECDH-ES
+     * algorithms. The value is a COSE_Key and has to be a public one: a key that carries a private part is rejected,
+     * since a sender that writes its private scalar into a header has leaked it, and nothing this library does
+     * should build on that. The point is not checked to be on the curve here -- the algorithm does it, before any
+     * scalar multiplication ({@see \Cose\Key\Ec2Key::assertOnCurve()}).
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9053#section-6.3.1
+     */
+    public function getEphemeralKey(): Ec2Key|OkpKey|null
+    {
+        $value = $this->getHeaderParameter(self::LABEL_EPHEMERAL_KEY);
+
+        return $value === null ? null : self::publicKeyValue($value, 'ephemeral key');
+    }
+
+    /**
+     * The "static key" header algorithm parameter (RFC 9053 section 6.3.1), or null when the recipient does not
+     * carry one: the sender's static public key of an ECDH-SS recipient, as an EC2 or an OKP key, with the same
+     * checks as {@see getEphemeralKey()}.
+     *
+     * A static key carried in the message identifies the sender only as far as the application trusts it: the
+     * header is not authenticated by anything but the key agreement itself.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9053#section-6.3.1
+     */
+    public function getStaticKey(): Ec2Key|OkpKey|null
+    {
+        $value = $this->getHeaderParameter(self::LABEL_STATIC_KEY);
+
+        return $value === null ? null : self::publicKeyValue($value, 'static key');
+    }
+
+    /**
+     * The "static key id" header algorithm parameter (RFC 9053 section 6.3.1), or null when the recipient does not
+     * carry one: the identifier of the sender's static public key of an ECDH-SS recipient, a byte string the
+     * application resolves to a key it holds.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9053#section-6.3.1
+     */
+    public function getStaticKeyId(): ?string
+    {
+        $value = $this->getHeaderParameter(self::LABEL_STATIC_KEY_ID);
+
+        return $value === null ? null : self::byteStringValue($value, 'static key id');
+    }
+
+    /**
+     * The "salt" header algorithm parameter (RFC 9053 section 5.1), or null when the recipient does not carry one:
+     * the salt of the HKDF extract step. It "does not need to be separately authenticated": it is bound to the key
+     * by being an input of the derivation, which is why it may travel in the unprotected bucket.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9053#section-5.1
+     */
+    public function getSalt(): ?string
+    {
+        $value = $this->getHeaderParameter(self::LABEL_SALT);
+
+        return $value === null ? null : self::byteStringValue($value, 'salt');
+    }
+
+    /**
+     * The "PartyU identity" header algorithm parameter (RFC 9053 section 5.2), or null when absent.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9053#section-5.2
+     */
+    public function getPartyUIdentity(): ?string
+    {
+        $value = $this->getHeaderParameter(self::LABEL_PARTY_U_IDENTITY);
+
+        return $value === null ? null : self::byteStringValue($value, 'PartyU identity');
+    }
+
+    /**
+     * The "PartyU nonce" header algorithm parameter (RFC 9053 section 5.2), or null when absent: a byte string or
+     * an integer, table 10 allowing both.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9053#section-5.2
+     */
+    public function getPartyUNonce(): string|int|null
+    {
+        $value = $this->getHeaderParameter(self::LABEL_PARTY_U_NONCE);
+
+        return $value === null ? null : self::nonceValue($value, 'PartyU nonce');
+    }
+
+    /**
+     * The "PartyU other" header algorithm parameter (RFC 9053 section 5.2), or null when absent.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9053#section-5.2
+     */
+    public function getPartyUOther(): ?string
+    {
+        $value = $this->getHeaderParameter(self::LABEL_PARTY_U_OTHER);
+
+        return $value === null ? null : self::byteStringValue($value, 'PartyU other');
+    }
+
+    /**
+     * The "PartyV identity" header algorithm parameter (RFC 9053 section 5.2), or null when absent.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9053#section-5.2
+     */
+    public function getPartyVIdentity(): ?string
+    {
+        $value = $this->getHeaderParameter(self::LABEL_PARTY_V_IDENTITY);
+
+        return $value === null ? null : self::byteStringValue($value, 'PartyV identity');
+    }
+
+    /**
+     * The "PartyV nonce" header algorithm parameter (RFC 9053 section 5.2), or null when absent: a byte string or
+     * an integer.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9053#section-5.2
+     */
+    public function getPartyVNonce(): string|int|null
+    {
+        $value = $this->getHeaderParameter(self::LABEL_PARTY_V_NONCE);
+
+        return $value === null ? null : self::nonceValue($value, 'PartyV nonce');
+    }
+
+    /**
+     * The "PartyV other" header algorithm parameter (RFC 9053 section 5.2), or null when absent.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9053#section-5.2
+     */
+    public function getPartyVOther(): ?string
+    {
+        $value = $this->getHeaderParameter(self::LABEL_PARTY_V_OTHER);
+
+        return $value === null ? null : self::byteStringValue($value, 'PartyV other');
+    }
+
+    /**
+     * A COSE_Key-valued header parameter as a public EC2 or OKP key: the key types RFC 9053 section 6.3.1 allows
+     * for ECDH, and the only ones a key agreement parameter can carry.
+     */
+    private static function publicKeyValue(CBORObject $value, string $parameter): Ec2Key|OkpKey
+    {
+        if (! $value instanceof MapObject && ! $value instanceof IndefiniteLengthMapObject) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The value shall be a COSE_Key map (RFC 9053 section 6.3.1), got "%s".',
+                $parameter,
+                get_debug_type($value)
+            ));
+        }
+        try {
+            $key = Key::createFromData($value->normalize());
+        } catch (Throwable $e) {
+            // The map comes from the wire: whatever the key constructor objects to reaches the caller as the
+            // exception this library documents, never as a TypeError or an Error.
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The value is not a valid COSE_Key: %s',
+                $parameter,
+                $e->getMessage()
+            ), 0, $e);
+        }
+        if (! $key instanceof Ec2Key && ! $key instanceof OkpKey) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The key type shall be EC2 or OKP (RFC 9053 section 6.3.1), got "%s".',
+                $parameter,
+                $key->type()
+            ));
+        }
+        if ($key->isPrivate()) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The value shall be a public key and carries a private part.',
+                $parameter
+            ));
+        }
+
+        return $key;
+    }
+
+    private static function byteStringValue(CBORObject $value, string $parameter): string
+    {
+        if (! $value instanceof ByteStringObject && ! $value instanceof IndefiniteLengthByteStringObject) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The value shall be a byte string, got "%s".',
+                $parameter,
+                get_debug_type($value)
+            ));
+        }
+
+        return $value->getValue();
+    }
+
+    /**
+     * "nonce : bstr / int" (RFC 9053 section 5.2): the value is handed back as the type it was carried in, because
+     * the two encode differently in the COSE_KDF_Context and a byte string of digits is not the integer they spell.
+     */
+    private static function nonceValue(CBORObject $value, string $parameter): string|int
+    {
+        if ($value instanceof ByteStringObject || $value instanceof IndefiniteLengthByteStringObject) {
+            return $value->getValue();
+        }
+        if ($value instanceof UnsignedIntegerObject || $value instanceof NegativeIntegerObject) {
+            $normalized = $value->normalize();
+            // A 64-bit value beyond PHP_INT_MAX normalizes to a numeric string; it cannot be re-encoded as an int.
+            if ((string) (int) $normalized !== $normalized) {
+                throw new InvalidArgumentException(sprintf(
+                    'Invalid "%s" header parameter. The integer value exceeds the platform integer range.',
+                    $parameter
+                ));
+            }
+
+            return (int) $normalized;
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            'Invalid "%s" header parameter. The value shall be a byte string or an integer (RFC 9053 section 5.2), got "%s".',
+            $parameter,
+            get_debug_type($value)
+        ));
     }
 }

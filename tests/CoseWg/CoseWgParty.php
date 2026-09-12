@@ -7,6 +7,7 @@ namespace Cose\Tests\CoseWg;
 use function array_key_exists;
 use function array_map;
 use function array_values;
+use Cose\Algorithm\KeyManagement\PartyInfo;
 use Cose\Key\Key;
 use function is_array;
 use function is_string;
@@ -173,6 +174,47 @@ final class CoseWgParty
     }
 
     /**
+     * The key-encryption key of a key agreement with key wrap recipient -- the output of the KDF -- when recorded.
+     */
+    public function keyEncryptionKey(): ?string
+    {
+        return $this->bytesOf($this->intermediates, 'KEK_hex');
+    }
+
+    /**
+     * The PartyUInfo the generator used without sending it ("apu_id", "apu_nonce", "apu_other" of "unsent"): what
+     * the application supplies to the derivation from its protocol. Null when the fixture records none.
+     */
+    public function unsentPartyU(): ?PartyInfo
+    {
+        return $this->unsentPartyInfo('apu');
+    }
+
+    /**
+     * The PartyVInfo the generator used without sending it, likewise.
+     */
+    public function unsentPartyV(): ?PartyInfo
+    {
+        return $this->unsentPartyInfo('apv');
+    }
+
+    /**
+     * The SuppPubInfo "other" the generator put into the COSE_KDF_Context ("pub_other" of "unsent"), when any.
+     */
+    public function suppPubInfoOther(): ?string
+    {
+        return $this->unsentText('pub_other');
+    }
+
+    /**
+     * The SuppPrivInfo the generator put into the COSE_KDF_Context ("priv_other" of "unsent"), when any.
+     */
+    public function suppPrivInfo(): ?string
+    {
+        return $this->unsentText('priv_other');
+    }
+
+    /**
      * The recipients nested under this one, for the layered key management of RFC 9052 section 5.1.
      *
      * @return list<self>
@@ -198,6 +240,35 @@ final class CoseWgParty
             array_keys($recipients),
             $recipients
         ));
+    }
+
+    private function unsentPartyInfo(string $prefix): ?PartyInfo
+    {
+        $identity = $this->unsentText($prefix . '_id');
+        $nonce = $this->unsentText($prefix . '_nonce');
+        $other = $this->unsentText($prefix . '_other');
+        if ($identity === null && $nonce === null && $other === null) {
+            return null;
+        }
+
+        return PartyInfo::create($identity, $nonce, $other);
+    }
+
+    /**
+     * The fixtures write the unsent context values as plain text, taken as bytes.
+     */
+    private function unsentText(string $field): ?string
+    {
+        $unsent = $this->unsentHeader();
+        if (! array_key_exists($field, $unsent)) {
+            return null;
+        }
+        $value = $unsent[$field];
+        if (! is_string($value)) {
+            throw new LogicException(sprintf('%s: "%s" is not a string', $this->name, $field));
+        }
+
+        return $value;
     }
 
     /**

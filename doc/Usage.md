@@ -1,10 +1,10 @@
 # How to Use COSE Library
 
-This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature, MAC and content encryption algorithms, the cryptographic structures a signature, a MAC or an encryption is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`), [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims) and [RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html) (X.509 certificates: `x5bag`, `x5chain`, `x5t`, `x5u`), the hash algorithms of [RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html) and the COSE Key Thumbprint of [RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html). Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
+This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature, MAC, content encryption and key management algorithms, the cryptographic structures a signature, a MAC or an encryption is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`), [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims) and [RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html) (X.509 certificates: `x5bag`, `x5chain`, `x5t`, `x5u`), the hash algorithms of [RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html) and the COSE Key Thumbprint of [RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html). Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
 
 The six COSE message types themselves come from [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0 or later, as `CBOR\Tag\CoseSign1Tag` and its siblings. The `Cose\...Tag` classes this library used to ship are deprecated since 4.8.0 and removed in 5.0.0 — see [Upgrading from the Cose\...Tag classes](#upgrading-from-the-cosetag-classes).
 
-The key management algorithms of RFC 9053 §5–6 (HKDF, AES Key Wrap, ECDH) are not implemented yet: a recipient carrying a wrapped or derived content key is the application's to open, see [issue #201](https://github.com/web-auth/cose-lib/issues/201).
+The key management algorithms of RFC 9053 §5–6 — `direct`, HKDF, AES Key Wrap, ECDH — fill and open the recipients of a `COSE_Encrypt` or a `COSE_Mac`, see [Key Management Algorithms](#key-management-algorithms). RSAES-OAEP (RFC 8230 §3) and COSE-HPKE are not implemented.
 
 ## Table of Contents
 
@@ -41,6 +41,7 @@ The key management algorithms of RFC 9053 §5–6 (HKDF, AES Key Wrap, ECDH) are
   - [Verifying a Signature Made by a Certificate](#verifying-a-signature-made-by-a-certificate)
   - [Validating Symmetric Keys](#validating-symmetric-keys)
   - [Content Encryption Algorithms](#content-encryption-algorithms)
+  - [Key Management Algorithms](#key-management-algorithms)
   - [Hash Algorithms](#hash-algorithms)
 
 ## Installation
@@ -318,11 +319,12 @@ Three points that follow from the RFC:
   the policies it was created with, when `verifyWithX5Chain()` calls it.
 
 The three header *algorithm* parameters of [RFC 9360 §3](https://www.rfc-editor.org/rfc/rfc9360#section-3) —
-`x5t-sender` (-27), `x5u-sender` (-28) and `x5chain-sender` (-29) — are only meaningful with the ECDH-SS key agreement
-algorithms. Their labels are declared (`CoseHeaders::LABEL_X5T_SENDER`, `LABEL_X5U_SENDER`, `LABEL_X5CHAIN_SENDER`);
-their accessors come with those algorithms ([issue #201](https://github.com/web-auth/cose-lib/issues/201)). Until
-then, `CoseCertHash::fromCBOR()`, `HeaderMapHelper::assertUriValue()` and `X5Chain::fromCBOR()` read the value of a
-raw lookup. C509 certificates (a draft) are out of scope.
+`x5t-sender` (-27), `x5u-sender` (-28) and `x5chain-sender` (-29) — identify the sender's key exchange certificate of
+an ECDH-SS recipient, and `getX5TSender()`, `getX5USender()` and `getX5ChainSender()` read them exactly as their §2
+counterparts: same structures, same rules, same absence of trust. The key they name is what the application hands to
+the algorithm through `RecipientLayer::withSenderKey()` — after validating the chain, out of its own store, or from
+wherever the URI it chose to fetch led — see [Key Management Algorithms](#key-management-algorithms). C509
+certificates (a draft) are out of scope.
 
 [`examples/13-x509-header-parameters.php`](../examples/13-x509-header-parameters.php) runs the whole of this on the
 certificates of cose-wg/Examples.
@@ -668,9 +670,50 @@ foreach (CoseRecipient::all($coseEncrypt->getRecipients()) as $recipient) {
 > `[bstr, map, bstr / nil, ? [+ COSE_recipient]]` array. `CoseRecipient::all()` applies that rule, nested levels
 > included.
 
-The key wrap and key agreement algorithms that fill the recipient entries (RFC 9053 §5–6) are not implemented yet,
-see [issue #201](https://github.com/web-auth/cose-lib/issues/201); [`examples/05-encrypt-recipients.php`](../examples/05-encrypt-recipients.php)
-wraps the CEK with AES Key Wrap written out by hand in the meantime.
+The recipient entries are filled by the key management algorithms of RFC 9053 §5–6, and
+`EncryptStructure::encryptFor()` runs the whole of it — draw the CEK, wrap or derive it for each recipient, encrypt
+the content, assemble the message — in one call:
+
+```php
+use Cose\Algorithm\ContentEncryption\A128GCM;
+use Cose\Algorithm\KeyManagement\A256KW;
+use Cose\Algorithm\KeyManagement\ECDH_ES_A128KW;
+use Cose\Encryption\EncryptStructure;
+use Cose\Encryption\Recipient;
+
+$algorithm = A128GCM::create();
+$coseEncrypt = EncryptStructure::create($protectedHeader)->encryptFor($algorithm, $plaintext, random_bytes(12), [
+    Recipient::create(A256KW::create(), $sharedKek, null, $kidHeader),  // a Symmetric key the parties share
+    Recipient::create(ECDH_ES_A128KW::create(), $bobPublicKey),         // Bob's EC2 or OKP public key
+]); // CBOR\Tag\CoseEncryptTag: the IV is in its unprotected bucket, each COSE_recipient carries its "alg"
+```
+
+Opening it is the reverse, one recipient at a time — the recipient's own key, the algorithm its headers announce,
+and a `RecipientLayer` that says what the recovered key is for:
+
+```php
+use Cose\Algorithm\KeyManagement\KeyManagement;
+use Cose\Algorithm\KeyManagement\RecipientLayer;
+use Cose\Key\SymmetricKey;
+
+$entries = CoseRecipient::all($coseEncrypt->getRecipients());
+$mine = $entries[1]; // located by "kid", by the ephemeral key, or however the application names its recipients
+$keyManagement = $manager->get((int) $mine->headers()->getHeaderParameter(1)?->normalize());
+assert($keyManagement instanceof KeyManagement);
+
+$cek = $keyManagement->recoverKey(RecipientLayer::fromRecipient($mine, $algorithm, null, count($entries)), $bobPrivateKey);
+$plaintext = EncryptStructure::create($coseEncrypt->getProtectedHeader())->decrypt(
+    $algorithm,
+    SymmetricKey::create([SymmetricKey::TYPE => SymmetricKey::TYPE_OCT, SymmetricKey::DATA_K => $cek]),
+    $coseEncrypt->getCiphertext()->getValue(),
+    InitializationVector::resolve(CoseHeaders::fromMessage($coseEncrypt), $algorithm->nonceLength())
+);
+```
+
+See [Key Management Algorithms](#key-management-algorithms) for the eighteen algorithms, the rules each family
+enforces, and the parameters of a static-static agreement; and
+[`examples/05-encrypt-recipients.php`](../examples/05-encrypt-recipients.php) for the whole of it, nested recipients
+included.
 
 ### The Nonce: IV and Partial IV
 
@@ -1738,6 +1781,181 @@ if (ChaCha20Poly1305::isSupported()) {
 }
 ```
 
+### Key Management Algorithms
+
+The content key distribution methods of [RFC 9053 §5–6](https://datatracker.ietf.org/doc/html/rfc9053#section-5),
+in `Cose\Algorithm\KeyManagement`. [RFC 9052 §8.5](https://datatracker.ietf.org/doc/html/rfc9052#section-8.5)
+sorts them into classes, and each class is an interface here, all extending `KeyManagement`:
+
+| Algorithm | Identifier | Class | Family | Reference |
+|-----------|------------|-------|--------|-----------|
+| direct | -6 | `Direct` | `DirectEncryption` | [RFC 9053 §6.1.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.1.1) |
+| direct+HKDF-SHA-256 | -10 | `DirectHKDF_SHA256` | `DirectEncryption` | [RFC 9053 §6.1.2](https://www.rfc-editor.org/rfc/rfc9053#section-6.1.2) |
+| direct+HKDF-SHA-512 | -11 | `DirectHKDF_SHA512` | `DirectEncryption` | [RFC 9053 §6.1.2](https://www.rfc-editor.org/rfc/rfc9053#section-6.1.2) |
+| direct+HKDF-AES-128 | -12 | `DirectHKDF_AES128` | `DirectEncryption` | [RFC 9053 §6.1.2](https://www.rfc-editor.org/rfc/rfc9053#section-6.1.2) |
+| direct+HKDF-AES-256 | -13 | `DirectHKDF_AES256` | `DirectEncryption` | [RFC 9053 §6.1.2](https://www.rfc-editor.org/rfc/rfc9053#section-6.1.2) |
+| A128KW | -3 | `A128KW` | `KeyWrap` | [RFC 9053 §6.2.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.2.1) |
+| A192KW | -4 | `A192KW` | `KeyWrap` | [RFC 9053 §6.2.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.2.1) |
+| A256KW | -5 | `A256KW` | `KeyWrap` | [RFC 9053 §6.2.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.2.1) |
+| ECDH-ES + HKDF-256 | -25 | `ECDH_ES_HKDF256` | `KeyAgreement` | [RFC 9053 §6.3.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.3.1) |
+| ECDH-ES + HKDF-512 | -26 | `ECDH_ES_HKDF512` | `KeyAgreement` | [RFC 9053 §6.3.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.3.1) |
+| ECDH-SS + HKDF-256 | -27 | `ECDH_SS_HKDF256` | `KeyAgreement` | [RFC 9053 §6.3.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.3.1) |
+| ECDH-SS + HKDF-512 | -28 | `ECDH_SS_HKDF512` | `KeyAgreement` | [RFC 9053 §6.3.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.3.1) |
+| ECDH-ES + A128KW | -29 | `ECDH_ES_A128KW` | `KeyAgreement` | [RFC 9053 §6.4.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.4.1) |
+| ECDH-ES + A192KW | -30 | `ECDH_ES_A192KW` | `KeyAgreement` | [RFC 9053 §6.4.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.4.1) |
+| ECDH-ES + A256KW | -31 | `ECDH_ES_A256KW` | `KeyAgreement` | [RFC 9053 §6.4.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.4.1) |
+| ECDH-SS + A128KW | -32 | `ECDH_SS_A128KW` | `KeyAgreement` | [RFC 9053 §6.4.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.4.1) |
+| ECDH-SS + A192KW | -33 | `ECDH_SS_A192KW` | `KeyAgreement` | [RFC 9053 §6.4.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.4.1) |
+| ECDH-SS + A256KW | -34 | `ECDH_SS_A256KW` | `KeyAgreement` | [RFC 9053 §6.4.1](https://www.rfc-editor.org/rfc/rfc9053#section-6.4.1) |
+
+The *Algorithm* column is the IANA name. RSAES-OAEP (-40, -41, -42; RFC 8230 §3) and COSE-HPKE are not implemented.
+
+#### The two sides of an algorithm
+
+Every algorithm has a receiving side, `recoverKey()`, and a sending side, `protectKey()`, both run against a
+`RecipientLayer`: the headers and the ciphertext of the `COSE_recipient`, and what the algorithm needs to know about
+the key it protects — the algorithm that key is for and its length, which [RFC 9053 §5.2](https://datatracker.ietf.org/doc/html/rfc9053#section-5.2)
+binds into the derived key through the `COSE_KDF_Context`. That key is the content encryption or MAC algorithm of the
+message for a recipient of the content layer, and the key wrap of the recipient above for a nested one
+([RFC 9052 Appendix B](https://datatracker.ietf.org/doc/html/rfc9052#appendix-B)).
+
+```php
+use Cose\Algorithm\KeyManagement\RecipientLayer;
+
+// Receiving: the layer of a decoded COSE_recipient, for the content algorithm, among $count recipients
+$layer = RecipientLayer::fromRecipient($coseRecipient, $contentAlgorithm, null, $count);
+$key = $keyManagement->recoverKey($layer, $recipientKey);        // the CEK, or the KEK of the recipient above
+
+// Sending: the layer of the recipient the sender is about to write
+$layer = RecipientLayer::create(CoseHeaders::of($protected, $unprotected), $contentAlgorithm, null, $count);
+$protectedKey = $keyManagement->protectKey($layer, $recipientKey, $cek); // ProtectedKey
+$protectedKey->key();              // the key of the layer below: the $cek given, or the one a direct algorithm derived
+$protectedKey->headerParameters(); // to merge into the unprotected bucket of the recipient: the "ephemeral key"
+$protectedKey->ciphertext();       // the "ciphertext" field of the COSE_recipient: the wrapped key, or h''
+```
+
+The recipient's key is the shared symmetric secret for the direct encryption and key wrap families, and the
+recipient's EC2 or OKP key for the key agreement family — private on the receiving side, public on the sending side.
+`EncryptStructure::encryptFor()` does the sending side for a whole message, see
+[COSE_Encrypt (Multiple Recipients)](#cose_encrypt-multiple-recipients); the receiving side is one call per
+recipient, the application picking the recipient that is its own.
+
+#### What each family enforces
+
+**Direct encryption** (`DirectEncryption`: `direct`, `direct+HKDF-*`) and **direct key agreement**
+(`ECDH-*+HKDF-*`) decide the key of the layer below instead of transporting one — `isDirect()` is true, `protectKey()`
+takes no key and derives it. [RFC 9052 §8.5.1](https://datatracker.ietf.org/doc/html/rfc9052#section-8.5.1) and
+[§8.5.4](https://datatracker.ietf.org/doc/html/rfc9052#section-8.5.4) follow from that, and are enforced on both
+sides: such a recipient "MUST be the only mode used on the message" (a sibling recipient is refused), its
+`ciphertext` "MUST be a zero-length byte string", its `recipients` "MUST be absent". `direct` adds that the protected
+bucket "MUST be zero length" (RFC 9053 §6.1.1) and uses the key as it is; the four `direct+HKDF-*` run it through the
+HKDF of §5.1 — HMAC with the extract step for SHA-256 and SHA-512, AES-CBC-MAC without it for AES-128 and AES-256,
+where the shared secret is the PRK, has to be exactly 16 or 32 bytes, and the `salt`, if carried, is not used
+(§5.1). "Either the 'salt' parameter for HKDF or the 'PartyU nonce' parameter MUST be present" (§6.1.2): the sending
+side refuses to derive without one; the receiving side derives with what the message carries.
+
+**Key wrap** (`KeyWrap`: `A128KW`, `A192KW`, `A256KW`) is the AES Key Wrap of RFC 3394, through
+[spomky-labs/aes-key-wrap](https://github.com/Spomky-Labs/aes-key-wrap), with `wrap()` and `unwrap()` exposed on their
+own. "The protected header bucket MUST be empty" (§6.2.1) — in either of the two empty forms of RFC 9052 §3. The KEK
+is a symmetric key of exactly the size the identifier names; the key to wrap is a multiple of 64 bits, at least 128.
+A wrapped key that fails the integrity check of RFC 3394 §2.2.3 is reported with one message
+(`AesKeyWrap::UNWRAP_FAILED`), whether the KEK is wrong or the value was tampered with.
+
+**Key agreement** (`KeyAgreement`: the twelve `ECDH-*`) runs an elliptic curve Diffie-Hellman agreement, the HKDF
+over its shared secret with the `COSE_KDF_Context`, and either hands the derived key to the layer below (§6.3.1) or
+wraps the layer's key with it (§6.4.1, where the context binds to the key wrap algorithm and its key size).
+`agree()` exposes the agreement-and-KDF step on its own. Before anything is multiplied:
+
+- the two keys are of the same type and on the same curve (§6.3.1: "Implementations MUST verify that the key type
+  and curve are correct"); an EC2 ephemeral key for an OKP recipient is refused, and so is a key on another curve;
+- the curve is one ECDH is defined for: P-256, P-384, P-521, X25519, X448, and the four Brainpool curves where the
+  OpenSSL build provides them (`EllipticCurveDiffieHellman::isCurveSupported()`); secp256k1, registered for ES256K
+  and nothing else, and the Edwards curves, which sign, are refused;
+- **an EC2 point is checked to be on the curve** (§6.3.1.1) by `Ec2Key::assertOnCurve()`, by the library itself and
+  before OpenSSL sees the point: an off-curve point fed to a scalar multiplication is the invalid-curve attack, which
+  leaks the private key a few bits per message. The constructor of `Ec2Key` does not run the check, so that keys
+  built from arbitrary bytes keep loading; `isOnCurve()` answers without throwing;
+- **an all-zero OKP secret is refused** (RFC 7748 §6.1): "for the 'OKP' format, there is no simple way to perform
+  point validation", and the all-zero output is what a low-order point produces.
+
+*Ephemeral-Static* (`ECDH-ES`): "the sender MUST generate a new ephemeral key for every key agreement operation"
+(§6.3.1). `protectKey()` generates it on the recipient's curve and hands back its public half, `kty`, `crv`, `x`,
+`y` and nothing else, as the `ephemeral key` (-1) header parameter; `recoverKey()` reads it with
+`CoseHeaders::getEphemeralKey()`, which refuses a key carrying a private part.
+
+*Static-Static* (`ECDH-SS`): the sender's static key is the application's to supply on both sides,
+`RecipientLayer::withSenderKey()` — its private key when sending, the sender's public key when receiving, resolved
+from whatever identifies it in the headers: `static key id` (-3, `getStaticKeyId()`), or the `x5t-sender`,
+`x5u-sender` and `x5chain-sender` parameters of RFC 9360 §3 (`getX5TSender()`, `getX5USender()`,
+`getX5ChainSender()`), after the validation the application owns. A `static key` (-2, `getStaticKey()`) carried in the
+message is used when no key was supplied — with the caveat that a header authenticates nothing on its own. "The
+sender MUST either generate a new random value or create a unique value for use as a KDF input": the sending side
+refuses to run without a `salt` (-20) or a `PartyU nonce` (-22) header parameter.
+
+```php
+use Cose\Algorithm\KeyManagement\ECDH_SS_HKDF256;
+use Cose\Encryption\Recipient;
+
+// Sending: Alice's static private key, Bob's public key, and a nonce that is unique for the pair of keys
+$recipient = Recipient::create(ECDH_SS_HKDF256::create(), $bobPublicKey, null, MapObject::create([
+    MapItem::create(NegativeIntegerObject::create(CoseHeaders::LABEL_STATIC_KEY_ID), ByteStringObject::create('alice')),
+    MapItem::create(NegativeIntegerObject::create(CoseHeaders::LABEL_PARTY_U_NONCE), ByteStringObject::create(random_bytes(32))),
+]))->withSenderKey($alicePrivateKey);
+
+// Receiving: Bob resolves "alice" out of the keys he trusts, and hands Alice's public key to the layer
+$layer = RecipientLayer::fromRecipient($coseRecipient, $algorithm)->withSenderKey($alicePublicKey);
+$cek = ECDH_SS_HKDF256::create()->recoverKey($layer, $bobPrivateKey);
+```
+
+#### The KDF context
+
+`KdfContext` builds the `COSE_KDF_Context` of [RFC 9053 §5.2](https://datatracker.ietf.org/doc/html/rfc9053#section-5.2)
+exactly as the CDDL says: `[ AlgorithmID, PartyUInfo, PartyVInfo, SuppPubInfo, ? SuppPrivInfo ]`, the two `PartyInfo`
+always three items long with `nil` where nothing is known, `keyDataLength` in bits, the protected bucket of the
+recipient embedded as carried (or `h''` when empty, in either form), `other` and `SuppPrivInfo` present only when the
+application defines them. `RecipientLayer::kdfContext()` builds it for a layer: the `PartyU *` and `PartyV *`
+parameters (-21 to -26, `getPartyUIdentity()` and siblings) come from the headers, and the application completes
+them with what its protocol implies — identities are "often known as part of the protocol and can thus be inferred
+rather than made explicit" — through `withPartyU()`, `withPartyV()`, `withSuppPubInfoOther()` and
+`withSuppPrivInfo()`, on the layer or on a `Recipient`. Where the headers carry a value, it wins element by element.
+
+`Hkdf` is the HKDF of §5.1 as one construction with the PRF as a parameter — `Hkdf::hmac('sha256')`,
+`Hkdf::hmac('sha512')`, `Hkdf::aesCbcMac(128)`, `Hkdf::aesCbcMac(256)` — checked against the vectors of RFC 5869
+and against `hash_hkdf()`. "The AES HKDF version cannot be used with ECDH" (§5.1), and no such identifier exists.
+
+#### Key restrictions
+
+**Enforced by default**, as for the content encryption algorithms: RFC 9053 §6 makes the checks a MUST and the
+classes are new. `alg`, when present, must match the identifier; `key_ops`, when present, must include `derive key`
+or `derive bits` for the key of a derivation or an agreement, `wrap key` or `encrypt` to wrap and `unwrap key` or
+`decrypt` to unwrap, and "MUST be empty for the public key" of an agreement (§6.3.1). `direct` enforces nothing: the
+key is the content key itself, and the content encryption or MAC algorithm checks it when it uses it.
+`withKeyRestrictionsEnforced(false)`, on an algorithm or through the `Manager`, turns it off.
+
+```php
+use Cose\Algorithm\KeyManagement\A128KW;
+use Cose\Algorithm\KeyManagement\Direct;
+use Cose\Algorithm\KeyManagement\DirectHKDF_SHA256;
+use Cose\Algorithm\KeyManagement\ECDH_ES_A128KW;
+use Cose\Algorithm\KeyManagement\ECDH_ES_HKDF256;
+use Cose\Algorithm\KeyManagement\ECDH_SS_HKDF256;
+use Cose\Algorithm\Manager;
+
+$manager = Manager::create()->add(
+    Direct::create(),
+    DirectHKDF_SHA256::create(),
+    A128KW::create(),
+    ECDH_ES_HKDF256::create(),
+    ECDH_SS_HKDF256::create(),
+    ECDH_ES_A128KW::create(),
+);
+```
+
+The `ecdh-direct-examples`, `ecdh-wrap-examples`, `hkdf-hmac-sha-examples`, `hkdf-aes-examples`,
+`aes-wrap-examples`, `X25519-tests` and `enveloped-tests` fixtures of cose-wg/Examples — and the layered ones of
+RFC 8152 Appendix B and C.5.4 — are opened by the test suite, every intermediate the generator recorded
+(`COSE_KDF_Context`, shared secret, KEK, CEK) compared on the way.
+
 ### Hash Algorithms
 
 The hash algorithms of [RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html), in `Cose\Algorithm\Hash`. COSE
@@ -1852,6 +2070,25 @@ The following header parameters are commonly used in COSE structures:
 | 34 | x5t | COSE_CertHash | Thumbprint of the end-entity certificate (RFC 9360), `getX5T()` |
 | 35 | x5u | uri | URI of an X.509 certificate, never fetched by this library (RFC 9360), `getX5U()` |
 
+The header *algorithm* parameters of the key management algorithms, read from a `COSE_recipient` by the same
+accessors:
+
+| Label | Name | Type | Description |
+|-------|------|------|-------------|
+| -1 | ephemeral key | COSE_Key | Sender's ephemeral public key, ECDH-ES (RFC 9053 §6.3.1), `getEphemeralKey()` |
+| -2 | static key | COSE_Key | Sender's static public key, ECDH-SS (RFC 9053 §6.3.1), `getStaticKey()` |
+| -3 | static key id | bstr | Identifier of the sender's static key, ECDH-SS (RFC 9053 §6.3.1), `getStaticKeyId()` |
+| -20 | salt | bstr | Salt of the HKDF extract step (RFC 9053 §5.1), `getSalt()` |
+| -21 | PartyU identity | bstr | PartyUInfo of the COSE_KDF_Context (RFC 9053 §5.2), `getPartyUIdentity()` |
+| -22 | PartyU nonce | bstr / int | `getPartyUNonce()` |
+| -23 | PartyU other | bstr | `getPartyUOther()` |
+| -24 | PartyV identity | bstr | PartyVInfo of the COSE_KDF_Context (RFC 9053 §5.2), `getPartyVIdentity()` |
+| -25 | PartyV nonce | bstr / int | `getPartyVNonce()` |
+| -26 | PartyV other | bstr | `getPartyVOther()` |
+| -27 | x5t-sender | COSE_CertHash | Thumbprint of the sender's key exchange certificate, ECDH-SS (RFC 9360 §3), `getX5TSender()` |
+| -28 | x5u-sender | uri | URI of the sender's key exchange certificate, never fetched (RFC 9360 §3), `getX5USender()` |
+| -29 | x5chain-sender | COSE_X509 | Chain of the sender's key exchange certificate, ECDH-SS (RFC 9360 §3), `getX5ChainSender()` |
+
 ## Examples
 
 The [`examples/`](../examples) directory holds a runnable program per topic. Each prints what it does and fails
@@ -1868,7 +2105,7 @@ php examples/01-sign1.php
 | `examples/02-sign-multiple-signers.php` | COSE_Sign, and why `Signature` carries `sign_protected` |
 | `examples/03-mac0.php` | COSE_Mac0 over the MAC_structure, with HMAC and AES-CBC-MAC |
 | `examples/04-encrypt0.php` | COSE_Encrypt0: A128GCM through `Encrypt0Structure`, IV and Partial IV |
-| `examples/05-encrypt-recipients.php` | COSE_Encrypt: one ciphertext, the CEK wrapped per recipient, nested recipients |
+| `examples/05-encrypt-recipients.php` | COSE_Encrypt: `encryptFor()` with AES Key Wrap, ECDH-ES and ECDH-SS recipients, then a direct one, then nested recipients |
 | `examples/06-headers.php` | The header rules, against what the raw CBOR map answers |
 | `examples/07-detached-and-external-aad.php` | Detached content and `external_aad` |
 | `examples/08-cwt.php` | CBOR Web Tokens |
@@ -1889,6 +2126,8 @@ The test suite is the rest of the examples, and every one of them is executed on
 | `tests/Structure/CoseRecipientTest.php` | Per-recipient views, nested recipients and detached ciphertext |
 | `tests/Encryption/EncryptStructureRoundTripTest.php` | Encrypting and decrypting through the `Enc_structure`, against RFC 9052 Appendix C.4 |
 | `tests/Algorithm/ContentEncryption/AeadTest.php` | The AEAD algorithms against the published vectors of their primitives |
+| `tests/Algorithm/KeyManagement/` | The key management algorithms: RFC 3394 and RFC 5869 vectors, the cose-wg intermediates, a point on the twist of P-256 refused, every rule of RFC 9052 §8.5 |
+| `tests/Encryption/EncryptForTest.php` | `encryptFor()` for four recipients of three families, and each of them opening the message |
 | `tests/CoseWg/CoseWgFixtureTest.php` | Every fixture of cose-wg/Examples, encrypted ones included |
 | `tests/CoseWg/X509FixtureTest.php` | The x509-examples of cose-wg/Examples read through the RFC 9360 accessors, and verified with the certificate they carry |
 | `tests/Signature/CoseSign1CreateAndVerifyTest.php` | EU digital COVID certificate verification |
@@ -1906,4 +2145,7 @@ The test suite is the rest of the examples, and every one of them is executed on
 - [RFC 9054 - CBOR Object Signing and Encryption (COSE): Hash Algorithms](https://www.rfc-editor.org/rfc/rfc9054.html)
 - [RFC 9679 - CBOR Object Signing and Encryption (COSE) Key Thumbprint](https://www.rfc-editor.org/rfc/rfc9679.html)
 - [RFC 9360 - CBOR Object Signing and Encryption (COSE): Header Parameters for Carrying and Referencing X.509 Certificates](https://www.rfc-editor.org/rfc/rfc9360.html)
+- [RFC 3394 - Advanced Encryption Standard (AES) Key Wrap Algorithm](https://www.rfc-editor.org/rfc/rfc3394.html)
+- [RFC 5869 - HMAC-based Extract-and-Expand Key Derivation Function (HKDF)](https://www.rfc-editor.org/rfc/rfc5869.html)
+- [RFC 7748 - Elliptic Curves for Security](https://www.rfc-editor.org/rfc/rfc7748.html)
 - [IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml)

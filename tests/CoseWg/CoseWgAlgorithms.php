@@ -17,6 +17,24 @@ use Cose\Algorithm\ContentEncryption\A256CCM_64_128;
 use Cose\Algorithm\ContentEncryption\A256CCM_64_64;
 use Cose\Algorithm\ContentEncryption\A256GCM;
 use Cose\Algorithm\ContentEncryption\ChaCha20Poly1305;
+use Cose\Algorithm\KeyManagement\A128KW;
+use Cose\Algorithm\KeyManagement\A192KW;
+use Cose\Algorithm\KeyManagement\A256KW;
+use Cose\Algorithm\KeyManagement\Direct;
+use Cose\Algorithm\KeyManagement\DirectHKDF_AES128;
+use Cose\Algorithm\KeyManagement\DirectHKDF_AES256;
+use Cose\Algorithm\KeyManagement\DirectHKDF_SHA256;
+use Cose\Algorithm\KeyManagement\DirectHKDF_SHA512;
+use Cose\Algorithm\KeyManagement\ECDH_ES_A128KW;
+use Cose\Algorithm\KeyManagement\ECDH_ES_A192KW;
+use Cose\Algorithm\KeyManagement\ECDH_ES_A256KW;
+use Cose\Algorithm\KeyManagement\ECDH_ES_HKDF256;
+use Cose\Algorithm\KeyManagement\ECDH_ES_HKDF512;
+use Cose\Algorithm\KeyManagement\ECDH_SS_A128KW;
+use Cose\Algorithm\KeyManagement\ECDH_SS_A192KW;
+use Cose\Algorithm\KeyManagement\ECDH_SS_A256KW;
+use Cose\Algorithm\KeyManagement\ECDH_SS_HKDF256;
+use Cose\Algorithm\KeyManagement\ECDH_SS_HKDF512;
 use Cose\Algorithm\Mac\AESMAC128_128;
 use Cose\Algorithm\Mac\AESMAC128_64;
 use Cose\Algorithm\Mac\AESMAC256_128;
@@ -65,8 +83,10 @@ use function sprintf;
 final class CoseWgAlgorithms
 {
     /**
-     * "direct" (RFC 9053 section 6.1): the recipient's key is the content key. It is not an algorithm class in this
-     * library and needs none; the harness resolves it on its own.
+     * "direct" (RFC 9053 section 6.1.1): the recipient's key is the content key. A COSE_Mac0 and a COSE_Encrypt0
+     * carry no recipient on the wire, and their fixtures still list one, under this name, to say where the key came
+     * from; the harness reads that key directly. On a COSE_Mac or a COSE_Encrypt the recipient is on the wire and
+     * goes through {@see Direct} like any other algorithm.
      */
     public const DIRECT = Algorithms::COSE_ALGORITHM_DIRECT;
 
@@ -163,7 +183,8 @@ final class CoseWgAlgorithms
      *
      * RS1, Ed256 and Ed512 are left out on purpose: each needs an explicit acknowledgement to be built, and no fixture
      * uses them. Ed448, the Brainpool ESB* algorithms, AES-CCM and ChaCha20/Poly1305 are added only where the
-     * platform can compute them.
+     * platform can compute them. The key management algorithms of RFC 9053 sections 5 and 6 are all there; the RSAES-OAEP
+     * ones (-40, -41, -42) are not implemented and their fixtures stay skipped.
      */
     public static function manager(): Manager
     {
@@ -194,6 +215,24 @@ final class CoseWgAlgorithms
             A128GCM::create(),
             A192GCM::create(),
             A256GCM::create(),
+            Direct::create(),
+            DirectHKDF_SHA256::create(),
+            DirectHKDF_SHA512::create(),
+            DirectHKDF_AES128::create(),
+            DirectHKDF_AES256::create(),
+            A128KW::create(),
+            A192KW::create(),
+            A256KW::create(),
+            ECDH_ES_HKDF256::create(),
+            ECDH_ES_HKDF512::create(),
+            ECDH_SS_HKDF256::create(),
+            ECDH_SS_HKDF512::create(),
+            ECDH_ES_A128KW::create(),
+            ECDH_ES_A192KW::create(),
+            ECDH_ES_A256KW::create(),
+            ECDH_SS_A128KW::create(),
+            ECDH_SS_A192KW::create(),
+            ECDH_SS_A256KW::create(),
         );
         if (Ed448::isSupported()) {
             $manager->add(Ed448::create());

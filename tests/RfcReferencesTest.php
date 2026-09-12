@@ -45,7 +45,7 @@ use function trim;
  * Every algorithm, key type and curve the library ships is traceable, from the README and from the usage guide, to
  * the RFC and the section that define it — and the reference written there is the one the IANA COSE registry gives.
  *
- * The expectations below were checked against <https://www.iana.org/assignments/cose/cose.xhtml> on 2026-09-11. The
+ * The expectations below were checked against <https://www.iana.org/assignments/cose/cose.xhtml> on 2026-09-12. The
  * tables are parsed, not searched, so a row that loses its Reference cell, an identifier that drifts from the class
  * constant, or a new algorithm class that nobody documented all fail here.
  *
@@ -119,6 +119,24 @@ final class RfcReferencesTest extends TestCase
         -43 => ['SHA-384', 9054, '3.2'],
         -44 => ['SHA-512', 9054, '3.2'],
         -45 => ['SHAKE256', 9054, '3.3'],
+        -6 => ['direct', 9053, '6.1.1'],
+        -10 => ['direct+HKDF-SHA-256', 9053, '6.1.2'],
+        -11 => ['direct+HKDF-SHA-512', 9053, '6.1.2'],
+        -12 => ['direct+HKDF-AES-128', 9053, '6.1.2'],
+        -13 => ['direct+HKDF-AES-256', 9053, '6.1.2'],
+        -3 => ['A128KW', 9053, '6.2.1'],
+        -4 => ['A192KW', 9053, '6.2.1'],
+        -5 => ['A256KW', 9053, '6.2.1'],
+        -25 => ['ECDH-ES + HKDF-256', 9053, '6.3.1'],
+        -26 => ['ECDH-ES + HKDF-512', 9053, '6.3.1'],
+        -27 => ['ECDH-SS + HKDF-256', 9053, '6.3.1'],
+        -28 => ['ECDH-SS + HKDF-512', 9053, '6.3.1'],
+        -29 => ['ECDH-ES + A128KW', 9053, '6.4.1'],
+        -30 => ['ECDH-ES + A192KW', 9053, '6.4.1'],
+        -31 => ['ECDH-ES + A256KW', 9053, '6.4.1'],
+        -32 => ['ECDH-SS + A128KW', 9053, '6.4.1'],
+        -33 => ['ECDH-SS + A192KW', 9053, '6.4.1'],
+        -34 => ['ECDH-SS + A256KW', 9053, '6.4.1'],
     ];
 
     /**
@@ -153,6 +171,21 @@ final class RfcReferencesTest extends TestCase
         'SHA512_256' => 'SHA-512/256',
         'SHA384' => 'SHA-384',
         'SHA512' => 'SHA-512',
+        'Direct' => 'direct',
+        'DirectHKDF_SHA256' => 'direct+HKDF-SHA-256',
+        'DirectHKDF_SHA512' => 'direct+HKDF-SHA-512',
+        'DirectHKDF_AES128' => 'direct+HKDF-AES-128',
+        'DirectHKDF_AES256' => 'direct+HKDF-AES-256',
+        'ECDH_ES_HKDF256' => 'ECDH-ES + HKDF-256',
+        'ECDH_ES_HKDF512' => 'ECDH-ES + HKDF-512',
+        'ECDH_SS_HKDF256' => 'ECDH-SS + HKDF-256',
+        'ECDH_SS_HKDF512' => 'ECDH-SS + HKDF-512',
+        'ECDH_ES_A128KW' => 'ECDH-ES + A128KW',
+        'ECDH_ES_A192KW' => 'ECDH-ES + A192KW',
+        'ECDH_ES_A256KW' => 'ECDH-ES + A256KW',
+        'ECDH_SS_A128KW' => 'ECDH-SS + A128KW',
+        'ECDH_SS_A192KW' => 'ECDH-SS + A192KW',
+        'ECDH_SS_A256KW' => 'ECDH-SS + A256KW',
     ];
 
     /**

@@ -40,7 +40,37 @@ header parameter and the `Base IV` of the key (RFC 9052 §3.1). `examples/04-enc
 - **`Key::assertUsableWithAny()`** is the form of `assertUsableWith()` that accepts an operation under several names:
   RFC 9053 §4 lets a content encryption key carry `encrypt` or `wrap key`, `decrypt` or `unwrap key`.
 
-The key management algorithms of RFC 9053 §5–6 are not part of this release; see issue #201.
+**Key management is implemented.** The content key distribution methods of RFC 9053 §5–6 ship in
+`Cose\Algorithm\KeyManagement`, one interface per class of RFC 9052 §8.5 under `KeyManagement`: `DirectEncryption`
+(`Direct` -6, `DirectHKDF_SHA256` -10, `DirectHKDF_SHA512` -11, `DirectHKDF_AES128` -12, `DirectHKDF_AES256` -13),
+`KeyWrap` (`A128KW` -3, `A192KW` -4, `A256KW` -5) and `KeyAgreement` (`ECDH_ES_HKDF256` -25, `ECDH_ES_HKDF512` -26,
+`ECDH_SS_HKDF256` -27, `ECDH_SS_HKDF512` -28, `ECDH_ES_A128KW` -29, `ECDH_ES_A192KW` -30, `ECDH_ES_A256KW` -31,
+`ECDH_SS_A128KW` -32, `ECDH_SS_A192KW` -33, `ECDH_SS_A256KW` -34). Each has `recoverKey()` (receiving) and
+`protectKey()` (sending), run against a `RecipientLayer` — the `COSE_recipient` and the algorithm and key length of
+the key it protects. `Hkdf` is the KDF of §5.1 with an injectable PRF (HMAC with the extract step, AES-CBC-MAC
+without it); `KdfContext` builds the `COSE_KDF_Context` of §5.2 exactly; `EllipticCurveDiffieHellman` computes the
+agreement on P-256, P-384, P-521, X25519, X448 and the Brainpool curves, validates an EC2 point before any scalar
+multiplication (`Ec2Key::isOnCurve()` / `assertOnCurve()`, new) and refuses an all-zero OKP secret.
+`EncryptStructure::encryptFor()` encrypts for N recipients in one call, from `Cose\Encryption\Recipient` inputs.
+`CoseHeaders` gains the labels and accessors of the ECDH and HKDF parameters (-1, -2, -3, -20 to -26) and of the
+`*-sender` parameters of RFC 9360 §3 (`getX5TSender()`, `getX5USender()`, `getX5ChainSender()`). The
+`ecdh-direct-examples`, `ecdh-wrap-examples`, `hkdf-hmac-sha-examples`, `hkdf-aes-examples`, `aes-wrap-examples`,
+`X25519-tests` and `enveloped-tests` fixtures of cose-wg/Examples now run, the layered ones of RFC 8152 Appendix B
+and C.5.4 included; only the three RSAES-OAEP fixtures stay skipped. Points to know:
+
+- **These algorithms enforce the `alg` and `key_ops` restrictions of the key by default**, like the content
+  encryption ones; `direct` enforces nothing, the key being the content key itself.
+- **The recipient rules of RFC 9052 §8.5 are enforced on both sides.** A direct algorithm (`isDirect()`) refuses a
+  sibling recipient, a non-empty ciphertext and nested recipients; `direct` and the AES Key Wrap refuse a non-empty
+  protected bucket; the sending side of `direct+HKDF-*` and `ECDH-SS` refuses to run without a `salt` or a `PartyU
+  nonce`, while the receiving side derives with what the message carries.
+- **The sender's static key of ECDH-SS is the application's to supply** on both sides, through
+  `RecipientLayer::withSenderKey()`; a `static key` (-2) carried in the headers is used only when none is supplied.
+  No chain is validated and no URI is fetched to find it.
+- **New dependency:** [spomky-labs/aes-key-wrap](https://github.com/Spomky-Labs/aes-key-wrap) `^7.0` (RFC 3394),
+  which requires `ext-mbstring`.
+- RSAES-OAEP (-40, -41, -42) and COSE-HPKE are not implemented. See
+  [doc/Usage.md](doc/Usage.md#key-management-algorithms).
 
 **The hash algorithms of RFC 9054 are implemented.** `Cose\Algorithm\Hash` holds `SHA1` (-14), `SHA256_64` (-15),
 `SHA256` (-16), `SHA512_256` (-17), `SHAKE128` (-18), `SHA384` (-43), `SHA512` (-44) and `SHAKE256` (-45), with the
