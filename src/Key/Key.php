@@ -29,6 +29,12 @@ class Key
 
     public const TYPE_OCT = 4;
 
+    /**
+     * The Algorithm Key Pair type of RFC 9964, section 3: a public and a private byte string whose format the "alg"
+     * of the key decides. ML-DSA keys are of this type.
+     */
+    public const TYPE_AKP = 7;
+
     public const TYPE_NAME_OKP = 'OKP';
 
     /**
@@ -54,6 +60,12 @@ class Key
      * The name of key type 4 in the IANA "COSE Key Types" registry (RFC 9053, section 7.3, table 21).
      */
     public const TYPE_NAME_OCT_IANA = 'Symmetric';
+
+    /**
+     * The name of key type 7 in the IANA "COSE Key Types" registry (RFC 9964, section 8.1.2.1), which is also its
+     * JOSE spelling.
+     */
+    public const TYPE_NAME_AKP = 'AKP';
 
     public const KID = 2;
 
@@ -116,6 +128,7 @@ class Key
         self::TYPE_EC2 => [self::TYPE_NAME_EC2_IANA, self::TYPE_NAME_EC2],
         self::TYPE_RSA => [self::TYPE_NAME_RSA],
         self::TYPE_OCT => [self::TYPE_NAME_OCT_IANA, self::TYPE_NAME_OCT],
+        self::TYPE_AKP => [self::TYPE_NAME_AKP],
     ];
 
     /**
@@ -166,6 +179,7 @@ class Key
             self::TYPE_EC2, '2', self::TYPE_NAME_EC2, self::TYPE_NAME_EC2_IANA => new Ec2Key($data),
             self::TYPE_RSA, '3', self::TYPE_NAME_RSA => new RsaKey($data),
             self::TYPE_OCT, '4', self::TYPE_NAME_OCT, self::TYPE_NAME_OCT_IANA => new SymmetricKey($data),
+            self::TYPE_AKP, '7', self::TYPE_NAME_AKP => new AkpKey($data),
             default => self::create($data),
         };
     }

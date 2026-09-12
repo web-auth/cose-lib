@@ -15,15 +15,18 @@ use Cose\Algorithm\Signature\FullySpecified\Ed25519 as FullySpecifiedEd25519;
 use Cose\Algorithm\Signature\FullySpecified\Ed448;
 use Cose\Algorithm\Signature\FullySpecified\ESB256;
 use Cose\Algorithm\Signature\FullySpecified\ESP256;
+use Cose\Algorithm\Signature\MLDSA\MLDSA44;
 use Cose\Algorithm\Signature\RSA\PS256;
 use Cose\Algorithm\Signature\RSA\PS384;
 use Cose\Algorithm\Signature\RSA\PS512;
 use Cose\Algorithm\Signature\RSA\RS1;
 use Cose\Algorithm\Signature\RSA\RS256;
 use Cose\Algorithm\Signature\Signature;
+use Cose\Key\AkpKey;
 use Cose\Key\Key;
 use Cose\Key\RsaKeyValidator;
 use Cose\Structure\X509\X5Chain;
+use Cose\Tests\Algorithm\Signature\MLDSA\Rfc9964Vectors;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -177,6 +180,24 @@ final class CertificateSignatureVerifierTest extends TestCase
                 Certificates::ED448_CERTIFICATE,
                 Certificates::ed448PrivateKey(),
             ];
+        }
+        if (MLDSA44::isSupported()) {
+            // The certificate holds the ML-DSA-44 key of the OpenSSL vectors; the seed is what signs.
+            foreach (Rfc9964Vectors::openSslVectors() as [$identifier, $seed, $pub]) {
+                if ($identifier !== MLDSA44::ID) {
+                    continue;
+                }
+                yield 'ML-DSA-44 (-48)' => [
+                    MLDSA44::create(),
+                    Rfc9964Vectors::mlDsa44Certificate(),
+                    AkpKey::create([
+                        Key::TYPE => Key::TYPE_AKP,
+                        Key::ALG => $identifier,
+                        AkpKey::DATA_PUB => $pub,
+                        AkpKey::DATA_PRIV => $seed,
+                    ]),
+                ];
+            }
         }
     }
 

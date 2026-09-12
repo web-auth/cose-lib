@@ -33,7 +33,8 @@ use function uksort;
  * (integer or name), the order of the members and the compressed or uncompressed form of an EC2 point therefore
  * make no difference: two representations of one key have one thumbprint, and a private key has the thumbprint of
  * its public half. That is what makes the value usable as a "kid", as the "ckt" confirmation method of a CWT
- * (section 5.6) and as the URI of section 5.7.
+ * (section 5.6) and as the URI of section 5.7. The one exception is "alg" on an AKP key, which RFC 9964 section 6
+ * puts among the required members because the type alone does not say what the key is.
  *
  * SHA-256, the hash section 3 requires every implementation to support, is the default; any {@see Hash} may be
  * given instead. The parameter is typed Hash rather than FilterOnlyHash on purpose: a thumbprint is an identifier
@@ -94,9 +95,10 @@ final class Thumbprint
      * "kty" is always the integer of the IANA "COSE Key Types" registry and "crv" the integer of the "COSE Elliptic
      * Curves" registry, whatever form the key names them under; the "y" of an EC2 key is always the coordinate,
      * uncompressed as section 4.2 of RFC 9679 demands; the "x" of an OKP private key that carries none is the
-     * recomputed public key.
+     * recomputed public key. An AKP key (RFC 9964, section 6) contributes "kty", "alg" and "pub".
      *
-     * @throws InvalidArgumentException when the key is of a type RFC 9679 defines no required parameters for
+     * @throws InvalidArgumentException when the key is of a type RFC 9679 defines no required parameters for, or an
+     *                                  AKP key without the "alg" its thumbprint is computed over
      */
     public static function canonicalForm(Key $key): string
     {
@@ -121,6 +123,7 @@ final class Thumbprint
                 Key::TYPE => Key::TYPE_OCT,
                 SymmetricKey::DATA_K => $key->k(),
             ],
+            $key instanceof AkpKey => self::akpMembers($key),
             default => throw new InvalidArgumentException(sprintf(
                 'No COSE Key Thumbprint is defined for a key of type "%s"',
                 $key->type()
@@ -128,6 +131,28 @@ final class Thumbprint
         };
 
         return self::encodeMap($members);
+    }
+
+    /**
+     * RFC 9964, section 6: the required members of an AKP key are "kty", "alg" and "pub" - "alg", which no other key
+     * type includes, because the AKP type says nothing about the algorithm and the same "pub" bytes under another
+     * algorithm would be another key.
+     *
+     * @return array<int, int|string>
+     */
+    private static function akpMembers(AkpKey $key): array
+    {
+        if (! $key->has(Key::ALG)) {
+            throw new InvalidArgumentException(
+                'No COSE Key Thumbprint can be computed for an AKP key without "alg": RFC 9964 section 6 makes it a required member'
+            );
+        }
+
+        return [
+            Key::TYPE => Key::TYPE_AKP,
+            Key::ALG => $key->alg(),
+            AkpKey::DATA_PUB => $key->pub(),
+        ];
     }
 
     /**

@@ -6,6 +6,7 @@ namespace Cose\Tests\CoseWg;
 
 use function array_key_exists;
 use function base64_decode;
+use Cose\Key\AkpKey;
 use Cose\Key\Ec2Key;
 use Cose\Key\Key;
 use Cose\Key\OkpKey;
@@ -43,6 +44,7 @@ final class CoseWgKey
     private const COMMON_LABELS = [
         'kty' => Key::TYPE,
         'kid' => Key::KID,
+        'alg' => Key::ALG,
     ];
 
     private const EC2_LABELS = [
@@ -72,6 +74,10 @@ final class CoseWgKey
         ],
         Key::TYPE_NAME_OCT => self::OCT_LABELS,
         Key::TYPE_NAME_OCT_IANA => self::OCT_LABELS,
+        Key::TYPE_NAME_AKP => [
+            'pub' => AkpKey::DATA_PUB,
+            'priv' => AkpKey::DATA_PRIV,
+        ],
         Key::TYPE_NAME_RSA => [
             'n' => RsaKey::DATA_N,
             'e' => RsaKey::DATA_E,
@@ -138,6 +144,12 @@ final class CoseWgKey
             }
             $data[$label] = match (true) {
                 in_array($parameter, self::TEXT_VALUES, true) => $value,
+                // A key restricted to an algorithm names it the way the fixtures name every algorithm; the COSE_Key
+                // carries the identifier, which is what Key::alg() reads.
+                $parameter === 'alg' => CoseWgAlgorithms::identifierOf($value) ?? throw new LogicException(sprintf(
+                    'The fixture key algorithm "%s" is not one the CoseWgAlgorithms table knows',
+                    $value
+                )),
                 $isHex => self::hex($value, $name),
                 $parameter === 'kid' => $value,
                 default => self::base64url($value, $name),

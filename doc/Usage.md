@@ -1,6 +1,6 @@
 # How to Use COSE Library
 
-This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature, MAC, content encryption and key management algorithms, the cryptographic structures a signature, a MAC or an encryption is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`), [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims) and [RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html) (X.509 certificates: `x5bag`, `x5chain`, `x5t`, `x5u`) and [RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html) (the hash envelope: `payload-hash-alg`, `preimage-content-type`, `payload-location`), the hash algorithms of [RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html), the COSE Key Thumbprint of [RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html) and the version 2 countersignatures of [RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html). Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
+This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature, MAC, content encryption and key management algorithms, the cryptographic structures a signature, a MAC or an encryption is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`), [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims) and [RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html) (X.509 certificates: `x5bag`, `x5chain`, `x5t`, `x5u`) and [RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html) (the hash envelope: `payload-hash-alg`, `preimage-content-type`, `payload-location`), the hash algorithms of [RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html), the COSE Key Thumbprint of [RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html) the version 2 countersignatures of [RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html) and the ML-DSA post-quantum signatures and AKP key type of [RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html). Every algorithm and key type table of this guide carries a *Reference* column naming the RFC and the section that define the row.
 
 The six COSE message types themselves come from [spomky-labs/cbor-php](https://github.com/Spomky-Labs/cbor-php) 3.4.0 or later, as `CBOR\Tag\CoseSign1Tag` and its siblings. The `Cose\...Tag` classes this library used to ship are deprecated since 4.8.0 and removed in 5.0.0 — see [Upgrading from the Cose\...Tag classes](#upgrading-from-the-cosetag-classes).
 
@@ -32,6 +32,7 @@ The key management algorithms of RFC 9053 §5–6 — `direct`, HKDF, AES Key Wr
 - [Upgrading from the Cose\...Tag classes](#upgrading-from-the-cosetag-classes)
 - [Supported Algorithms](#supported-algorithms)
   - [Fully-Specified Algorithms](#fully-specified-algorithms)
+  - [ML-DSA](#ml-dsa)
   - [Signature Verification Contract](#signature-verification-contract)
   - [Key Restrictions (alg and key_ops)](#key-restrictions-alg-and-key_ops)
   - [Key Types](#key-types)
@@ -1372,6 +1373,109 @@ $manager = Manager::create()->add(
 );
 ```
 
+### ML-DSA
+
+[RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html) registers ML-DSA, the module-lattice signature scheme of
+FIPS 204, for COSE — the first post-quantum signature in the registry — together with the key type it is carried
+in, AKP (see [Key Types](#key-types)). The three parameter sets live in the `Cose\Algorithm\Signature\MLDSA`
+namespace.
+
+| Algorithm | Identifier | Description | Reference |
+|-----------|------------|-------------|-----------|
+| ML-DSA-44 | -48 | ML-DSA with the FIPS 204 parameter set of security category 2 — 1312-byte public key, 2420-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
+| ML-DSA-65 | -49 | ML-DSA with the parameter set of security category 3 — 1952-byte public key, 3309-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
+| ML-DSA-87 | -50 | ML-DSA with the parameter set of security category 5 — 2592-byte public key, 4627-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
+
+The three are *pure* ML-DSA (FIPS 204 algorithm 2) with the empty context string, which is all RFC 9964 allows:
+HashML-DSA is not registered (§7.2 explains why), and a non-empty `ctx` is forbidden (§5). The private key is the
+32-byte seed of FIPS 204 (§4) and nothing else: the expanded private key of FIPS 204 is not a representation the RFC
+allows, and `AkpKey` refuses a `priv` of that size.
+
+#### Keys
+
+An ML-DSA key is an `AkpKey`: `kty` 7, the **required** `alg` naming the parameter set, `pub` (-1) holding the
+encoded public key of FIPS 204 §7.2, and, on the signing side, `priv` (-2) holding the seed. The algorithm expands
+a seed into the key pair, which is how a key is generated — from `random_bytes(32)` — and how a stored seed is
+turned back into a key:
+
+```php
+use Cose\Algorithm\Signature\MLDSA\MLDSA65;
+use Cose\Key\AkpKey;
+use Cose\Key\Key;
+
+$algorithm = MLDSA65::create();
+
+$key = $algorithm->keyPairFromSeed(random_bytes(32));   // AkpKey: alg -49, pub (1952 bytes), priv (the seed)
+$key->pub();                                            // FIPS 204 pkEncode() output
+$key->priv();                                           // the 32-byte seed
+$key->toPublic();                                       // the same key without "priv"
+
+// The key as it travels, or as a stored credential is rebuilt:
+$key = AkpKey::create([
+    Key::TYPE => Key::TYPE_AKP,
+    Key::ALG => MLDSA65::ID,
+    AkpKey::DATA_PUB => $pub,
+    AkpKey::DATA_PRIV => $seed,   // omitted on the verifying side
+]);
+```
+
+`Key::createFromData()` dispatches `kty` 7 — as the integer, the `'7'` string cbor-php decodes it to, or the name
+`AKP` — to `AkpKey`. `asPEM()` writes the RFC 9881 forms OpenSSL reads: a seed-only PrivateKeyInfo (the `seed [0]`
+choice of `ML-DSA-PrivateKey`) for a private key, a SubjectPublicKeyInfo for a public one. `PublicKeyLoader` reads
+the SubjectPublicKeyInfo back, from a bare structure or from the certificate a classical CA issued for the key, into
+an `AkpKey` carrying the `alg` the OID names. A certificate *signed* with ML-DSA cannot be read yet:
+spomky-labs/pki-framework does not know the ML-DSA signature algorithm identifiers.
+
+#### Signing and verifying
+
+```php
+$signature = $algorithm->sign((string) $toBeSigned, $key);                          // 3309 bytes for ML-DSA-65
+$isValid = $algorithm->verify((string) $toBeSigned, $key->toPublic(), $signature);  // bool
+```
+
+Signing is randomised (the *hedged* variant of FIPS 204, OpenSSL's default): two signatures over the same input
+differ, and both verify.
+
+#### What is checked before OpenSSL is called
+
+- `AkpKey` rejects, when the key is built, a `pub` whose length is not the one of the parameter set named by `alg`
+  and a `priv` that is not 32 bytes (RFC 9964 §4, §5, §7.3: "the seed length check MUST be performed"). A malformed
+  key is therefore refused when it is first seen, as the [verification contract](#signature-verification-contract)
+  promises for every key type.
+- The algorithm refuses an AKP key without `alg`: the type says nothing about the algorithm, and §3 makes the
+  parameter REQUIRED. It also refuses a key whose `alg` is another parameter set, whether or not the
+  [key restrictions](#key-restrictions-alg-and-key_ops) are enforced — for this key type, `alg` is what `crv` is to
+  an EC2 key, not a usage restriction laid over it. With the restrictions enforced, `key_ops` is checked as for any
+  algorithm.
+- When the key carries both halves, the public key is recomputed from the seed and compared in constant time: a
+  mismatched pair (§7.4, whose consequences "can range from operations failing to private key compromise") is
+  rejected on both `sign()` and `verify()`.
+- A signature of any length other than the table's is invalid (FIPS 204 algorithm 3, step 1) — `verify()` returns
+  `false` without loading the key.
+
+#### The platform gate
+
+ML-DSA is computed by OpenSSL, which ships it in its default provider as of **3.5**, and needs the digest-less
+`openssl_sign()` that PHP only offers as of **8.4**. `OPENSSL_VERSION_TEXT` reports the headers PHP was compiled
+against, not the library it loaded — a PHP built against 3.0 and running on 3.5 is common — so the OpenSSL check is
+a runtime probe: an ML-DSA key is loaded once per process. `MLDSA44::isSupported()`, which the three classes share,
+answers for both conditions; `create()` throws a `RuntimeException` naming the missing piece. Register the
+algorithms conditionally when the platform is not known in advance:
+
+```php
+use Cose\Algorithm\Signature\MLDSA\MLDSA44;
+use Cose\Algorithm\Signature\MLDSA\MLDSA65;
+use Cose\Algorithm\Signature\MLDSA\MLDSA87;
+
+if (MLDSA44::isSupported()) {
+    $manager->add(MLDSA44::create(), MLDSA65::create(), MLDSA87::create());
+}
+```
+
+The thumbprint of an AKP key is computed over `kty`, `alg` and `pub` (RFC 9964 §6), see
+[Key Thumbprints](#key-thumbprints). [`examples/16-ml-dsa.php`](../examples/16-ml-dsa.php) reproduces the
+COSE example of RFC 9964 Appendix A, thumbprint included, and signs a COSE_Sign1 with a fresh key.
+
 ### Signature Verification Contract
 
 `Cose\Algorithm\Signature\Signature::verify()` is total for every condition the governing specifications define as an
@@ -1481,7 +1585,7 @@ throws instead of being cast to `0`, an identifier no algorithm is registered un
 
 ### Key Types
 
-The `Cose\Key` classes cover the four key types of the IANA
+The `Cose\Key` classes cover the five key types of the IANA
 [COSE Key Types](https://www.iana.org/assignments/cose/cose.xhtml#key-type) registry that the algorithms above use.
 `Key::createFromData()` picks the class from `kty` (label 1), and the parameter labels are the `DATA_*` constants of
 each class — `Ec2Key::DATA_X` is -2, `RsaKey::DATA_N` is -1, and so on.
@@ -1492,6 +1596,13 @@ each class — `Ec2Key::DATA_X` is -2, `RsaKey::DATA_N` is -1, and so on.
 | EC2 | 2 | `Cose\Key\Ec2Key` | `crv` (-1), `x` (-2), `y` (-3), `d` (-4) | [RFC 9053 §7.1.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1.1) |
 | RSA | 3 | `Cose\Key\RsaKey` | `n` (-1), `e` (-2), `d` (-3), `p` (-4), `q` (-5), `dP` (-6), `dQ` (-7), `qInv` (-8), `other` (-9), `r_i` (-10), `d_i` (-11), `t_i` (-12) | [RFC 8230 §4](https://www.rfc-editor.org/rfc/rfc8230#section-4) |
 | Symmetric | 4 | `Cose\Key\SymmetricKey` | `k` (-1) | [RFC 9053 §7.3](https://www.rfc-editor.org/rfc/rfc9053#section-7.3) |
+| AKP | 7 | `Cose\Key\AkpKey` | `pub` (-1), `priv` (-2) | [RFC 9964 §3](https://www.rfc-editor.org/rfc/rfc9964#section-3) |
+
+An AKP key is a pair of byte strings whose format the algorithm decides, so `alg` is a **required** parameter of the
+type (RFC 9964 §3) rather than the optional restriction it is elsewhere; the class accepts a key without it, so that a
+map read from the wire can be inspected, and every consumer of the key refuses it. For the ML-DSA algorithms, `pub`
+is the encoded public key of FIPS 204 and `priv` the 32-byte seed, with the sizes checked against `alg` when the key
+is built — see [ML-DSA](#ml-dsa).
 
 The curves an `OkpKey` or an `Ec2Key` may carry in `crv`, with the `CURVE_*` constant naming each value:
 
@@ -1637,9 +1748,14 @@ the key was decoded from is never re-encoded, so:
 | EC2 | `kty` (1), `crv` (-1), `x` (-2), `y` (-3) | [RFC 9679 §4.2](https://www.rfc-editor.org/rfc/rfc9679#section-4.2) |
 | RSA | `kty` (1), `n` (-1), `e` (-2) | [RFC 9679 §4.3](https://www.rfc-editor.org/rfc/rfc9679#section-4.3) |
 | Symmetric | `kty` (1), `k` (-1) | [RFC 9679 §4.4](https://www.rfc-editor.org/rfc/rfc9679#section-4.4) |
+| AKP | `kty` (1), `alg` (3), `pub` (-1) | [RFC 9964 §6](https://www.rfc-editor.org/rfc/rfc9964#section-6) |
 
-A generic `Cose\Key\Key` of another type — HSS-LMS (5), AKP (7) — has no thumbprint here and `Thumbprint::of()`
-refuses it; RFC 9679 §4.6 defers those to the specifications of the types.
+The AKP row is the one place `alg` is part of the digest: RFC 9679 §4.6 defers the required parameters of any other
+key type to its own specification, and RFC 9964 §6 lists `alg` among them, because the AKP type alone does not say
+what the key is — the same `pub` bytes under another algorithm would be another key. An AKP key without `alg` has no
+thumbprint and `Thumbprint::of()` refuses it. The `kid` of every COSE example of RFC 9964 Appendix A.2 is that
+thumbprint. A generic `Cose\Key\Key` of a type this library has no class for — HSS-LMS (5) — has no thumbprint
+here either.
 
 ```php
 use Cose\Algorithm\Hash\SHA256;
@@ -2352,6 +2468,7 @@ php examples/01-sign1.php
 | `examples/13-x509-header-parameters.php` | RFC 9360: `x5chain`, `x5bag`, `x5t` and `x5u`, and where the library stops |
 | `examples/14-hash-envelope.php` | RFC 9995: a COSE_Sign1 over the SHA-256 of a file, verified, then confirmed against the file |
 | `examples/15-countersignatures.php` | RFC 9338: a notary countersigns a `COSE_Sign1`, an archive countersigns the countersignature, an abbreviated one on a `COSE_Mac0` |
+| `examples/16-ml-dsa.php` | RFC 9964: the ML-DSA example of the RFC reproduced, an AKP key from a seed, a COSE_Sign1 signed with ML-DSA-65, and the platform gate |
 
 The test suite is the rest of the examples, and every one of them is executed on each build:
 
@@ -2372,6 +2489,7 @@ The test suite is the rest of the examples, and every one of them is executed on
 | `tests/CoseWg/Rfc9338FixtureTest.php` | The six examples of RFC 9338 Appendix A, primary signature, MAC or encryption and countersignature alike |
 | `tests/Signature/CountersignTest.php` | The `Countersign_structure` against the RFC 8152 fixtures: same bytes for the two-field targets, different ones for the others |
 | `tests/Signature/CountersignerTest.php` | Both forms on every target, a countersignature of a countersignature, `attach()` through the wire |
+| `tests/Algorithm/Signature/MLDSA/MLDSATest.php` | ML-DSA against the vectors of RFC 9964 Appendix A, of the OpenSSL command line and of NIST ACVP; every key check; both sides of the platform gate |
 | `tests/Signature/CoseSign1CreateAndVerifyTest.php` | EU digital COVID certificate verification |
 | `tests/Structure/DeprecatedTagClassesTest.php` | The deprecation and the upstream replacements |
 
@@ -2389,6 +2507,9 @@ The test suite is the rest of the examples, and every one of them is executed on
 - [RFC 9360 - CBOR Object Signing and Encryption (COSE): Header Parameters for Carrying and Referencing X.509 Certificates](https://www.rfc-editor.org/rfc/rfc9360.html)
 - [RFC 9995 - CBOR Object Signing and Encryption (COSE) Hash Envelope](https://www.rfc-editor.org/rfc/rfc9995.html)
 - [RFC 9338 - CBOR Object Signing and Encryption (COSE): Countersignatures](https://www.rfc-editor.org/rfc/rfc9338.html)
+- [RFC 9964 - ML-DSA for JOSE and COSE](https://www.rfc-editor.org/rfc/rfc9964.html)
+- [RFC 9881 - Internet X.509 Public Key Infrastructure: Algorithm Identifiers for ML-DSA](https://www.rfc-editor.org/rfc/rfc9881.html)
+- [FIPS 204 - Module-Lattice-Based Digital Signature Standard](https://doi.org/10.6028/NIST.FIPS.204)
 - [RFC 3394 - Advanced Encryption Standard (AES) Key Wrap Algorithm](https://www.rfc-editor.org/rfc/rfc3394.html)
 - [RFC 5869 - HMAC-based Extract-and-Expand Key Derivation Function (HKDF)](https://www.rfc-editor.org/rfc/rfc5869.html)
 - [RFC 7748 - Elliptic Curves for Security](https://www.rfc-editor.org/rfc/rfc7748.html)
