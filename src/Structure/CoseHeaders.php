@@ -56,6 +56,7 @@ use Throwable;
  * $hashAlg = $headers->getPayloadHashAlg();          // RFC 9995: -16 when the payload is the SHA-256 of the content
  * $countersignatures = $headers->getCountersignatures(); // RFC 9338: the COSE_Countersignature entries of label 11
  * $receipts = $headers->getReceipts();               // RFC 9942: the COSE receipts, each a CBOR\Tag\CoseSign1Tag
+ * $tst = $headers->get3161Ctt();                     // RFC 9921: the DER of the RFC 3161 token over the signature, or null
  * ```
  *
  * The protected bucket is decoded once, on first use.
@@ -69,6 +70,7 @@ use Throwable;
  * @see https://www.rfc-editor.org/rfc/rfc9995#section-4
  * @see https://www.rfc-editor.org/rfc/rfc9338#section-2
  * @see https://www.rfc-editor.org/rfc/rfc9942#section-2
+ * @see https://www.rfc-editor.org/rfc/rfc9921#section-3
  * @see https://github.com/web-auth/cose-lib/issues/166
  * @see \Cose\Tests\Structure\CoseHeadersTest
  * @see \Cose\Tests\Structure\CountersignatureHeadersTest
@@ -148,6 +150,21 @@ final class CoseHeaders
      * dereferenced by this library.
      */
     public const LABEL_PAYLOAD_LOCATION = 260;
+
+    /**
+     * The "3161-ttc" header parameter of RFC 9921 ("Timestamp, Then COSE"): a DER-encoded RFC 3161 TimeStampToken
+     * whose MessageImprint is the hash of the payload, obtained before the message was signed. Protected bucket
+     * only (RFC 9921 section 3.2); {@see get3161Ttc()} reads it.
+     */
+    public const LABEL_3161_TTC = 269;
+
+    /**
+     * The "3161-ctt" header parameter of RFC 9921 ("COSE, Then Timestamp"): a DER-encoded RFC 3161 TimeStampToken
+     * whose MessageImprint is the hash of the CBOR-encoded "signature" field of a COSE_Sign1, or of the
+     * "signatures" field of a COSE_Sign, obtained after the message was signed. Unprotected bucket only (RFC 9921
+     * section 3.1); {@see get3161Ctt()} reads it.
+     */
+    public const LABEL_3161_CTT = 270;
 
     /**
      * The "receipts" header parameter of RFC 9942: a "Priority ordered sequence of CBOR encoded Receipts", each a
@@ -490,6 +507,80 @@ final class CoseHeaders
         }
 
         return $value->getValue();
+    }
+
+    /**
+     * The "3161-ttc" header parameter (RFC 9921), or null when the message does not carry one: the DER bytes of an
+     * RFC 3161 TimeStampToken obtained over the payload before the message was signed, "Timestamp, Then COSE".
+     *
+     * RFC 9921 section 3.2: "The 3161-ttc COSE _protected_ header parameter MUST be used for the mode described in
+     * Section 2.2", and it "contains a DER-encoded TST [RFC3161] wrapped in a CBOR byte string (Major type 2)". The
+     * placement is not a preference: the token is what the signer commits to, so that the signed statement carries
+     * its own proof of the payload's existence (section 1.1, the transparency use case), and a token the signature
+     * does not cover proves nothing about what was signed. This accessor reads the protected bucket only and rejects
+     * a message that carries the label in the unprotected one. The raw lookup,
+     * getUnprotectedHeaderParameter(CoseHeaders::LABEL_3161_TTC), is the lenient form.
+     *
+     * The bytes are handed back as carried, and nothing inside them is read here:
+     * {@see \Cose\Structure\Timestamp\TimeStampToken::fromDER()} parses the TSTInfo, and
+     * {@see \Cose\Structure\Timestamp\TimestampBinding::matchesTtc()} is the check of section 4 that the
+     * MessageImprint is the hash of the payload. Whether the TSA's signature on the token is valid, and whether the
+     * TSA is trusted, is the application's to establish with a CMS implementation; this library does neither.
+     *
+     * Section 5.1: a token in this bucket "prov[es] the existence of payload data at an earlier point in time", not
+     * the existence of the signature. "Validators must not interpret protected-header payload timestamps as proof of
+     * signature creation time".
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9921#section-3.2
+     * @see https://www.rfc-editor.org/rfc/rfc9921#section-5.1
+     */
+    public function get3161Ttc(): ?string
+    {
+        if ($this->getUnprotectedHeaderParameter(self::LABEL_3161_TTC) !== null) {
+            throw new InvalidArgumentException(
+                'Invalid "3161-ttc" header parameter. It shall be present in the protected header only (RFC 9921 section 3.2); a timestamp token the signature does not cover proves nothing about what was signed.'
+            );
+        }
+        $value = $this->getProtectedHeaderParameter(self::LABEL_3161_TTC);
+
+        return $value === null ? null : self::timeStampTokenValue($value, '3161-ttc', 'RFC 9921 section 3.2');
+    }
+
+    /**
+     * The "3161-ctt" header parameter (RFC 9921), or null when the message does not carry one: the DER bytes of an
+     * RFC 3161 TimeStampToken obtained over the signature after the message was signed, "COSE, Then Timestamp".
+     *
+     * RFC 9921 section 3.1: "The 3161-ctt COSE _unprotected_ header parameter MUST be used for the mode described in
+     * Section 2.1", and it "contains a DER-encoded TST [RFC3161] wrapped in a CBOR byte string (Major type 2)". It
+     * cannot sit anywhere else: the token is computed over the signature, and the signature is computed over the
+     * protected bucket, so a token in the protected bucket would have to predate the signature it timestamps. This
+     * accessor reads the unprotected bucket only and rejects a message that carries the label in the protected one.
+     * The raw lookup, getProtectedHeaderParameter(CoseHeaders::LABEL_3161_CTT), is the lenient form.
+     *
+     * The bytes are handed back as carried, and nothing inside them is read here:
+     * {@see \Cose\Structure\Timestamp\TimeStampToken::fromDER()} parses the TSTInfo, and
+     * {@see \Cose\Structure\Timestamp\TimestampBinding::matchesCtt()} is the check of section 4 that the
+     * MessageImprint is the hash of the CBOR-encoded "signature" field of the COSE_Sign1, or of the "signatures"
+     * field of the COSE_Sign. Whether the TSA's signature on the token is valid, and whether the TSA is trusted, is
+     * the application's to establish with a CMS implementation; this library does neither.
+     *
+     * Section 5: "an attacker could manipulate the unprotected header by removing or replacing the timestamp. To
+     * avoid that, the COSE Signed Message should be integrity protected during transit and at rest." A message
+     * without the parameter is a message without a timestamp, which is what null says.
+     *
+     * @see https://www.rfc-editor.org/rfc/rfc9921#section-3.1
+     * @see https://www.rfc-editor.org/rfc/rfc9921#section-5
+     */
+    public function get3161Ctt(): ?string
+    {
+        if ($this->getProtectedHeaderParameter(self::LABEL_3161_CTT) !== null) {
+            throw new InvalidArgumentException(
+                'Invalid "3161-ctt" header parameter. It shall be present in the unprotected header only (RFC 9921 section 3.1); a timestamp token over the signature cannot be under the signature.'
+            );
+        }
+        $value = $this->getUnprotectedHeaderParameter(self::LABEL_3161_CTT);
+
+        return $value === null ? null : self::timeStampTokenValue($value, '3161-ctt', 'RFC 9921 section 3.1');
     }
 
     /**
@@ -1065,6 +1156,32 @@ final class CoseHeaders
         }
 
         return $value->getValue();
+    }
+
+    /**
+     * "A DER-encoded TST [RFC3161] wrapped in a CBOR byte string" (RFC 9921 sections 3.1 and 3.2): a byte string,
+     * and not an empty one, since no DER encoding is.
+     */
+    private static function timeStampTokenValue(CBORObject $value, string $parameter, string $reference): string
+    {
+        if (! $value instanceof ByteStringObject && ! $value instanceof IndefiniteLengthByteStringObject) {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The value shall be a DER-encoded TimeStampToken wrapped in a byte string (%s), got "%s".',
+                $parameter,
+                $reference,
+                get_debug_type($value)
+            ));
+        }
+        $token = $value->getValue();
+        if ($token === '') {
+            throw new InvalidArgumentException(sprintf(
+                'Invalid "%s" header parameter. The value shall be a DER-encoded TimeStampToken wrapped in a byte string (%s), got an empty byte string.',
+                $parameter,
+                $reference
+            ));
+        }
+
+        return $token;
     }
 
     /**

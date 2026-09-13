@@ -7,6 +7,7 @@ namespace Cose\Tests\Structure;
 use CBOR\ByteStringObject;
 use CBOR\CBORObject;
 use CBOR\Decoder;
+use CBOR\IndefiniteLengthByteStringObject;
 use CBOR\IndefiniteLengthMapObject;
 use CBOR\IndefiniteLengthTextStringObject;
 use CBOR\ListObject;
@@ -47,6 +48,7 @@ use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use function sprintf;
 
 /**
  * The header reader, on the six COSE messages of cbor-php 3.4.0.
@@ -1502,6 +1504,203 @@ final class CoseHeadersTest extends TestCase
         yield 'a byte string' => [ByteStringObject::create('https://sbom.example/manifest.spdx.json')];
         yield 'an integer' => [UnsignedIntegerObject::create(1)];
         yield 'a tagged URI' => [UriTag::create(TextStringObject::create('https://sbom.example/manifest.spdx.json'))];
+    }
+
+    /**
+     * RFC 9921 section 3: "3161-ttc" (269) is read from the protected bucket, "3161-ctt" (270) from the unprotected
+     * one, each as the DER bytes it wraps. The parameters are defined for COSE_Sign and COSE_Sign1; the reader does
+     * not care which message the buckets belong to.
+     *
+     * @param class-string<AbstractCoseTag> $class
+     */
+    #[Test]
+    #[DataProvider('getSignedMessageClasses')]
+    public function theRfc3161TokensAreReadFromTheirBuckets(string $class): void
+    {
+        // Given: {269: h'ttc'} protected, {270: h'ctt'} unprotected
+        $protectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_3161_TTC), ByteStringObject::create("\x30\x03\x02\x01\x01")),
+        ]);
+        $unprotectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_3161_CTT), ByteStringObject::create("\x30\x03\x02\x01\x02")),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message($class, ByteStringObject::create((string) $protectedHeader), $unprotectedHeader)
+        );
+
+        // Then
+        static::assertSame(269, CoseHeaders::LABEL_3161_TTC);
+        static::assertSame(270, CoseHeaders::LABEL_3161_CTT);
+        static::assertSame("\x30\x03\x02\x01\x01", $headers->get3161Ttc());
+        static::assertSame("\x30\x03\x02\x01\x02", $headers->get3161Ctt());
+
+        // and a message without them answers null
+        $none = CoseHeaders::fromMessage(self::message($class, ByteStringObject::create('')));
+        static::assertNull($none->get3161Ttc());
+        static::assertNull($none->get3161Ctt());
+    }
+
+    /**
+     * @return iterable<string, array{class-string<AbstractCoseTag>}>
+     */
+    public static function getSignedMessageClasses(): iterable
+    {
+        yield 'COSE_Sign1' => [CoseSign1Tag::class];
+        yield 'COSE_Sign' => [CoseSignTag::class];
+    }
+
+    /**
+     * RFC 9921 section 3.2: "The 3161-ttc COSE _protected_ header parameter MUST be used". A copy in the unprotected
+     * bucket, alone or next to the protected one, makes the message malformed; the lenient lookup still answers.
+     *
+     * @param class-string<AbstractCoseTag> $class
+     */
+    #[Test]
+    #[DataProvider('getSignedMessageClasses')]
+    public function aTtcTokenInTheUnprotectedBucketIsRejected(string $class): void
+    {
+        // Given: {} protected, {269: h'...'} unprotected
+        $unprotectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_3161_TTC), ByteStringObject::create("\x30\x00")),
+        ]);
+        $headers = CoseHeaders::fromMessage(self::message($class, ByteStringObject::create(''), $unprotectedHeader));
+
+        // Then
+        static::assertNotNull($headers->getUnprotectedHeaderParameter(CoseHeaders::LABEL_3161_TTC));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "3161-ttc" header parameter. It shall be present in the protected header only (RFC 9921 section 3.2); a timestamp token the signature does not cover proves nothing about what was signed.');
+        $headers->get3161Ttc();
+    }
+
+    #[Test]
+    public function aTtcTokenInBothBucketsIsRejected(): void
+    {
+        // Given: {269: h'...'} protected, {269: h'...'} unprotected
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_3161_TTC), ByteStringObject::create("\x30\x00")),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header), $header)
+        );
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "3161-ttc" header parameter. It shall be present in the protected header only (RFC 9921 section 3.2)');
+        $headers->get3161Ttc();
+    }
+
+    /**
+     * RFC 9921 section 3.1: "The 3161-ctt COSE _unprotected_ header parameter MUST be used". A copy in the
+     * protected bucket cannot be a token over the signature, since the signature is computed over that bucket.
+     *
+     * @param class-string<AbstractCoseTag> $class
+     */
+    #[Test]
+    #[DataProvider('getSignedMessageClasses')]
+    public function aCttTokenInTheProtectedBucketIsRejected(string $class): void
+    {
+        // Given: {270: h'...'} protected, {} unprotected
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_3161_CTT), ByteStringObject::create("\x30\x00")),
+        ]);
+        $headers = CoseHeaders::fromMessage(self::message($class, ByteStringObject::create((string) $header)));
+
+        // Then
+        static::assertNotNull($headers->getProtectedHeaderParameter(CoseHeaders::LABEL_3161_CTT));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "3161-ctt" header parameter. It shall be present in the unprotected header only (RFC 9921 section 3.1); a timestamp token over the signature cannot be under the signature.');
+        $headers->get3161Ctt();
+    }
+
+    #[Test]
+    public function aCttTokenInBothBucketsIsRejected(): void
+    {
+        // Given: {270: h'...'} protected, {270: h'...'} unprotected
+        $header = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_3161_CTT), ByteStringObject::create("\x30\x00")),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $header), $header)
+        );
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid "3161-ctt" header parameter. It shall be present in the unprotected header only (RFC 9921 section 3.1)');
+        $headers->get3161Ctt();
+    }
+
+    /**
+     * "a DER-encoded TST [RFC3161] wrapped in a CBOR byte string (Major type 2)": anything else, and an empty byte
+     * string, which no DER encoding is, are rejected by both accessors.
+     */
+    #[Test]
+    #[DataProvider('getInvalidTimeStampTokenValues')]
+    public function aTimeStampTokenThatIsNotAByteStringIsRejected(CBORObject $value, string $message): void
+    {
+        // Given: {269: value} protected, {270: value} unprotected
+        $protectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_3161_TTC), $value),
+        ]);
+        $unprotectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_3161_CTT), $value),
+        ]);
+        $headers = CoseHeaders::fromMessage(
+            self::message(CoseSign1Tag::class, ByteStringObject::create((string) $protectedHeader), $unprotectedHeader)
+        );
+
+        // Then
+        try {
+            $headers->get3161Ttc();
+            static::fail('An InvalidArgumentException was expected for "3161-ttc"');
+        } catch (InvalidArgumentException $e) {
+            static::assertSame(sprintf($message, '3161-ttc', 'RFC 9921 section 3.2'), $e->getMessage());
+        }
+        try {
+            $headers->get3161Ctt();
+            static::fail('An InvalidArgumentException was expected for "3161-ctt"');
+        } catch (InvalidArgumentException $e) {
+            static::assertSame(sprintf($message, '3161-ctt', 'RFC 9921 section 3.1'), $e->getMessage());
+        }
+    }
+
+    /**
+     * @return iterable<string, array{CBORObject, string}>
+     */
+    public static function getInvalidTimeStampTokenValues(): iterable
+    {
+        yield 'a text string' => [
+            TextStringObject::create('MIIVSQYJKoZIhvcNAQcCoIIVOjCCFTYCAQMxDzANBglghkgBZQMEAgMFADCCAYQ'),
+            'Invalid "%s" header parameter. The value shall be a DER-encoded TimeStampToken wrapped in a byte string (%s), got "CBOR\\TextStringObject".',
+        ];
+        yield 'an integer' => [
+            UnsignedIntegerObject::create(1),
+            'Invalid "%s" header parameter. The value shall be a DER-encoded TimeStampToken wrapped in a byte string (%s), got "CBOR\\UnsignedIntegerObject".',
+        ];
+        yield 'an array of byte strings' => [
+            ListObject::create([ByteStringObject::create("\x30\x00")]),
+            'Invalid "%s" header parameter. The value shall be a DER-encoded TimeStampToken wrapped in a byte string (%s), got "CBOR\\ListObject".',
+        ];
+        yield 'an empty byte string' => [
+            ByteStringObject::create(''),
+            'Invalid "%s" header parameter. The value shall be a DER-encoded TimeStampToken wrapped in a byte string (%s), got an empty byte string.',
+        ];
+    }
+
+    /**
+     * An indefinite-length byte string is a byte string (RFC 8949 section 3.2.3); the chunks are joined.
+     */
+    #[Test]
+    public function anIndefiniteLengthTimeStampTokenIsRead(): void
+    {
+        // Given: {270: (_ h'3003', h'020101')} unprotected
+        $token = IndefiniteLengthByteStringObject::create()->append("\x30\x03")->append("\x02\x01\x01");
+        $unprotectedHeader = MapObject::create([
+            MapItem::create(UnsignedIntegerObject::create(CoseHeaders::LABEL_3161_CTT), $token),
+        ]);
+        $headers = CoseHeaders::fromMessage(self::message(CoseSign1Tag::class, ByteStringObject::create(''), $unprotectedHeader));
+
+        // Then
+        static::assertSame("\x30\x03\x02\x01\x01", $headers->get3161Ctt());
     }
 
     /**
