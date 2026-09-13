@@ -30,6 +30,7 @@ use Symfony\Component\VarDumper\Cloner\VarCloner;
 use Symfony\Component\VarDumper\Dumper\CliDumper;
 
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/_diagnostic.php';
 
 /**
  * A freshly generated P-256 key pair, private part included.
@@ -164,6 +165,24 @@ function example_dump(string $label, CBORObject|string $item): void
             }
         }
     );
+}
+
+/**
+ * The same item in CBOR diagnostic notation, annotated with the CDDL of the RFCs.
+ *
+ * This is the view the RFC appendices use for their own examples, so a message printed here can be read against
+ * them line by line: `18([ / protected h'a10126' / << { / alg / 1 : -7 / ES256 / } >>, ...`. The productions the
+ * item instantiates are quoted above it, from the RFC that defines them. See _diagnostic.php.
+ *
+ * @param string|null $as what a bare map is, 'COSE_Key' or 'Claims-Set'; a header map when not said
+ */
+function example_diagnostic(string $label, CBORObject|string $item, ?string $as = null): void
+{
+    if (! $item instanceof CBORObject) {
+        $item = Decoder::create()->decode(StringStream::create($item));
+    }
+    echo $label, ' (diagnostic notation):', PHP_EOL;
+    ExampleDiagnostic::render($item, $as);
 }
 
 /**

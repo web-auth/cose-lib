@@ -47,6 +47,7 @@ $key = Ec2Key::create([
 $canonicalForm = Thumbprint::canonicalForm($key);
 example_hex('canonical COSE_Key', $canonicalForm);
 example_dump('canonical COSE_Key', $canonicalForm);
+example_diagnostic('canonical COSE_Key', $canonicalForm, 'COSE_Key');
 example_assert(
     bin2hex($canonicalForm) === 'a40102200121582065eda5a12577c2bae829437fe338701a10aaa375e1bb5b5de108de439c08551d2258201e52ed75701163f7f9e40ddf9f341b3dc9ba860af7e0ca7ca7e9eecd0084d19c',
     'the canonical form is the one section 6 prints'

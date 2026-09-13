@@ -61,6 +61,7 @@ $message = CoseSign1Tag::create(ListObject::create([
 ]));
 example_hex('COSE_Sign1', (string) $message);
 example_dump('COSE_Sign1', $message);
+example_diagnostic('COSE_Sign1', $message);
 
 // --- the notary countersigns -----------------------------------------------------
 
@@ -71,6 +72,7 @@ $toBeSigned = Countersign::full($target, $es256Protected);
 example_line('context', $toBeSigned->getContext());
 example_hex('Countersign_structure', (string) $toBeSigned);
 example_dump('Countersign_structure', (string) $toBeSigned);
+example_diagnostic('Countersign_structure', (string) $toBeSigned);
 
 // The countersigner's headers are its own: its algorithm, its key identifier. sign() checks that an "alg" they carry
 // is the algorithm in hand, and hands back the COSE_Countersignature -- a COSE_Signature.
@@ -82,6 +84,7 @@ Countersigner::attach($message->getUnprotectedHeader(), $countersignature);
 $encoded = (string) $message;
 example_hex('countersigned', $encoded);
 example_dump('countersigned', $encoded);
+example_diagnostic('countersigned', $encoded);
 echo PHP_EOL;
 
 // --- the receiver verifies both -------------------------------------------------
@@ -132,6 +135,7 @@ $decoded = Decoder::create()->decode(StringStream::create((string) $decoded));
 example_assert($decoded instanceof CoseSign1Tag, 'decoded again as a COSE_Sign1');
 // Label 11 is now a list of two COSE_Countersignature; the first one carries a label 11 of its own.
 example_dump('countersigned twice', $decoded);
+example_diagnostic('countersigned twice', $decoded);
 $target = CountersignTarget::of($decoded);
 $outer = $target->getCountersignatures();
 example_assert(count($outer) === 2, 'the message carries two countersignatures');
@@ -165,6 +169,7 @@ example_line('MAC0 context', Countersign::abbreviated($target)->getContext());
 Countersigner::attach0($mac0->getUnprotectedHeader(), Countersigner::sign0($target, $algorithm, $notary));
 example_hex('countersigned COSE_Mac0', (string) $mac0);
 example_dump('countersigned COSE_Mac0', $mac0);
+example_diagnostic('countersigned COSE_Mac0', $mac0);
 
 $decodedMac0 = Decoder::create()->decode(StringStream::create((string) $mac0));
 example_assert($decodedMac0 instanceof CoseMac0Tag, 'decoded as a COSE_Mac0');

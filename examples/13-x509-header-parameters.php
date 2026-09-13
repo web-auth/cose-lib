@@ -113,6 +113,7 @@ $message = CoseSign1Tag::create(ListObject::create([$protected, $unprotected, $p
 example_hex('COSE_Sign1', (string) $message);
 example_hex('x5t', (string) $thumbprint->toCBOR());
 example_dump('COSE_Sign1', $message);
+example_diagnostic('COSE_Sign1', $message);
 example_assert(
     bin2hex($thumbprint->hashValue()) === '11fa0500d6763ae15a3238296e04c048a8fdd220a0dda0234824b18fb6666600',
     'the thumbprint is the one cose-wg signed-05 carries'

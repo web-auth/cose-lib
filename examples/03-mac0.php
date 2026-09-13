@@ -55,7 +55,9 @@ $encoded = (string) $message;
 example_hex('MAC_structure', (string) $toBeMaced);
 example_hex('COSE_Mac0', $encoded);
 example_dump('MAC_structure', (string) $toBeMaced);
+example_diagnostic('MAC_structure', (string) $toBeMaced);
 example_dump('COSE_Mac0', $message);
+example_diagnostic('COSE_Mac0', $message);
 echo PHP_EOL;
 
 // --- verifying ---------------------------------------------------------------
@@ -93,7 +95,9 @@ example_assert(
 example_hex('MAC0 structure', (string) $toBeVerified);
 example_hex('MAC structure', (string) $asMac);
 example_dump('MAC0 structure', (string) $toBeVerified);
+example_diagnostic('MAC0 structure', (string) $toBeVerified);
 example_dump('MAC structure', (string) $asMac);
+example_diagnostic('MAC structure', (string) $asMac);
 
 // --- the same message under AES-CBC-MAC ---------------------------------------
 

@@ -73,6 +73,7 @@ $message = CoseSignTag::create(ListObject::create([
 $encoded = (string) $message;
 example_hex('COSE_Sign', $encoded);
 example_dump('COSE_Sign', $message);
+example_diagnostic('COSE_Sign', $message);
 echo PHP_EOL;
 
 // --- verifying -------------------------------------------------------------

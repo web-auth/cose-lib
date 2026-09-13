@@ -146,6 +146,7 @@ $message = CoseSign1Tag::create(ListObject::create([
 ]));
 example_line('COSE_Sign1', strlen((string) $message) . ' bytes');
 example_dump('COSE_Sign1', $message);
+example_diagnostic('COSE_Sign1', $message);
 
 $decoded = Decoder::create()->decode(StringStream::create((string) $message));
 example_assert($decoded instanceof CoseSign1Tag, 'decoded as a COSE_Sign1');

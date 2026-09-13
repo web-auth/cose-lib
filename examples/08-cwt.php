@@ -87,6 +87,7 @@ $message = CoseSign1Tag::create(ListObject::create([
 $encoded = (string) CwtTag::create($message);
 example_hex('CWT', $encoded);
 example_dump('CWT', $encoded);
+example_diagnostic('CWT', $encoded);
 example_assert(str_starts_with(bin2hex($encoded), 'd83d'), 'the outer head is tag 61');
 echo PHP_EOL;
 
@@ -118,6 +119,7 @@ example_assert($typ === 'application/cwt' || $typ === 61, 'the token says it is 
 $claimsInHeader = $headers->getCwtClaims();
 example_assert($claimsInHeader !== null, 'the protected header carries CWT Claims');
 example_dump('protected header', $token->getProtectedHeaderAsMap());
+example_diagnostic('protected header', $token->getProtectedHeaderAsMap());
 example_line('iss (header)', (string) HeaderMapHelper::findLabel($claimsInHeader, 1)?->normalize());
 
 // 2. Verify.
@@ -129,6 +131,7 @@ example_assert(
 
 // 3. Only now, read the claims.
 example_dump('claims', $token->getPayload()->getValue());
+example_diagnostic('claims', $token->getPayload()->getValue(), 'Claims-Set');
 $decodedClaims = Decoder::create()
     ->decode(StringStream::create($token->getPayload()->getValue()))
     ->normalize();

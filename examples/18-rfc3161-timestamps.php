@@ -114,6 +114,7 @@ $ttcMessage = CoseSign1Tag::create(ListObject::create([
 ]));
 example_line('COSE_Sign1 (TTC)', sprintf('%d bytes, of which %d are the token', strlen((string) $ttcMessage), strlen($ttcToken)));
 example_dump('COSE_Sign1 (TTC)', $ttcMessage);
+example_diagnostic('COSE_Sign1 (TTC)', $ttcMessage);
 echo PHP_EOL;
 
 // --- 2. verifying a TTC message: the signature first, then the binding, then what it means -------------------------
@@ -200,6 +201,7 @@ $cttMessage = CoseSign1Tag::create(ListObject::create([
 $headers = CoseHeaders::fromMessage($cttMessage);
 example_assert($headers->get3161Ctt() === $cttToken, 'get3161Ctt() reads the token from the unprotected bucket');
 example_dump('COSE_Sign1 (CTT)', $cttMessage);
+example_diagnostic('COSE_Sign1 (CTT)', $cttMessage);
 example_assert($binding->matchesCtt($headers, $cttMessage), 'the token is a token over the signature field of this message');
 example_assert($binding->matches($headers, $cttMessage), 'matches() runs whichever modes the message carries');
 example_line('proves', 'the signature existed at genTime, if the TSA is trusted; the time of the signature, not of the payload');

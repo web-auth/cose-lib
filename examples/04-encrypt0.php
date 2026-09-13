@@ -59,6 +59,7 @@ $unprotectedHeader = MapObject::create([
 $structure = Encrypt0Structure::create($protectedHeader);
 example_hex('Enc_structure', (string) $structure);
 example_dump('Enc_structure', (string) $structure);
+example_diagnostic('Enc_structure', (string) $structure);
 
 // RFC 9053 section 4.1: the ciphertext is followed by the 16-byte authentication tag.
 $ciphertext = $structure->encrypt($algorithm, $key, $plaintext, $nonce);
@@ -73,6 +74,7 @@ $message = CoseEncrypt0Tag::create(ListObject::create([
 $encoded = (string) $message;
 example_hex('COSE_Encrypt0', $encoded);
 example_dump('COSE_Encrypt0', $message);
+example_diagnostic('COSE_Encrypt0', $message);
 echo PHP_EOL;
 
 // --- decrypting -------------------------------------------------------------
@@ -132,6 +134,7 @@ $message = CoseEncrypt0Tag::create(ListObject::create([
 ]));
 example_hex('with a Partial IV', (string) $message);
 example_dump('with a Partial IV', $message);
+example_diagnostic('with a Partial IV', $message);
 
 $decoded = Decoder::create()->decode(StringStream::create((string) $message));
 example_assert($decoded instanceof CoseEncrypt0Tag, 'decoded as a COSE_Encrypt0');

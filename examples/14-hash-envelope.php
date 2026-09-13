@@ -77,6 +77,7 @@ $encoded = (string) $message;
 example_hex('payload (SHA-256)', $payload->getValue());
 example_hex('COSE_Sign1', $encoded);
 example_dump('COSE_Sign1', $message);
+example_diagnostic('COSE_Sign1', $message);
 example_assert(strlen($encoded) < strlen($content), 'the envelope is smaller than the content it stands for');
 echo PHP_EOL;
 

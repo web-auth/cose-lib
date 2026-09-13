@@ -62,7 +62,9 @@ $encoded = (string) $message;
 example_hex('Sig_structure', (string) $toBeSigned);
 example_hex('COSE_Sign1', $encoded);
 example_dump('Sig_structure', (string) $toBeSigned);
+example_diagnostic('Sig_structure', (string) $toBeSigned);
 example_dump('COSE_Sign1', $message);
+example_diagnostic('COSE_Sign1', $message);
 echo PHP_EOL;
 
 // --- verifying -------------------------------------------------------------
@@ -81,6 +83,7 @@ example_assert(
     'the protected header declares ES256'
 );
 example_dump('protected header', $decoded->getProtectedHeaderAsMap());
+example_diagnostic('protected header', $decoded->getProtectedHeaderAsMap());
 example_line('kid', (string) $headers->getHeaderParameter(4)?->getValue());
 
 $decodedPayload = $decoded->getPayload();

@@ -73,6 +73,7 @@ $x5t = ListObject::create([
 ]);
 example_hex('x5t', (string) $x5t);
 example_dump('x5t', $x5t);
+example_diagnostic('x5t', $x5t);
 example_assert(
     bin2hex($thumbprint) === '11fa0500d6763ae15a3238296e04c048a8fdd220a0dda0234824b18fb6666600',
     'the thumbprint is the one the cose-wg signed-05 fixture carries'
