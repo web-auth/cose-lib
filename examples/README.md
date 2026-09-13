@@ -33,6 +33,7 @@ Every CBOR item is printed as hex in full, never truncated, so it can be pasted 
 | [`15-countersignatures.php`](15-countersignatures.php) | RFC 9338: a notary countersigns a `COSE_Sign1`, an archive countersigns the countersignature, an abbreviated countersignature on a `COSE_Mac0`, and what the reader refuses |
 | [`16-ml-dsa.php`](16-ml-dsa.php) | RFC 9964: ML-DSA over the AKP key type: the example of the RFC reproduced (public key, signature, thumbprint as `kid`), a COSE_Sign1 signed with a fresh ML-DSA-65 key, what is refused before OpenSSL is called, and the platform gate |
 | [`17-receipts.php`](17-receipts.php) | RFC 9942: a receipt of inclusion and a receipt of consistency over the Certificate Transparency test tree: `receipts`, `vds`, `vdp`, the two-step verification, a tampered proof, an unregistered structure, and what the library leaves to the application |
+| [`18-rfc3161-timestamps.php`](18-rfc3161-timestamps.php) | RFC 9921: the `TimeStampReq` of Appendix A.1 rebuilt byte for byte and its token bound to the payload (`3161-ttc`), a token over a fresh signature (`3161-ctt`), what each proves, a token in the wrong bucket, a SHA-1 token, the Appendix A.2 token that does not bind, and what the library leaves to a CMS implementation |
 
 ## What the library does and does not do
 

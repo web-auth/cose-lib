@@ -71,7 +71,7 @@ final class RfcReferencesTest extends TestCase
     /**
      * The RFCs the library implements, as the README and composer.json have to declare them.
      */
-    private const IMPLEMENTED_RFCS = [9052, 9053, 8230, 8812, 9864, 9596, 9597, 9054, 9679, 9360, 9995, 9338, 9964, 9942];
+    private const IMPLEMENTED_RFCS = [9052, 9053, 8230, 8812, 9864, 9596, 9597, 9054, 9679, 9360, 9995, 9338, 9964, 9942, 9921];
 
     /**
      * Identifier => [documented name, RFC number, section]. The section is the one the RFC itself defines the
@@ -356,8 +356,9 @@ final class RfcReferencesTest extends TestCase
         }
 
         foreach (self::tablesWithColumn($document, 'Reference') as $table) {
-            static::assertFalse(
-                isset($table[0]['Algorithm'], $table[0]['Identifier']),
+            static::assertArrayNotHasKey(
+                'Algorithm',
+                $table[0],
                 sprintf('%s carries an algorithm table; the tables belong in %s', $document, self::ALGORITHMS_DOCUMENT)
             );
         }

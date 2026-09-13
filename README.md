@@ -31,6 +31,8 @@ This library implements:
   AKP key type
 - **[RFC 9942](https://www.rfc-editor.org/rfc/rfc9942.html)** - COSE Receipts: the `receipts`, `vds` and `vdp` header
   parameters and the `RFC9162_SHA256` verifiable data structure
+- **[RFC 9921](https://www.rfc-editor.org/rfc/rfc9921.html)** - COSE Header Parameter for Timestamp Tokens as
+  Defined in RFC 3161: `3161-ttc` and `3161-ctt`, carried and bound to the message, not validated
 
 Every identifier the library ships is listed with the RFC section that defines it in
 [Supported Algorithms](doc/Algorithms.md), and a test keeps that list in step with the classes and with the IANA
@@ -135,6 +137,7 @@ The [documentation index](doc/README.md) lists every chapter:
 | [X.509 Header Parameters](doc/X509.md) | `x5bag`, `x5chain`, `x5t`, `x5u`, and where the library stops |
 | [Hash Envelope](doc/HashEnvelope.md) | RFC 9995: a signature over the digest of a payload kept elsewhere |
 | [COSE Receipts](doc/Receipts.md) | RFC 9942: `receipts`, `vds`, `vdp` and the `RFC9162_SHA256` Merkle proofs, and where the library stops |
+| [RFC 3161 Timestamp Tokens](doc/Timestamps.md) | RFC 9921: `3161-ttc` and `3161-ctt`, the message imprint of each mode, and where the library stops |
 | [Supported Algorithms](doc/Algorithms.md) | Every identifier with its RFC reference; the `Manager` |
 | [Keys](doc/Keys.md) | Key types and curves, AKP keys, `alg` / `key_ops` restrictions, key validation, thumbprints |
 | [Upgrading](doc/Upgrading.md) | Moving off the deprecated `Cose\...Tag` classes |
@@ -145,7 +148,7 @@ branches and what changed in each release.
 ## What to know before relying on it
 
 - **The library verifies, it does not decide.** Binding `alg`, processing `crit`, validating a certificate chain,
-  fetching an `x5u` or a `payload-location`, trusting the issuer of a receipt, comparing header claims with payload
+  fetching an `x5u` or a `payload-location`, trusting the issuer of a receipt or a timestamp, comparing header claims with payload
   claims: all of that is the application's, and the documentation says so wherever it applies. No chain is
   validated, no URI is fetched and no trust is established by this library.
 - **Weak-but-needed algorithms warn until acknowledged.** `RS1` (SHA-1), the non-standard `Ed256`/`Ed512`, an HMAC

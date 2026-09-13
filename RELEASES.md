@@ -266,6 +266,36 @@ the test suite. Two decisions to know:
 
 Nothing existing changes. See [doc/Receipts.md](doc/Receipts.md).
 
+**The RFC 3161 timestamp tokens of RFC 9921 are carried and bound, not validated.** `CoseHeaders::get3161Ttc()`
+reads `3161-ttc` (269) from the protected bucket only and `get3161Ctt()` reads `3161-ctt` (270) from the
+unprotected bucket only, each as the DER bytes of the `TimeStampToken` it wraps, `null` when absent; a token in the
+other bucket, a value that is not a byte string, and an empty byte string are rejected, as RFC 9921 §3.1 and §3.2
+place the parameters. The labels are `CoseHeaders::LABEL_3161_TTC` and `LABEL_3161_CTT`. The new namespace
+`Cose\Structure\Timestamp` holds the three classes: `MessageImprint` is the structure of RFC 3161 §2.4.1 and the
+bytes each mode hashes into it, `ttc()` / `ttcInput()` over the payload bytes without their CBOR head, `ctt()` /
+`cttInput()` over the CBOR-encoded `signature` field of a `COSE_Sign1` or the CBOR-encoded `signatures` field of a
+`COSE_Sign`, with the RFC 9054 hash algorithms mapped to their OIDs and `toDER()` for the `TimeStampReq` the
+application builds; `TimeStampToken::fromDER()` is a minimal parser of the CMS `SignedData` down to the `TSTInfo`
+(imprint, policy, serial number, `genTime`, nonce), the content types and the version checked and nothing verified;
+`TimestampBinding` is the check of §4, `matchesTtc()`, `matchesCtt()` and `matches()`, the hash algorithm of the
+token resolved through the application's `Manager` and required to be a `Hash`, so that a token hashed with SHA-1,
+*Filter Only* under RFC 9054 §2, fails even when SHA-1 is registered for `x5t`. **The library never talks to a TSA
+and never validates a token**: the TSA's CMS signature, certificate chain and policy are the application's, as the
+chain of `x5chain` is, and the DER is exposed for a CMS implementation. RFC 9921 §5.1 is applied as written: the two
+modes have separate accessors and separate checks, and the documentation says what each proves and that a CWT
+`iat` is a claim, not a proof of time. The two tokens of RFC 9921 Appendix A are vendored under
+`tests/fixtures/rfc9921/`; the imprints of §3.1.1 and §3.1.2 are reproduced over the `COSE_Sign1` and `COSE_Sign` of
+RFC 9052 Appendix C, and the Appendix A.1 token binds to its payload. One thing to know:
+
+- **The Appendix A.2 token of RFC 9921 does not bind to its own message, and the library says so.** Its imprint,
+  `dd9471ef...`, is not the SHA-256 of the CBOR-encoded signature field, `44c2419d...`, that §3.1.1 computes for the
+  same message: the RFC's example generator hashed the error output of `diag2cbor.rb` on a line-folded diagnostic
+  file instead of the signature, which the test suite reproduces byte for byte. §3.1 and §3.1.1 are what this
+  library implements; the fixtures' README has the full account, and no erratum had been filed at the time of the
+  release.
+
+Nothing existing changes. See [doc/Timestamps.md](doc/Timestamps.md).
+
 **The Brainpool algorithms of RFC 9864 check their curve up front.** The Brainpool curves are compiled out of some
 OpenSSL builds and of every FIPS provider; `ESB256`, `ESB320`, `ESB384` and `ESB512` used to fail on such a build
 inside `sign()` or `verify()`, with an OpenSSL error string. Each now exposes `isSupported()`, backed by
