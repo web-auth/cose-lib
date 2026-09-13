@@ -10,7 +10,7 @@ The content encryption algorithms of [RFC 9053 §4](https://datatracker.ietf.org
 `Cose\Algorithm\ContentEncryption`: `A128GCM`, `A192GCM`, `A256GCM`, the eight AES-CCM variants and
 `ChaCha20Poly1305`, see [Content Encryption Algorithms](Algorithms.md#content-encryption-algorithms). Every one of
 them encrypts with a symmetric key, a nonce whose length the algorithm fixes, and the `Enc_structure` of
-[RFC 9052 §5.3](https://datatracker.ietf.org/doc/html/rfc9052#section-5.3) as additional authenticated data — never
+[RFC 9052 §5.3](https://datatracker.ietf.org/doc/html/rfc9052#section-5.3) as additional authenticated data, never
 the protected header on its own. `Encrypt0Structure` and `EncryptStructure` build that structure and hand it to the
 algorithm through `encrypt()` and `decrypt()`. How the content key reaches the recipients of a `COSE_Encrypt` is the
 subject of [Key Management](KeyManagement.md).
@@ -128,9 +128,9 @@ foreach (CoseRecipient::all($coseEncrypt->getRecipients()) as $recipient) {
 > `[bstr, map, bstr / nil, ? [+ COSE_recipient]]` array. `CoseRecipient::all()` applies that rule, nested levels
 > included.
 
-The recipient entries are filled by the key management algorithms of RFC 9053 §5–6, and
-`EncryptStructure::encryptFor()` runs the whole of it — draw the CEK, wrap or derive it for each recipient, encrypt
-the content, assemble the message — in one call:
+The recipient entries are filled by the key management algorithms of RFC 9053 §5 and §6, and
+`EncryptStructure::encryptFor()` runs the whole of it (draw the CEK, wrap or derive it for each recipient, encrypt
+the content, assemble the message) in one call:
 
 ```php
 use Cose\Algorithm\ContentEncryption\A128GCM;
@@ -146,7 +146,7 @@ $coseEncrypt = EncryptStructure::create($protectedHeader)->encryptFor($algorithm
 ]); // CBOR\Tag\CoseEncryptTag: the IV is in its unprotected bucket, each COSE_recipient carries its "alg"
 ```
 
-Opening it is the reverse, one recipient at a time — the recipient's own key, the algorithm its headers announce,
+Opening it is the reverse, one recipient at a time: the recipient's own key, the algorithm its headers announce,
 and a `RecipientLayer` that says what the recovered key is for:
 
 ```php
@@ -185,8 +185,8 @@ key map, [§7.1](https://datatracker.ietf.org/doc/html/rfc9052#section-7.1)):
 1. left-pad the Partial IV with zeros to the nonce length of the algorithm;
 2. XOR it with the Base IV, itself a prefix of the nonce.
 
-`InitializationVector::resolve()` does both, and rejects a layer carrying the two parameters at once — the RFC says
-they "MUST NOT both be present in the same security layer" — as well as an `IV` of the wrong length:
+`InitializationVector::resolve()` does both, and rejects a layer carrying the two parameters at once (the RFC says
+they "MUST NOT both be present in the same security layer") as well as an `IV` of the wrong length:
 
 ```php
 use Cose\Encryption\InitializationVector;

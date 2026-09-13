@@ -5,8 +5,8 @@
 > [!IMPORTANT]
 > **`payload-location` is never fetched by this library.** [RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html)
 > §5.3 leaves it to the verifier, which "can choose to fetch the content and confirm that the digest of it [...]
-> matches the payload bytes"; how the content is obtained — from that location, from a cache, from a package
-> registry — is the application's, exactly as dereferencing an `x5u` is. `getPayloadLocation()` returns a string,
+> matches the payload bytes"; how the content is obtained (from that location, from a cache, from a package
+> registry) is the application's, exactly as dereferencing an `x5u` is. `getPayloadLocation()` returns a string,
 > and `HashEnvelope::matches()` is the confirmation step once the bytes are in hand.
 
 - [The Three Parameters](#the-three-parameters)
@@ -16,7 +16,7 @@
 ## The Three Parameters
 
 A hash envelope is a `COSE_Sign`, `COSE_Sign1`, `COSE_Mac` or `COSE_Mac0` whose payload is the digest of the
-content rather than the content itself, so that a large artefact — a software bill of materials, a firmware image —
+content rather than the content itself, so that a large artefact (a software bill of materials, a firmware image)
 is hashed once and its signature carried separately ([RFC 9995 §1](https://www.rfc-editor.org/rfc/rfc9995#section-1)).
 Nothing changes in how the message is signed or verified; three header parameters, all in the protected bucket, say
 what the payload is, and each has a typed accessor on `CoseHeaders`:
@@ -27,12 +27,12 @@ what the payload is, and each has a typed accessor on `CoseHeaders`:
 | `preimage-content-type` | 259 (`CoseHeaders::LABEL_PREIMAGE_CONTENT_TYPE`) | `uint / tstr` | [RFC 9995 §3](https://www.rfc-editor.org/rfc/rfc9995#section-3) | `getPreimageContentType(): int\|string\|null` |
 | `payload-location` | 260 (`CoseHeaders::LABEL_PAYLOAD_LOCATION`) | `tstr` | [RFC 9995 §3](https://www.rfc-editor.org/rfc/rfc9995#section-3) | `getPayloadLocation(): ?string` |
 
-`payload-hash-alg` names the hash function by its identifier in the IANA COSE Algorithms registry — the
-[RFC 9054 identifiers](Algorithms.md#hash-algorithms), `-16` for SHA-256. `preimage-content-type` — IANA's name; the CDDL of
-[§4](https://www.rfc-editor.org/rfc/rfc9995#section-4) calls it `payload_preimage_content_type` — is the content type
+`payload-hash-alg` names the hash function by its identifier in the IANA COSE Algorithms registry, the
+[RFC 9054 identifiers](Algorithms.md#hash-algorithms), `-16` for SHA-256. `preimage-content-type` (IANA's name; the CDDL of
+[§4](https://www.rfc-editor.org/rfc/rfc9995#section-4) calls it `payload_preimage_content_type`) is the content type
 of the bytes that were hashed, with the value syntax of `content type` ([RFC 9052 §3.1](https://datatracker.ietf.org/doc/html/rfc9052#section-3.1)):
 a CoAP Content-Format number or a `<type-name>/<subtype-name>` media type name, parameters allowed.
-`payload-location` is "the string or URI hint for the location of the data hashed" — a text string, not required to
+`payload-location` is "the string or URI hint for the location of the data hashed": a text string, not required to
 be a URI.
 
 The placement rules of [RFC 9995 §4](https://www.rfc-editor.org/rfc/rfc9995#section-4) are what the accessors add
@@ -40,7 +40,7 @@ to a raw lookup: "Label 258 (payload_hash_alg) MUST be present in the protected 
 the unprotected header", labels 259 and 260 "MAY be present in the protected header and MUST NOT be present in the
 unprotected header", and "Label 3 (content_type) MUST NOT be present in the protected or unprotected headers". Each
 accessor reads the protected bucket only, throws when its label is found in the unprotected one, and throws when a
-message carrying `payload-hash-alg` also carries `content type` in either bucket — label 3 would describe the
+message carrying `payload-hash-alg` also carries `content type` in either bucket, since label 3 would describe the
 digest, and 259 already describes the content. `getProtectedHeaderParameter(CoseHeaders::LABEL_PAYLOAD_HASH_ALG)`
 is the lenient form.
 
@@ -70,7 +70,7 @@ $signature = ES256::create()->sign((string) Signature1::create($protectedHeader,
 $headers = CoseHeaders::fromMessage($coseSign1);
 $hashAlg = $headers->getPayloadHashAlg();             // -16
 $contentType = $headers->getPreimageContentType();    // "application/spdx+json"
-$location = $headers->getPayloadLocation();           // "https://sbom.example/manifest.spdx.json" — yours to fetch, or not
+$location = $headers->getPayloadLocation();           // "https://sbom.example/manifest.spdx.json"; yours to fetch, or not
 
 $manager = Manager::create()->add(ES256::create(), SHA256::create());
 $envelope = HashEnvelope::create($manager);

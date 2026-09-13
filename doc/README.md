@@ -1,4 +1,4 @@
-# COSE Library for PHP — Documentation
+# COSE Library for PHP: Documentation
 
 This library implements COSE (CBOR Object Signing and Encryption) as defined in [RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052) and [RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053): the COSE key types, the signature, MAC, content encryption and key management algorithms, the cryptographic structures a signature, a MAC or an encryption is computed over, and the header rules that decide what a message says. It also implements the algorithms and the key type that [RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230) (RSASSA-PSS, RSA keys), [RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812) (RSASSA-PKCS1-v1_5, secp256k1) and [RFC 9864](https://www.rfc-editor.org/rfc/rfc9864.html) (fully-specified identifiers) add to COSE, the header parameters of [RFC 9596](https://www.rfc-editor.org/rfc/rfc9596.html) (`typ`), [RFC 9597](https://www.rfc-editor.org/rfc/rfc9597.html) (CWT Claims) and [RFC 9360](https://www.rfc-editor.org/rfc/rfc9360.html) (X.509 certificates), the hash envelope of [RFC 9995](https://www.rfc-editor.org/rfc/rfc9995.html), the version 2 countersignatures of [RFC 9338](https://www.rfc-editor.org/rfc/rfc9338.html), the receipts of [RFC 9942](https://www.rfc-editor.org/rfc/rfc9942.html) with their `RFC9162_SHA256` Merkle proofs, the hash algorithms of [RFC 9054](https://www.rfc-editor.org/rfc/rfc9054.html), the COSE Key Thumbprint of [RFC 9679](https://www.rfc-editor.org/rfc/rfc9679.html), and the ML-DSA post-quantum signatures and AKP key type of [RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html).
 
@@ -16,9 +16,9 @@ The six COSE message types themselves come from [spomky-labs/cbor-php](https://g
 | [Encryption](Encryption.md) | `COSE_Encrypt0` and `COSE_Encrypt`, `encryptFor()`, the nonce (`IV`, `Partial IV`, `Base IV`) |
 | [Key Management](KeyManagement.md) | `direct`, HKDF, AES Key Wrap and ECDH recipients: the two sides of an algorithm, what each family enforces, the KDF context |
 | [CBOR Web Tokens](Cwt.md) | Verifying a CWT, the `typ` and `CWT Claims` header parameters |
-| [X.509 Header Parameters](X509.md) | `x5bag`, `x5chain`, `x5t`, `x5u` and the `*-sender` parameters — and where the library stops |
+| [X.509 Header Parameters](X509.md) | `x5bag`, `x5chain`, `x5t`, `x5u` and the `*-sender` parameters, and where the library stops |
 | [Hash Envelope](HashEnvelope.md) | RFC 9995: `payload-hash-alg`, `preimage-content-type`, `payload-location`, and `HashEnvelope` to build and confirm one |
-| [COSE Receipts](Receipts.md) | RFC 9942: `receipts`, `vds`, `vdp`, the `RFC9162_SHA256` inclusion and consistency proofs, `ReceiptVerifier` — and where the library stops |
+| [COSE Receipts](Receipts.md) | RFC 9942: `receipts`, `vds`, `vdp`, the `RFC9162_SHA256` inclusion and consistency proofs, `ReceiptVerifier`, and where the library stops |
 | [Supported Algorithms](Algorithms.md) | Every identifier the library ships, with its RFC reference: signature (ML-DSA included), MAC, content encryption, key management and hash algorithms; the `Manager` |
 | [Keys](Keys.md) | Key types and curves, parameter forms, Ed25519 private keys, AKP keys, `alg` / `key_ops` restrictions, RSA and symmetric key validation, thumbprints, loading a key from a certificate |
 | [Upgrading](Upgrading.md) | Moving off the deprecated `Cose\...Tag` classes |
@@ -82,5 +82,5 @@ The test suite is the rest of the examples, and every one of them is executed on
 - [RFC 3394 - Advanced Encryption Standard (AES) Key Wrap Algorithm](https://www.rfc-editor.org/rfc/rfc3394.html)
 - [RFC 5869 - HMAC-based Extract-and-Expand Key Derivation Function (HKDF)](https://www.rfc-editor.org/rfc/rfc5869.html)
 - [RFC 7748 - Elliptic Curves for Security](https://www.rfc-editor.org/rfc/rfc7748.html)
-- [IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml) — the algorithm, key type and curve
+- [IANA COSE Registry](https://www.iana.org/assignments/cose/cose.xhtml): the algorithm, key type and curve
   registries every identifier of this library is checked against

@@ -16,7 +16,7 @@
 The `Cose\Key` classes cover the five key types of the IANA
 [COSE Key Types](https://www.iana.org/assignments/cose/cose.xhtml#key-type) registry that the
 [algorithms](Algorithms.md) use. `Key::createFromData()` picks the class from `kty` (label 1), and the parameter
-labels are the `DATA_*` constants of each class — `Ec2Key::DATA_X` is -2, `RsaKey::DATA_N` is -1, and so on.
+labels are the `DATA_*` constants of each class: `Ec2Key::DATA_X` is -2, `RsaKey::DATA_N` is -1, and so on.
 
 | Key type | `kty` | Class | Parameters | Reference |
 |----------|-------|-------|------------|-----------|
@@ -30,7 +30,7 @@ An AKP key is a pair of byte strings whose format the algorithm decides, so `alg
 type (RFC 9964 §3) rather than the optional restriction it is elsewhere; the class accepts a key without it, so that a
 map read from the wire can be inspected, and every consumer of the key refuses it. For the ML-DSA algorithms, `pub`
 is the encoded public key of FIPS 204 and `priv` the 32-byte seed, with the sizes checked against `alg` when the key
-is built — see [ML-DSA](Algorithms.md#ml-dsa).
+is built; see [ML-DSA](Algorithms.md#ml-dsa).
 
 The curves an `OkpKey` or an `Ec2Key` may carry in `crv`, with the `CURVE_*` constant naming each value:
 
@@ -50,8 +50,8 @@ The curves an `OkpKey` or an `Ec2Key` may carry in `crv`, with the `CURVE_*` con
 | brainpoolP512r1 | 259 | EC2 | `Ec2Key::CURVE_BP512` | [ISO/IEC 18013-5:2021 §9.1.5.2](https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves) |
 
 X25519 and X448 are registered "for use w/ ECDH only": they serve the [key agreement](KeyManagement.md) algorithms
-and no signature. The Brainpool curves are registered at IANA by ISO/IEC 18013-5 rather than by an RFC — the link
-goes to the registry entry — and are compiled out of some OpenSSL builds, see
+and no signature. The Brainpool curves are registered at IANA by ISO/IEC 18013-5 rather than by an RFC (the link
+goes to the registry entry) and are compiled out of some OpenSSL builds, see
 [Optional extensions](Installation.md#optional-extensions). The names a key may carry instead of these numbers are
 listed under [Key Parameter Forms](#key-parameter-forms).
 
@@ -63,11 +63,11 @@ shapes. The `Key` classes settle them all at construction time:
 - a key type or a curve given as the numeric string spomky-labs/cbor-php produces when it decodes a CBOR integer
   (`'2'`, `'-1'`) is stored as the integer it denotes, so `Key::type()` always compares equal to `Key::TYPE_EC2` and
   friends, whether the key was decoded from CBOR or built by hand;
-- a key type may also be given by name — the names of the IANA
+- a key type may also be given by name: the names of the IANA
   [COSE Key Types](https://www.iana.org/assignments/cose/cose.xhtml#key-type) registry, `OKP`, `EC2`, `RSA`,
   `Symmetric` and `AKP`, or the JOSE spellings `EC` and `oct` a key converted from a JWK carries. `Key::typeIs(Key::TYPE_EC2)`
   answers for every form, while `type()` keeps returning the form supplied;
-- a curve may be given by name — `P-256`, `P-384`, `P-521`, `secp256k1`, `brainpoolP256r1` and so on. `curve()`
+- a curve may be given by name: `P-256`, `P-384`, `P-521`, `secp256k1`, `brainpoolP256r1` and so on. `curve()`
   returns the form the key carries, and `Ec2Key::curveId()` / `OkpKey::curveId()` return the value of the IANA
   [COSE Elliptic Curves](https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves) registry whatever that
   form is. The algorithm classes compare the latter, so a key that names its curve signs and verifies exactly like
@@ -92,7 +92,7 @@ Curve 8 is named `secp256k1` by [RFC 8812, section 4.2](https://datatracker.ietf
 deprecated but still accepted.
 
 - the `y` of an `Ec2Key` may be a boolean: the *sign bit* of the compressed point encoding that
-  [RFC 9053 §7.1.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1.1) allows for a public key — "if the sign
+  [RFC 9053 §7.1.1](https://www.rfc-editor.org/rfc/rfc9053#section-7.1.1) allows for a public key: "if the sign
   bit is zero, then encode y as a CBOR false value; otherwise, encode y as a CBOR true value", the sign bit being
   the parity of `y` (SEC 1 §2.3.3). The point is decompressed when the key is built: the square root of
   x³ + ax + b modulo the field prime, a single modular exponentiation since every supported curve has p ≡ 3 (mod 4),
@@ -116,8 +116,8 @@ $key->y();                 // the 32-byte coordinate, decompressed
 $key->get(Ec2Key::DATA_Y); // true, as supplied
 ```
 
-Anything else — a float, a numeric string that is not an integer, a name no registry defines, an `x` that is not a
-byte string, a sign bit that names no point of the curve — is refused by the constructor with an
+Anything else (a float, a numeric string that is not an integer, a name no registry defines, an `x` that is not a
+byte string, a sign bit that names no point of the curve) is refused by the constructor with an
 `InvalidArgumentException`, before any of it is used.
 
 ## Ed25519 Private Keys
@@ -129,7 +129,7 @@ signs under a public key handed to it: a `-2` (`x`) that contradicts `d` is refu
 `InvalidArgumentException`, because signing under two different `x` values for one seed discloses the private key.
 
 [RFC 9053, section 7.2](https://www.rfc-editor.org/rfc/rfc9053#section-7.2) makes `x` RECOMMENDED, not REQUIRED, for a
-private key — "it can be recomputed from the required elements" — so an `OkpKey` may carry `crv` and `d` alone. That is
+private key, "it can be recomputed from the required elements", so an `OkpKey` may carry `crv` and `d` alone. That is
 the safest way to build a signing key, since nothing can then hand it an `x` inconsistent with the seed:
 
 ```php
@@ -153,16 +153,16 @@ primitive in PHP, so a key on those curves still has to carry its `x`.
 ## Key Restrictions (`alg` and `key_ops`)
 
 A COSE key may restrict itself. [RFC 9052, section 7.1](https://www.rfc-editor.org/rfc/rfc9052.html#section-7.1) gives
-it two parameters for that: `alg` (label 3) pins it to one algorithm — "If the algorithms do not match, then this key
-object MUST NOT be used to perform the cryptographic operation" — and `key_ops` (label 4) pins it to a set of
+it two parameters for that: `alg` (label 3) pins it to one algorithm ("If the algorithms do not match, then this key
+object MUST NOT be used to perform the cryptographic operation") and `key_ops` (label 4) pins it to a set of
 operations, whose values are those of Table 5: `sign` (1), `verify` (2), `encrypt` (3), `decrypt` (4), `wrap key`
 (5), `unwrap key` (6), `derive key` (7), `derive bits` (8), `MAC create` (9) and `MAC verify` (10) for the algorithms
 this library implements. [RFC 9053](https://www.rfc-editor.org/rfc/rfc9053.html#section-2.1) repeats both as a
 per-algorithm requirement for ECDSA (§2.1), EdDSA (§2.2), HMAC (§3.1), AES-CBC-MAC (§3.2), the content encryption
-algorithms (§4.1–4.3) and the key management algorithms (§6).
+algorithms (§4.1 to §4.3) and the key management algorithms (§6).
 
 For the signature and MAC algorithms, enforcing them is **opt-in**, so that a key which used to work keeps working.
-Ask an algorithm — or a whole `Manager` — to enforce the restrictions, and it refuses the key with an
+Ask an algorithm, or a whole `Manager`, to enforce the restrictions, and it refuses the key with an
 `InvalidArgumentException` whenever the key forbids what is being done with it. The
 [content encryption](Algorithms.md#content-encryption-algorithms) and
 [key management](KeyManagement.md#key-restrictions) algorithms, which have no such history, enforce them from the
@@ -223,7 +223,7 @@ Three details are worth knowing:
   encrypt, and `decrypt` *or* `unwrap key` to decrypt. `Key::assertUsableWithAny($alg, Key::OP_ENCRYPT, Key::OP_WRAP_KEY)`
   passes on either and fails naming both; `assertUsableWith()` is its single-operation form.
 
-`Key::alg()` is strict about the value it reads: an `alg` that is not an integer — the text `'RS256'`, for instance —
+`Key::alg()` is strict about the value it reads: an `alg` that is not an integer, the text `'RS256'` for instance,
 throws instead of being cast to `0`, an identifier no algorithm is registered under. An integer written as a string
 (`'-7'`) is accepted, as the key constructors do for `kty` and `crv`.
 
@@ -247,7 +247,7 @@ verifier takes that key from whoever produced the message.
 
 The **minimum** modulus length is applied automatically too, with `RsaKeyValidator::create()`. Because legacy
 authenticators holding 1024 bit keys still exist, a key below `RsaKeyValidator::MINIMUM_MODULUS_LENGTH` (2048) bits
-only emits an `E_USER_WARNING` — `RsaKeyValidator::WEAK_KEY_MESSAGE`, filled in with the reason — and the operation
+only emits an `E_USER_WARNING` (`RsaKeyValidator::WEAK_KEY_MESSAGE`, filled in with the reason) and the operation
 goes through:
 
 ```php
@@ -322,11 +322,11 @@ exception and are applied by the MAC algorithms themselves: `hash()` and `verify
 `InvalidArgumentException` when the key is not symmetric, or when its `k` is missing, is not a PHP string or is empty.
 The AES-CBC-MAC algorithms add the length: RFC 9053 §3.2 ties it to the identifier, so a `k` that is not exactly
 16 bytes (AES-MAC 128/64 and 128/128) or 32 bytes (AES-MAC 256/64 and 256/128) is refused the same way, before
-OpenSSL is reached — it is the wrong key rather than a weak one; `AesCbcMac::keyLength()` and `tagLength()` give the
+OpenSSL is reached: it is the wrong key rather than a weak one; `AesCbcMac::keyLength()` and `tagLength()` give the
 lengths in bytes. The content encryption and key wrap algorithms do the same with `keyLength()`.
 
 `SymmetricKey` applies the same contract at construction time, where the mistake is easiest to attribute. A value
-decoded from CBOR has to be normalized first — a `CBOR\ByteStringObject` is not a byte string.
+decoded from CBOR has to be normalized first, a `CBOR\ByteStringObject` not being a byte string.
 
 ```php
 use Cose\Key\SymmetricKey;
@@ -380,13 +380,13 @@ else. It is what a producer can use as a `kid`, what the `ckt` member of a CWT `
 
 The computation follows [§3](https://www.rfc-editor.org/rfc/rfc9679#section-3): a `COSE_Key` holding only the
 required parameters of the key type ([§4](https://www.rfc-editor.org/rfc/rfc9679#section-4)) is built from scratch,
-encoded in the deterministic encoding of [RFC 8949 §4.2.1](https://www.rfc-editor.org/rfc/rfc8949#section-4.2.1) —
-shortest-form integers and lengths, map keys sorted in the bytewise order of their encodings — and hashed. The map
+encoded in the deterministic encoding of [RFC 8949 §4.2.1](https://www.rfc-editor.org/rfc/rfc8949#section-4.2.1),
+shortest-form integers and lengths, map keys sorted in the bytewise order of their encodings, and hashed. The map
 the key was decoded from is never re-encoded, so:
 
 - `kid`, `alg`, `key_ops`, `Base IV` and the private parts do not affect the result;
 - neither does the order of the members, nor whether `kty` and `crv` were given as integers, as numeric strings or
-  as names — the canonical form always carries the integers of the IANA registries;
+  as names; the canonical form always carries the integers of the IANA registries;
 - an EC2 key carrying `y` as a sign bit and the same key carrying the coordinate have the same thumbprint, computed
   over the uncompressed point as [§4.2](https://www.rfc-editor.org/rfc/rfc9679#section-4.2) requires;
 - a private key has the thumbprint of its public half, an OKP private key without `x` included.
@@ -401,9 +401,9 @@ the key was decoded from is never re-encoded, so:
 
 The AKP row is the one place `alg` is part of the digest: RFC 9679 §4.6 defers the required parameters of any other
 key type to its own specification, and RFC 9964 §6 lists `alg` among them, because the AKP type alone does not say
-what the key is — the same `pub` bytes under another algorithm would be another key. An AKP key without `alg` has no
+what the key is: the same `pub` bytes under another algorithm would be another key. An AKP key without `alg` has no
 thumbprint and `Thumbprint::of()` refuses it. The `kid` of every COSE example of RFC 9964 Appendix A.2 is that
-thumbprint. A generic `Cose\Key\Key` of a type this library has no class for — HSS-LMS (5) — has no thumbprint
+thumbprint. A generic `Cose\Key\Key` of a type this library has no class for, HSS-LMS (5), has no thumbprint
 here either.
 
 ```php
@@ -446,7 +446,7 @@ then thumbprints of symmetric keys MUST NOT be used".
 
 `Cose\Key\PublicKeyLoader` turns the key of an X.509 certificate, or a bare SubjectPublicKeyInfo, into a
 `Cose\Key\Key`. Both accept PEM or DER, and both cover RSA (including RSASSA-PSS keys), the elliptic curves this
-library names — P-256, secp256k1, P-384, P-521 and the four brainpool curves, a compressed point included — the
+library names (P-256, secp256k1, P-384, P-521 and the four brainpool curves, a compressed point included), the
 RFC 8410 curves, and the ML-DSA keys of [RFC 9881](https://www.rfc-editor.org/rfc/rfc9881.html), read into an
 `AkpKey` carrying the `alg` the OID names. A certificate *signed* with ML-DSA cannot be read yet: spomky-labs/pki-framework
 does not know the ML-DSA signature algorithm identifiers; a certificate holding an ML-DSA key and signed by a

@@ -18,7 +18,7 @@ turn. Any of the structures of RFC 9052 can be countersigned: a `COSE_Sign1`, a 
 | `Countersignature0 version 2` | 12 (`CoseHeaders::LABEL_COUNTERSIGNATURE0_V2`) | `COSE_Countersignature0` (`bstr`) | [RFC 9338 §2](https://www.rfc-editor.org/rfc/rfc9338#section-2) | `getCountersignature0(): ?string` |
 
 The **full form** (label 11) is a `COSE_Countersignature`, which is a `COSE_Signature` (§3.1): a `[protected,
-unprotected, signature]` entry with headers of its own — its algorithm, its key identifier — carried bare or under
+unprotected, signature]` entry with headers of its own (its algorithm, its key identifier) carried bare or under
 the CBOR tag 19. The value of the parameter is one of them or an array of one or more; `getCountersignatures()`
 reads both into a list of `CoseSignature`. The **abbreviated form** (label 12) is the bare signature value: no
 headers, "the parameters for computing or verifying the abbreviated countersignature are provided by the same
@@ -83,7 +83,7 @@ $isValid = Countersigner::verify0($target, $countersignature0, $algorithmOfTheCo
 Both take the optional `external_aad` of RFC 9052 §4.4 as their last argument. `verify()` refuses a countersignature
 whose `alg` differs from the algorithm given, and yields `false` for what does not verify; after it, RFC 9338 §3.3
 leaves to the application the check "that the key is correctly paired with the signing identity and that the signing
-identity is authorized" — the `kid` is a hint, not a proof.
+identity is authorized": the `kid` is a hint, not a proof.
 
 ## What Is Signed
 
@@ -94,11 +94,11 @@ context string says whether `other_fields` is present:
 | Target | payload | other_fields | Full context | Abbreviated context |
 |---|---|---|---|---|
 | `COSE_Sign1` | payload | `[signature]` | `CounterSignatureV2` | `CounterSignature0V2` |
-| `COSE_Sign` | payload | — | `CounterSignature` | `CounterSignature0` |
-| `COSE_Signature` (a countersignature too) | signature | — | `CounterSignature` | `CounterSignature0` |
-| `COSE_Encrypt` | ciphertext | — | `CounterSignature` | `CounterSignature0` |
-| `COSE_Encrypt0` | ciphertext | — | `CounterSignature` | `CounterSignature0` |
-| `COSE_recipient` | ciphertext | — | `CounterSignature` | `CounterSignature0` |
+| `COSE_Sign` | payload | none | `CounterSignature` | `CounterSignature0` |
+| `COSE_Signature` (a countersignature too) | signature | none | `CounterSignature` | `CounterSignature0` |
+| `COSE_Encrypt` | ciphertext | none | `CounterSignature` | `CounterSignature0` |
+| `COSE_Encrypt0` | ciphertext | none | `CounterSignature` | `CounterSignature0` |
+| `COSE_recipient` | ciphertext | none | `CounterSignature` | `CounterSignature0` |
 | `COSE_Mac` | payload | `[tag]` | `CounterSignatureV2` | `CounterSignature0V2` |
 | `COSE_Mac0` | payload | `[tag]` | `CounterSignatureV2` | `CounterSignature0V2` |
 
@@ -106,7 +106,7 @@ A detached payload or ciphertext is supplied by the application, `CountersignTar
 for the other structures. The abbreviated structure has no `sign_protected` field at all (§3.3: "This field is
 omitted for the Countersignature0V2 attribute"), and the four context strings keep the forms apart: "the converted
 structure will fail signature validation" (§3). For a target with two byte string fields the version 2 value is the
-one an RFC 8152 countersigner produced — RFC 9338 §1 designed it so — which the `countersign/` fixtures of
+one an RFC 8152 countersigner produced (RFC 9338 §1 designed it so), which the `countersign/` fixtures of
 cose-wg/Examples confirm; for the three-field targets the two differ, which is the point of the new version. The
 to-be-signed bytes use the deterministic encoding RFC 9052 §9 narrows, as §4 requires, through the same
 `CoseStructure` base as `Signature1`.

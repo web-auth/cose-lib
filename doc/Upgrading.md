@@ -15,7 +15,7 @@ raise an `E_USER_DEPRECATED` on construction, and are **removed in 5.0.0**.
 | `Cose\Mac\CoseMacTag` | `CBOR\Tag\CoseMacTag` |
 | `Cose\Encryption\CoseEncrypt0Tag` | `CBOR\Tag\CoseEncrypt0Tag` |
 | `Cose\Encryption\CoseEncryptTag` | `CBOR\Tag\CoseEncryptTag` |
-| — | `CBOR\Tag\CwtTag` (tag 61, new) |
+| (none) | `CBOR\Tag\CwtTag` (tag 61, new) |
 
 Nothing else changes: the wire format is identical, so a message written by a deprecated class is read by its
 replacement and the reverse. What the migration has to handle:
@@ -29,7 +29,7 @@ replacement and the reverse. What the migration has to handle:
   `ByteStringObject|IndefiniteLengthByteStringObject|NullObject`.
 - **The accessors also return the `IndefiniteLength...` variants**, which the deprecated classes rejected outright.
 - **The header accessors move to `CoseHeaders`.** `getProtectedHeaderAsMap()` exists upstream but applies only the
-  CBOR rules; the RFC 9052 ones — label typing, trailing data, the protected-first lookup — stay here, see
+  CBOR rules; the RFC 9052 ones (label typing, trailing data, the protected-first lookup) stay here, see
   [Reading Headers](Messages.md#reading-headers):
 
   ```php

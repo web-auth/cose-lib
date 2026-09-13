@@ -6,7 +6,7 @@
 - [COSE_Mac (With Recipients)](#cose_mac-with-recipients)
 - [The Tag Covers the MAC_structure](#the-tag-covers-the-mac_structure)
 
-The MAC algorithms — HMAC and AES-CBC-MAC — are listed in [Algorithms](Algorithms.md#mac-algorithms), with the
+The MAC algorithms, HMAC and AES-CBC-MAC, are listed in [Algorithms](Algorithms.md#mac-algorithms), with the
 conditions AES-CBC-MAC comes with; the key they take, and what is checked about it, in
 [Validating Symmetric Keys](Keys.md#validating-symmetric-keys).
 
@@ -68,7 +68,7 @@ use CBOR\Tag\CoseMacTag;
 use Cose\Mac\MacStructure;
 use Cose\Structure\CoseRecipient;
 
-// Context "MAC" — the same header and payload give a different tag than under "MAC0"
+// Context "MAC": the same header and payload give a different tag than under "MAC0"
 $toBeMaced = MacStructure::create($protectedHeader, $payload);
 $tag = ByteStringObject::create($algorithm->hash((string) $toBeMaced, $macKey));
 
@@ -110,7 +110,7 @@ at least one entry, which `CoseRecipient::all()` enforces, nested levels include
 > $toBeMaced = Mac0Structure::create($coseMac0->getProtectedHeader(), $coseMac0->getPayload());
 > $macTag = $algorithm->hash((string) $toBeMaced, $key);
 >
-> // COSE_Mac: context "MAC" — the same header and payload give a different tag
+> // COSE_Mac: context "MAC", where the same header and payload give a different tag
 > $toBeMaced = MacStructure::create($coseMac->getProtectedHeader(), $coseMac->getPayload());
 > $isValid = $algorithm->verify((string) $toBeMaced, $key, $coseMac->getTag()->getValue());
 > ```

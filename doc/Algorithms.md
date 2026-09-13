@@ -30,15 +30,15 @@ registers in a [`Manager`](#registering-algorithms).
 | ES512 | -36 | ECDSA with SHA-512 | [RFC 9053 §2.1](https://www.rfc-editor.org/rfc/rfc9053#section-2.1) |
 | ES256K | -47 | ECDSA with the secp256k1 curve and SHA-256 | [RFC 8812 §3.2](https://www.rfc-editor.org/rfc/rfc8812#section-3.2) |
 
-**EdDSA** (`Cose\Algorithm\Signature\EdDSA`) — Ed25519 keys only, whatever the class; every one of them needs
+**EdDSA** (`Cose\Algorithm\Signature\EdDSA`): Ed25519 keys only, whatever the class; every one of them needs
 `ext-sodium` (`EdDSA::isSupported()`)
 
 | Algorithm | Identifier | Description | Reference |
 |-----------|------------|-------------|-----------|
 | EdDSA | -8 | Edwards-curve Digital Signature Algorithm | [RFC 9053 §2.2](https://www.rfc-editor.org/rfc/rfc9053#section-2.2) |
 | Ed25519 | -8 | The same algorithm under its own class name; identical signatures, identical identifier | [RFC 9053 §2.2](https://www.rfc-editor.org/rfc/rfc9053#section-2.2) |
-| Ed256 | -260 | Ed25519 over a SHA-256 digest — **non-standard**, see below | — |
-| Ed512 | -261 | Ed25519 over a SHA-512 digest — **non-standard**, see below | — |
+| Ed256 | -260 | Ed25519 over a SHA-256 digest, **non-standard**, see below | none |
+| Ed512 | -261 | Ed25519 over a SHA-512 digest, **non-standard**, see below | none |
 
 **RSA** (`Cose\Algorithm\Signature\RSA`)
 
@@ -50,9 +50,9 @@ registers in a [`Manager`](#registering-algorithms).
 | PS256 | -37 | RSASSA-PSS with SHA-256 | [RFC 8230 §2](https://www.rfc-editor.org/rfc/rfc8230#section-2) |
 | PS384 | -38 | RSASSA-PSS with SHA-384 | [RFC 8230 §2](https://www.rfc-editor.org/rfc/rfc8230#section-2) |
 | PS512 | -39 | RSASSA-PSS with SHA-512 | [RFC 8230 §2](https://www.rfc-editor.org/rfc/rfc8230#section-2) |
-| RS1 | -65535 | RSASSA-PKCS1-v1_5 with SHA-1 — **not secure**, kept only for legacy authenticators, see below | [RFC 8812 §2](https://www.rfc-editor.org/rfc/rfc8812#section-2) |
+| RS1 | -65535 | RSASSA-PKCS1-v1_5 with SHA-1, **not secure**, kept only for legacy authenticators, see below | [RFC 8812 §2](https://www.rfc-editor.org/rfc/rfc8812#section-2) |
 
-Every RSA algorithm validates the key it is given — modulus and exponent bounds, public parameter constraints — see
+Every RSA algorithm validates the key it is given (modulus and exponent bounds, public parameter constraints); see
 [Validating RSA Keys](Keys.md#validating-rsa-keys); the side-channel considerations of signing with RSASSA-PSS are in
 [Installation](Installation.md#performance).
 
@@ -71,12 +71,12 @@ party may receive a credential whose `alg` carries one of these values. They liv
 | ESP256 | -9 | ECDSA with the P-256 curve and SHA-256 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
 | ESP384 | -51 | ECDSA with the P-384 curve and SHA-384 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
 | ESP512 | -52 | ECDSA with the P-521 curve and SHA-512 | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
-| ESB256 | -265 | ECDSA with the brainpoolP256r1 curve and SHA-256 — requires an OpenSSL build with Brainpool | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
-| ESB320 | -266 | ECDSA with the brainpoolP320r1 curve and SHA-384 — requires an OpenSSL build with Brainpool | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
-| ESB384 | -267 | ECDSA with the brainpoolP384r1 curve and SHA-384 — requires an OpenSSL build with Brainpool | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
-| ESB512 | -268 | ECDSA with the brainpoolP512r1 curve and SHA-512 — requires an OpenSSL build with Brainpool | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESB256 | -265 | ECDSA with the brainpoolP256r1 curve and SHA-256; requires an OpenSSL build with Brainpool | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESB320 | -266 | ECDSA with the brainpoolP320r1 curve and SHA-384; requires an OpenSSL build with Brainpool | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESB384 | -267 | ECDSA with the brainpoolP384r1 curve and SHA-384; requires an OpenSSL build with Brainpool | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
+| ESB512 | -268 | ECDSA with the brainpoolP512r1 curve and SHA-512; requires an OpenSSL build with Brainpool | [RFC 9864 §2.1](https://www.rfc-editor.org/rfc/rfc9864#section-2.1) |
 | Ed25519 | -19 | EdDSA with the Ed25519 parameter set | [RFC 9864 §2.2](https://www.rfc-editor.org/rfc/rfc9864#section-2.2) |
-| Ed448 | -53 | EdDSA with the Ed448 parameter set — requires PHP 8.4 or later | [RFC 9864 §2.2](https://www.rfc-editor.org/rfc/rfc9864#section-2.2) |
+| Ed448 | -53 | EdDSA with the Ed448 parameter set; requires PHP 8.4 or later | [RFC 9864 §2.2](https://www.rfc-editor.org/rfc/rfc9864#section-2.2) |
 
 ```php
 use Cose\Algorithm\Manager;
@@ -104,7 +104,7 @@ identifiers next to the polymorphic ones.
 RFC 9864 marks ES256 (-7), EdDSA (-8), ES384 (-35) and ES512 (-36) as *Deprecated* in the IANA COSE Algorithms
 registry, in favour of the fully-specified identifiers above. That is a registry status, not an operational one:
 WebAuthn and CTAP authenticators emit -7 and -8, an authenticator's algorithm is fixed at manufacture, and they will
-keep emitting them for years. This library keeps the four identifiers as first-class algorithms — no deprecation
+keep emitting them for years. This library keeps the four identifiers as first-class algorithms: no deprecation
 notice, no runtime warning, and no change to how `EdDSA` (-8) resolves its curve. A relying party registers both
 forms and lets the credential decide:
 
@@ -126,15 +126,15 @@ $manager = Manager::create()->add(
 ### ML-DSA
 
 [RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html) registers ML-DSA, the module-lattice signature scheme of
-FIPS 204, for COSE — the first post-quantum signature in the registry — together with the key type it is carried
+FIPS 204, for COSE, the first post-quantum signature in the registry, together with the key type it is carried
 in, AKP (see [Key Types](Keys.md#key-types)). The three parameter sets live in the `Cose\Algorithm\Signature\MLDSA`
 namespace.
 
 | Algorithm | Identifier | Description | Reference |
 |-----------|------------|-------------|-----------|
-| ML-DSA-44 | -48 | ML-DSA with the FIPS 204 parameter set of security category 2 — 1312-byte public key, 2420-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
-| ML-DSA-65 | -49 | ML-DSA with the parameter set of security category 3 — 1952-byte public key, 3309-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
-| ML-DSA-87 | -50 | ML-DSA with the parameter set of security category 5 — 2592-byte public key, 4627-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
+| ML-DSA-44 | -48 | ML-DSA with the FIPS 204 parameter set of security category 2; 1312-byte public key, 2420-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
+| ML-DSA-65 | -49 | ML-DSA with the parameter set of security category 3; 1952-byte public key, 3309-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
+| ML-DSA-87 | -50 | ML-DSA with the parameter set of security category 5; 2592-byte public key, 4627-byte signature | [RFC 9964 §5](https://www.rfc-editor.org/rfc/rfc9964#section-5) |
 
 The three are *pure* ML-DSA (FIPS 204 algorithm 2) with the empty context string, which is all RFC 9964 allows:
 HashML-DSA is not registered (§7.2 explains why), and a non-empty `ctx` is forbidden (§5). The private key is the
@@ -145,7 +145,7 @@ allows, and `AkpKey` refuses a `priv` of that size.
 
 An ML-DSA key is an `AkpKey`: `kty` 7, the **required** `alg` naming the parameter set, `pub` (-1) holding the
 encoded public key of FIPS 204 §7.2, and, on the signing side, `priv` (-2) holding the seed. The algorithm expands
-a seed into the key pair, which is how a key is generated — from `random_bytes(32)` — and how a stored seed is
+a seed into the key pair, which is how a key is generated, from `random_bytes(32)`, and how a stored seed is
 turned back into a key:
 
 ```php
@@ -169,8 +169,8 @@ $key = AkpKey::create([
 ]);
 ```
 
-`Key::createFromData()` dispatches `kty` 7 — as the integer, the `'7'` string cbor-php decodes it to, or the name
-`AKP` — to `AkpKey`. `asPEM()` writes the RFC 9881 forms OpenSSL reads: a seed-only PrivateKeyInfo (the `seed [0]`
+`Key::createFromData()` dispatches `kty` 7, as the integer, the `'7'` string cbor-php decodes it to, or the name
+`AKP`, to `AkpKey`. `asPEM()` writes the RFC 9881 forms OpenSSL reads: a seed-only PrivateKeyInfo (the `seed [0]`
 choice of `ML-DSA-PrivateKey`) for a private key, a SubjectPublicKeyInfo for a public one. `PublicKeyLoader` reads
 the SubjectPublicKeyInfo back, from a bare structure or from the certificate a classical CA issued for the key, into
 an `AkpKey` carrying the `alg` the OID names. A certificate *signed* with ML-DSA cannot be read yet:
@@ -194,20 +194,20 @@ differ, and both verify.
   promises for every key type.
 - The algorithm refuses an AKP key without `alg`: the type says nothing about the algorithm, and §3 makes the
   parameter REQUIRED. It also refuses a key whose `alg` is another parameter set, whether or not the
-  [key restrictions](Keys.md#key-restrictions-alg-and-key_ops) are enforced — for this key type, `alg` is what `crv` is to
+  [key restrictions](Keys.md#key-restrictions-alg-and-key_ops) are enforced: for this key type, `alg` is what `crv` is to
   an EC2 key, not a usage restriction laid over it. With the restrictions enforced, `key_ops` is checked as for any
   algorithm.
 - When the key carries both halves, the public key is recomputed from the seed and compared in constant time: a
   mismatched pair (§7.4, whose consequences "can range from operations failing to private key compromise") is
   rejected on both `sign()` and `verify()`.
-- A signature of any length other than the table's is invalid (FIPS 204 algorithm 3, step 1) — `verify()` returns
+- A signature of any length other than the table's is invalid (FIPS 204 algorithm 3, step 1): `verify()` returns
   `false` without loading the key.
 
 #### The platform gate
 
 ML-DSA is computed by OpenSSL, which ships it in its default provider as of **3.5**, and needs the digest-less
 `openssl_sign()` that PHP only offers as of **8.4**. `OPENSSL_VERSION_TEXT` reports the headers PHP was compiled
-against, not the library it loaded — a PHP built against 3.0 and running on 3.5 is common — so the OpenSSL check is
+against, not the library it loaded (a PHP built against 3.0 and running on 3.5 is common), so the OpenSSL check is
 a runtime probe: an ML-DSA key is loaded once per process. `MLDSA44::isSupported()`, which the three classes share,
 answers for both conditions; `create()` throws a `RuntimeException` naming the missing piece. Register the
 algorithms conditionally when the platform is not known in advance:
@@ -254,7 +254,7 @@ COSE example of RFC 9964 Appendix A, thumbprint included, and signs a COSE_Sign1
 > [!WARNING]
 > **`Ed256` (-260) and `Ed512` (-261) are not defined by any specification, and their identifiers are not theirs.**
 > Both hash the message and sign the digest with pure **Ed25519**, without the `dom2` prefix that would make it the
-> Ed25519ph of [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032) §5.1 — whose §8.5 says prehashed variants
+> Ed25519ph of [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032) §5.1, whose §8.5 says prehashed variants
 > "SHOULD NOT be used" anyway. IANA has since assigned -260 to WalnutDSA
 > ([RFC 9021](https://www.rfc-editor.org/rfc/rfc9021)) and -261 to TurboSHAKE128
 > ([RFC 9861](https://www.rfc-editor.org/rfc/rfc9861)), so a conforming implementation reads objects produced by these
@@ -288,13 +288,13 @@ COSE example of RFC 9964 Appendix A, thumbprint included, and signs a COSE_Sign1
 
 | Algorithm | Identifier | Description | Reference |
 |-----------|------------|-------------|-----------|
-| AES-MAC 128/64 | 14 | AES-128 in CBC mode, 64-bit tag — class `AESMAC128_64` | [RFC 9053 §3.2](https://www.rfc-editor.org/rfc/rfc9053#section-3.2) |
-| AES-MAC 256/64 | 15 | AES-256 in CBC mode, 64-bit tag — class `AESMAC256_64` | [RFC 9053 §3.2](https://www.rfc-editor.org/rfc/rfc9053#section-3.2) |
-| AES-MAC 128/128 | 25 | AES-128 in CBC mode, 128-bit tag — class `AESMAC128_128` | [RFC 9053 §3.2](https://www.rfc-editor.org/rfc/rfc9053#section-3.2) |
-| AES-MAC 256/128 | 26 | AES-256 in CBC mode, 128-bit tag — class `AESMAC256_128` | [RFC 9053 §3.2](https://www.rfc-editor.org/rfc/rfc9053#section-3.2) |
+| AES-MAC 128/64 | 14 | AES-128 in CBC mode, 64-bit tag; class `AESMAC128_64` | [RFC 9053 §3.2](https://www.rfc-editor.org/rfc/rfc9053#section-3.2) |
+| AES-MAC 256/64 | 15 | AES-256 in CBC mode, 64-bit tag; class `AESMAC256_64` | [RFC 9053 §3.2](https://www.rfc-editor.org/rfc/rfc9053#section-3.2) |
+| AES-MAC 128/128 | 25 | AES-128 in CBC mode, 128-bit tag; class `AESMAC128_128` | [RFC 9053 §3.2](https://www.rfc-editor.org/rfc/rfc9053#section-3.2) |
+| AES-MAC 256/128 | 26 | AES-256 in CBC mode, 128-bit tag; class `AESMAC256_128` | [RFC 9053 §3.2](https://www.rfc-editor.org/rfc/rfc9053#section-3.2) |
 
 Every MAC algorithm implements `Cose\Algorithm\Mac\Mac`: `hash()` computes the tag, `verify()` compares it with
-`hash_equals()`, and both take a symmetric `Key` — whose type, presence and length are checked, see
+`hash_equals()`, and both take a symmetric `Key`, whose type, presence and length are checked; see
 [Validating Symmetric Keys](Keys.md#validating-symmetric-keys). The tag is computed over the `MAC_structure`, see
 [MAC](Mac.md).
 
@@ -323,12 +323,12 @@ $isValid = $algorithm->verify((string) $toBeMaced, $key, $tag);
 >   tag pairs, an attacker forges a third. Computing the tag over a `Mac0Structure` or `MacStructure`, as above, is
 >   the mitigation: the `MAC_structure` of [RFC 9052 §6.3](https://www.rfc-editor.org/rfc/rfc9052#section-6.3) is
 >   CBOR, and CBOR encodes the length of every field it holds. A tag computed over `$payload->getValue()` directly
->   has no such protection — on top of being interoperable with nothing.
+>   has no such protection, on top of being interoperable with nothing.
 > - *"Cipher Block Chaining (CBC) encryption and CBC-MAC MUST use different keys."* A key that also encrypts
 >   anything in CBC mode turns the last ciphertext block into a valid tag.
 >
 > The construction is AES in CBC mode with an all-zero IV, padding method 1 of ISO/IEC 9797-1 (zero bytes up to
-> the block boundary, none when the message already is a multiple of 16 bytes — the padding the
+> the block boundary, none when the message already is a multiple of 16 bytes; the padding the
 > [cose-wg/Examples](https://github.com/cose-wg/Examples/tree/master/cbc-mac-examples) vectors use), and the last
 > block truncated to the tag length. It is **not** AES-CMAC ([RFC 4493](https://www.rfc-editor.org/rfc/rfc4493)).
 >
@@ -338,8 +338,8 @@ $isValid = $algorithm->verify((string) $toBeMaced, $key, $tag);
 ## Content Encryption Algorithms
 
 The AEAD algorithms of [RFC 9053 §4](https://datatracker.ietf.org/doc/html/rfc9053#section-4), in
-`Cose\Algorithm\ContentEncryption`. Each implements `ContentEncryption` — `encrypt()`, `decrypt()`, `keyLength()`,
-`nonceLength()` and `tagLength()` — and is used through the `Enc_structure` classes, see [Encryption](Encryption.md).
+`Cose\Algorithm\ContentEncryption`. Each implements `ContentEncryption` (`encrypt()`, `decrypt()`, `keyLength()`,
+`nonceLength()` and `tagLength()`) and is used through the `Enc_structure` classes, see [Encryption](Encryption.md).
 
 | Algorithm | Identifier | Class | Key | Nonce | Tag | Reference |
 |-----------|------------|-------|-----|-------|-----|-----------|
@@ -361,9 +361,9 @@ The *Algorithm* column is the IANA name. The AES-CCM class names follow the JOSE
 length field in bits, which fixes the nonce length at 15 − L/8 bytes; the IANA name orders the same three numbers as
 AES-CCM-L-tag-key.
 
-What every algorithm checks, per RFC 9053 §4.1–4.3, before any primitive runs:
+What every algorithm checks, per RFC 9053 §4.1 to §4.3, before any primitive runs:
 
-- the key is a `SymmetricKey` whose `k` is exactly `keyLength()` bytes long — a key of another length is rejected
+- the key is a `SymmetricKey` whose `k` is exactly `keyLength()` bytes long; a key of another length is rejected
   with an `InvalidArgumentException`;
 - the nonce is exactly `nonceLength()` bytes long. This matters most for AES-CCM: OpenSSL accepts any nonce between
   7 and 13 bytes and derives L from it, so a 12-byte nonce handed to AES-CCM-16-64-128 would be encrypted with a
@@ -376,9 +376,9 @@ compares a tag itself.
 
 **Key restrictions are enforced by default for these algorithms**, unlike the signature and MAC algorithms for which
 enforcement is [opt-in](Keys.md#key-restrictions-alg-and-key_ops) so that existing keys keep working. RFC 9053 §4
-makes the checks a MUST — "If the 'alg' field is present, it MUST match the … algorithm being used", "If the
+makes the checks a MUST ("If the 'alg' field is present, it MUST match the … algorithm being used", "If the
 'key_ops' field is present, it MUST include 'encrypt' or 'wrap key' when encrypting" and "'decrypt' or 'unwrap key'
-when decrypting" — and these algorithms have no caller to keep compatible. `withKeyRestrictionsEnforced(false)` turns
+when decrypting") and these algorithms have no caller to keep compatible. `withKeyRestrictionsEnforced(false)` turns
 it off, on one algorithm or through `Manager::withKeyRestrictionsEnforced(false)`. `Key::assertUsableWithAny()` is
 the form of the check that accepts either name of an operation.
 
@@ -405,11 +405,11 @@ if (ChaCha20Poly1305::isSupported()) {
 > [!WARNING]
 > A nonce reused under the same key breaks every one of these algorithms: AES-GCM and ChaCha20/Poly1305 give up
 > their authentication key, AES-CCM the XOR of the plaintexts. Use `random_bytes()` per message, or a strictly
-> increasing counter sent as the `Partial IV` — see [The Nonce](Encryption.md#the-nonce-iv-and-partial-iv).
+> increasing counter sent as the `Partial IV`; see [The Nonce](Encryption.md#the-nonce-iv-and-partial-iv).
 
 ## Key Management Algorithms
 
-The content key distribution methods of [RFC 9053 §5–6](https://datatracker.ietf.org/doc/html/rfc9053#section-5),
+The content key distribution methods of [RFC 9053 §5 and §6](https://datatracker.ietf.org/doc/html/rfc9053#section-5),
 in `Cose\Algorithm\KeyManagement`. [RFC 9052 §8.5](https://datatracker.ietf.org/doc/html/rfc9052#section-8.5)
 sorts them into classes, and each class is an interface here, all extending `KeyManagement`. How they are used, and
 the rules each family enforces, are in [Key Management](KeyManagement.md).
@@ -451,15 +451,15 @@ names a hash by one of these identifiers wherever a digest travels in a message:
 | Algorithm | Identifier | Class | Digest | IANA recommendation | Reference |
 |-----------|------------|-------|--------|---------------------|-----------|
 | SHA-1 | -14 | `SHA1` | 20 bytes | Filter Only | [RFC 9054 §3.1](https://www.rfc-editor.org/rfc/rfc9054#section-3.1) |
-| SHA-256/64 | -15 | `SHA256_64` | 8 bytes — SHA-256 truncated | Filter Only | [RFC 9054 §3.2](https://www.rfc-editor.org/rfc/rfc9054#section-3.2) |
+| SHA-256/64 | -15 | `SHA256_64` | 8 bytes, SHA-256 truncated | Filter Only | [RFC 9054 §3.2](https://www.rfc-editor.org/rfc/rfc9054#section-3.2) |
 | SHA-256 | -16 | `SHA256` | 32 bytes | Yes | [RFC 9054 §3.2](https://www.rfc-editor.org/rfc/rfc9054#section-3.2) |
-| SHA-512/256 | -17 | `SHA512_256` | 32 bytes — a distinct SHA-2 function, not SHA-512 truncated | Yes | [RFC 9054 §3.2](https://www.rfc-editor.org/rfc/rfc9054#section-3.2) |
+| SHA-512/256 | -17 | `SHA512_256` | 32 bytes, a distinct SHA-2 function, not SHA-512 truncated | Yes | [RFC 9054 §3.2](https://www.rfc-editor.org/rfc/rfc9054#section-3.2) |
 | SHAKE128 | -18 | `SHAKE128` | 32 bytes | Yes | [RFC 9054 §3.3](https://www.rfc-editor.org/rfc/rfc9054#section-3.3) |
 | SHA-384 | -43 | `SHA384` | 48 bytes | Yes | [RFC 9054 §3.2](https://www.rfc-editor.org/rfc/rfc9054#section-3.2) |
 | SHA-512 | -44 | `SHA512` | 64 bytes | Yes | [RFC 9054 §3.2](https://www.rfc-editor.org/rfc/rfc9054#section-3.2) |
 | SHAKE256 | -45 | `SHAKE256` | 64 bytes | Yes | [RFC 9054 §3.3](https://www.rfc-editor.org/rfc/rfc9054#section-3.3) |
 
-Every class has `create()`, `identifier()`, `hash(string $data): string` — the digest as raw bytes — and
+Every class has `create()`, `identifier()`, `hash(string $data): string`, the digest as raw bytes, and
 `length(): int`, the number of bytes `hash()` returns.
 
 ```php
@@ -481,7 +481,7 @@ identifier resolves through a `Manager`.
 ### Filter Only, as a type
 
 [RFC 9054 §2](https://www.rfc-editor.org/rfc/rfc9054#section-2) distinguishes two uses of a hash function.
-*Filtering* is picking, among a collection of certificates or keys, the candidates whose fingerprint matches — after
+*Filtering* is picking, among a collection of certificates or keys, the candidates whose fingerprint matches, after
 which each candidate is still checked for real, by verifying the signature with its key, so a collision costs
 nothing. Using the digest *as an integrity primitive*, where it stands for the data, needs collision resistance.
 SHA-1 has a published collision and SHA-256/64 keeps 64 bits: both are fine for the first use and not for the
@@ -493,8 +493,8 @@ The library records it in the type system rather than with a runtime flag:
 - `Cose\Algorithm\Hash\Hash` extends it and is implemented by the six IANA recommends: `SHA256`, `SHA512_256`,
   `SHAKE128`, `SHA384`, `SHA512`, `SHAKE256`.
 
-A parameter typed `Hash` therefore refuses `SHA1` and `SHA256_64` — PHPStan and Psalm report it, and PHP throws a
-`TypeError` at the call — while a parameter typed `FilterOnlyHash` accepts all eight. Type the parameter after
+A parameter typed `Hash` therefore refuses `SHA1` and `SHA256_64` (PHPStan and Psalm report it, and PHP throws a
+`TypeError` at the call) while a parameter typed `FilterOnlyHash` accepts all eight. Type the parameter after
 what the digest is used for:
 
 ```php
@@ -562,7 +562,7 @@ $factory = ManagerFactory::create()
 $manager = $factory->generate('ES256');
 ```
 
-A later registration for an identifier — or, on the factory, for an alias — that is already taken replaces the earlier
+A later registration for an identifier, or, on the factory, for an alias, that is already taken replaces the earlier
 one. When the replacement is an instance of **another** class, that is a misconfiguration rather than an intent:
 `list()` keeps reporting a single entry, and which verifier answers for the identifier is decided by registration order
 alone, which in a Symfony application means by the service container. Such a replacement therefore emits an

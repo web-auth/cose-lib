@@ -13,7 +13,7 @@ EU Digital COVID Certificate, and wherever a CBOR Web Token or a COSE message ha
 This library implements:
 - **[RFC 9052](https://datatracker.ietf.org/doc/html/rfc9052)** - COSE: Structures and Process
 - **[RFC 9053](https://datatracker.ietf.org/doc/html/rfc9053)** - COSE: Initial Algorithms (signatures, HMAC, AES-CBC-MAC, the
-  AEAD content encryption algorithms, the key management algorithms — direct, HKDF, AES Key Wrap, ECDH — and the key
+  AEAD content encryption algorithms, the key management algorithms (direct, HKDF, AES Key Wrap, ECDH) and the key
   types)
 - **[RFC 8230](https://datatracker.ietf.org/doc/html/rfc8230)** - RSASSA-PSS (PS256, PS384, PS512) and the RSA key type
 - **[RFC 8812](https://datatracker.ietf.org/doc/html/rfc8812)** - RSASSA-PKCS1-v1_5 (RS256, RS384, RS512, RS1) and
@@ -48,7 +48,7 @@ needs PHP 8.4 and OpenSSL 3.5 at runtime) each expose an `isSupported()`. See [I
 
 ## Quick Start
 
-Verifying a `COSE_Sign1` — the message class is cbor-php's, the header rules and the `Sig_structure` are this
+Verifying a `COSE_Sign1`: the message class is cbor-php's, the header rules and the `Sig_structure` are this
 library's:
 
 ```php
@@ -78,7 +78,7 @@ if (! $coseSign1 instanceof CoseSign1Tag) {
 $headers = CoseHeaders::fromMessage($coseSign1);
 
 // RFC 9052 §3.1: bind the signature to the algorithm the protected header declares.
-// The label is matched by type as well as by value, so the text string "1" — a different label under §1.5 —
+// The label is matched by type as well as by value, so the text string "1", a different label under §1.5,
 // never answers a lookup for the integer label 1.
 $alg = $headers->getProtectedHeaderParameter(1);
 if ($alg === null || (int) $alg->normalize() !== $algorithm::identifier()) {
@@ -112,7 +112,7 @@ $isValid = $algorithm->verify((string) $sigStructure, $key, $coseSign1->getSigna
 > [!IMPORTANT]
 > The library verifies signatures; it does not decide what a message is allowed to say. Checking that `alg` is the one
 > expected for that key, and refusing any `crit` label the application does not process, are the caller's
-> responsibility ([RFC 9052 §3.1](https://datatracker.ietf.org/doc/html/rfc9052#section-3.1)) — the snippet above is
+> responsibility ([RFC 9052 §3.1](https://datatracker.ietf.org/doc/html/rfc9052#section-3.1)); the snippet above is
 > the shape they take. `tests/Signature/DocumentedVerifierTest.php` runs exactly this code.
 
 Signing is the same structure the other way round; [`examples/01-sign1.php`](examples/01-sign1.php) is the whole
@@ -132,9 +132,9 @@ The [documentation index](doc/README.md) lists every chapter:
 | [Encryption](doc/Encryption.md) | `COSE_Encrypt0` and `COSE_Encrypt`, the nonce |
 | [Key Management](doc/KeyManagement.md) | `direct`, HKDF, AES Key Wrap and ECDH recipients |
 | [CBOR Web Tokens](doc/Cwt.md) | Verifying a CWT, `typ` and `CWT Claims` |
-| [X.509 Header Parameters](doc/X509.md) | `x5bag`, `x5chain`, `x5t`, `x5u` — and where the library stops |
+| [X.509 Header Parameters](doc/X509.md) | `x5bag`, `x5chain`, `x5t`, `x5u`, and where the library stops |
 | [Hash Envelope](doc/HashEnvelope.md) | RFC 9995: a signature over the digest of a payload kept elsewhere |
-| [COSE Receipts](doc/Receipts.md) | RFC 9942: `receipts`, `vds`, `vdp` and the `RFC9162_SHA256` Merkle proofs — and where the library stops |
+| [COSE Receipts](doc/Receipts.md) | RFC 9942: `receipts`, `vds`, `vdp` and the `RFC9162_SHA256` Merkle proofs, and where the library stops |
 | [Supported Algorithms](doc/Algorithms.md) | Every identifier with its RFC reference; the `Manager` |
 | [Keys](doc/Keys.md) | Key types and curves, AKP keys, `alg` / `key_ops` restrictions, key validation, thumbprints |
 | [Upgrading](doc/Upgrading.md) | Moving off the deprecated `Cose\...Tag` classes |

@@ -260,7 +260,7 @@ final class RfcReferencesTest extends TestCase
         $name = self::DOCUMENTED_NAMES[$shortName] ?? $shortName;
 
         if (isset(self::NON_STANDARD[$identifier])) {
-            $expectedReference = '—';
+            $expectedReference = 'none';
         } else {
             static::assertArrayHasKey(
                 $identifier,
@@ -380,7 +380,7 @@ final class RfcReferencesTest extends TestCase
                 $label = implode(' | ', array_slice(array_values($row), 0, 2));
 
                 // Then
-                if ($reference === '—') {
+                if ($reference === 'none') {
                     $identifier = (int) ($row['Identifier'] ?? 0);
                     static::assertArrayHasKey(
                         $identifier,
