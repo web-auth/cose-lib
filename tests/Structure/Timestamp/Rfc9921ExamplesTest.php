@@ -132,7 +132,8 @@ final class Rfc9921ExamplesTest extends TestCase
      * over other bytes; and the bytes are identified: the error output of the RFC's example generator.
      *
      * The normative text of section 3.1 and the worked computation of section 3.1.1 agree with each other and with
-     * this implementation; the appendix does not. No erratum was filed at the time of writing.
+     * this implementation; the appendix does not. An erratum against Appendix A.2 was reported on 2026-09-13, see
+     * https://www.rfc-editor.org/errata/rfc9921 and tests/fixtures/rfc9921/README.md.
      */
     #[Test]
     public function theAppendixA2TokenWasComputedOverTheGeneratorsErrorOutputAndDoesNotBind(): void

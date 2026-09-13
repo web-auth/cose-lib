@@ -291,8 +291,8 @@ RFC 9052 Appendix C, and the Appendix A.1 token binds to its payload. One thing 
   `dd9471ef...`, is not the SHA-256 of the CBOR-encoded signature field, `44c2419d...`, that §3.1.1 computes for the
   same message: the RFC's example generator hashed the error output of `diag2cbor.rb` on a line-folded diagnostic
   file instead of the signature, which the test suite reproduces byte for byte. §3.1 and §3.1.1 are what this
-  library implements; the fixtures' README has the full account, and no erratum had been filed at the time of the
-  release.
+  library implements; the fixtures' README has the full account. An erratum against RFC 9921 Appendix A.2 was
+  reported on 2026-09-13 and is listed at <https://www.rfc-editor.org/errata/rfc9921> once screened.
 
 Nothing existing changes. See [doc/Timestamps.md](doc/Timestamps.md).
 

@@ -45,5 +45,6 @@ reproduced verbatim in `tests/Structure/Timestamp/Rfc9921ExamplesTest.php`; its 
 
 The test suite therefore checks the `3161-ctt` mode against §3.1.1 and §3.1.2, whose imprints are the ones the
 normative text of §3.1 produces, and uses `ctt-tst.der` for what it is: a well-formed token that decodes, and that
-the binding check correctly refuses for the message it is attached to. No erratum was filed against RFC 9921 at the
-time of writing.
+the binding check correctly refuses for the message it is attached to. An erratum against Appendix A.2, with the
+account above as its notes, was reported to the RFC Editor on 2026-09-13; it is listed at
+<https://www.rfc-editor.org/errata/rfc9921> once the RFC Production Center has screened it.
