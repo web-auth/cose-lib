@@ -94,7 +94,7 @@ final class PackagingTest extends TestCase
     }
 
     /**
-     * README.md documents "composer test"; the script has to exist.
+     * README.md and doc/Installation.md document "composer test"; the script has to exist.
      */
     #[Test]
     public function theDocumentedComposerScriptsExist(): void
@@ -123,7 +123,7 @@ final class PackagingTest extends TestCase
     public static function getDocumentedFiles(): iterable
     {
         yield '.github/CONTRIBUTING.md' => ['.github/CONTRIBUTING.md'];
-        yield 'doc/Usage.md' => ['doc/Usage.md'];
+        yield 'doc/README.md' => ['doc/README.md'];
         yield 'RELEASES.md' => ['RELEASES.md'];
         yield 'SECURITY.md' => ['SECURITY.md'];
         yield '.ci-tools/phpunit.xml.dist' => ['.ci-tools/phpunit.xml.dist'];

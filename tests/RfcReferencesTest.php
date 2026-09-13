@@ -43,8 +43,8 @@ use function substr;
 use function trim;
 
 /**
- * Every algorithm, key type and curve the library ships is traceable, from the README and from the usage guide, to
- * the RFC and the section that define it — and the reference written there is the one the IANA COSE registry gives.
+ * Every algorithm, key type and curve the library ships is traceable, from the documentation, to the RFC and the
+ * section that define it — and the reference written there is the one the IANA COSE registry gives.
  *
  * The expectations below were checked against <https://www.iana.org/assignments/cose/cose.xhtml> on 2026-09-12. The
  * tables are parsed, not searched, so a row that loses its Reference cell, an identifier that drifts from the class
@@ -56,7 +56,17 @@ final class RfcReferencesTest extends TestCase
 {
     private const ROOT = __DIR__ . '/..';
 
-    private const DOCUMENTS = ['README.md', 'doc/Usage.md'];
+    /**
+     * The chapter that lists every algorithm identifier, and the one that lists the key types and curves.
+     */
+    private const ALGORITHMS_DOCUMENT = 'doc/Algorithms.md';
+
+    private const KEYS_DOCUMENT = 'doc/Keys.md';
+
+    /**
+     * The index of the documentation, whose introduction and "References" section name every RFC implemented.
+     */
+    private const INDEX_DOCUMENT = 'doc/README.md';
 
     /**
      * The RFCs the library implements, as the README and composer.json have to declare them.
@@ -237,8 +247,8 @@ final class RfcReferencesTest extends TestCase
     private const ANY_REFERENCE_PATTERN = '/^(?:\[RFC (\d{4}) §([\d.]+)\]\(https:\/\/www\.rfc-editor\.org\/rfc\/rfc\1#section-\2\)|\[ISO\/IEC 18013-5:2021 §9\.1\.5\.2\]\(https:\/\/www\.iana\.org\/assignments\/cose\/cose\.xhtml#elliptic-curves\))$/';
 
     /**
-     * Every concrete Algorithm class of the library has a row, in each document, with its identifier and a reference
-     * to the RFC section that defines it.
+     * Every concrete Algorithm class of the library has a row in the algorithms chapter, with its identifier and a
+     * reference to the RFC section that defines it.
      */
     #[Test]
     #[DataProvider('getAlgorithmClasses')]
@@ -265,18 +275,17 @@ final class RfcReferencesTest extends TestCase
             $expectedReference = self::rfcReference($rfc, $section);
         }
 
-        foreach (self::DOCUMENTS as $document) {
-            // When
-            $row = self::findRow(self::algorithmRows($document), 'Algorithm', $name, 'Identifier', (string) $identifier);
+        // When
+        $document = self::ALGORITHMS_DOCUMENT;
+        $row = self::findRow(self::algorithmRows($document), 'Algorithm', $name, 'Identifier', (string) $identifier);
 
-            // Then
-            static::assertNotNull($row, sprintf('%s has no row for %s (%d)', $document, $name, $identifier));
-            static::assertSame(
-                $expectedReference,
-                $row['Reference'],
-                sprintf('%s: the reference of %s (%d) is not the one IANA gives', $document, $name, $identifier)
-            );
-        }
+        // Then
+        static::assertNotNull($row, sprintf('%s has no row for %s (%d)', $document, $name, $identifier));
+        static::assertSame(
+            $expectedReference,
+            $row['Reference'],
+            sprintf('%s: the reference of %s (%d) is not the one IANA gives', $document, $name, $identifier)
+        );
     }
 
     /**
@@ -304,13 +313,13 @@ final class RfcReferencesTest extends TestCase
 
     /**
      * The other direction: nothing is documented that the library does not ship, and no documented identifier has
-     * drifted from the class constant. The two documents also agree with each other.
+     * drifted from the class constant.
      */
     #[Test]
-    #[DataProvider('getDocuments')]
-    public function everyDocumentedAlgorithmIsShipped(string $document): void
+    public function everyDocumentedAlgorithmIsShipped(): void
     {
         // Given
+        $document = self::ALGORITHMS_DOCUMENT;
         $shipped = [];
         foreach (self::getAlgorithmClasses() as [$class]) {
             $shortName = substr($class, strrpos($class, '\\') + 1);
@@ -332,20 +341,30 @@ final class RfcReferencesTest extends TestCase
         }
     }
 
+    /**
+     * The algorithm tables live in one chapter only: a second copy anywhere else would be a second thing to keep in
+     * step, which the README used to be.
+     */
     #[Test]
-    public function theReadmeAndTheUsageGuideDocumentTheSameAlgorithms(): void
+    #[DataProvider('getDocuments')]
+    public function theAlgorithmTablesAreNotDuplicated(string $document): void
     {
-        $project = static fn (array $row): string => implode(' | ', [$row['Algorithm'], $row['Identifier'], $row['Reference']]);
-        $readme = array_map($project, self::algorithmRows('README.md'));
-        $usage = array_map($project, self::algorithmRows('doc/Usage.md'));
-        sort($readme);
-        sort($usage);
+        if ($document === self::ALGORITHMS_DOCUMENT) {
+            static::assertGreaterThanOrEqual(6, count(self::tablesWithColumn($document, 'Reference')), $document . ' has fewer reference tables than expected');
 
-        static::assertSame($readme, $usage);
+            return;
+        }
+
+        foreach (self::tablesWithColumn($document, 'Reference') as $table) {
+            static::assertFalse(
+                isset($table[0]['Algorithm'], $table[0]['Identifier']),
+                sprintf('%s carries an algorithm table; the tables belong in %s', $document, self::ALGORITHMS_DOCUMENT)
+            );
+        }
     }
 
     /**
-     * Every Reference cell of every table, in both documents, links the RFC and the section it names, so that a
+     * Every Reference cell of every table, in every document, links the RFC and the section it names, so that a
      * reader following the link lands on the defining text rather than on the front page of the RFC.
      */
     #[Test]
@@ -354,7 +373,6 @@ final class RfcReferencesTest extends TestCase
     {
         // Given
         $tables = self::tablesWithColumn($document, 'Reference');
-        static::assertGreaterThanOrEqual(4, count($tables), $document . ' has fewer reference tables than expected');
 
         foreach ($tables as $rows) {
             foreach ($rows as $row) {
@@ -392,10 +410,10 @@ final class RfcReferencesTest extends TestCase
      * the RFC that defines its parameters.
      */
     #[Test]
-    #[DataProvider('getDocuments')]
-    public function everyKeyTypeIsDocumentedWithItsReference(string $document): void
+    public function everyKeyTypeIsDocumentedWithItsReference(): void
     {
         // Given
+        $document = self::KEYS_DOCUMENT;
         $constants = (new ReflectionClass(Key::class))->getConstants();
         $types = array_filter($constants, static fn ($value, string $name): bool => str_starts_with($name, 'TYPE_') && is_int($value), ARRAY_FILTER_USE_BOTH);
         static::assertCount(count(self::KEY_TYPE_REFERENCES), $types);
@@ -422,9 +440,9 @@ final class RfcReferencesTest extends TestCase
      * likewise, so that the table answers "which label is p" without opening the class.
      */
     #[Test]
-    #[DataProvider('getDocuments')]
-    public function theKeyTypeTableListsTheParameterLabelsOfEachClass(string $document): void
+    public function theKeyTypeTableListsTheParameterLabelsOfEachClass(): void
     {
+        $document = self::KEYS_DOCUMENT;
         $rows = self::tableWithColumns($document, ['Key type', 'kty', 'Class', 'Parameters', 'Reference']);
         $expected = [
             'OKP' => [
@@ -478,10 +496,10 @@ final class RfcReferencesTest extends TestCase
      * names it and with the reference the IANA registry gives.
      */
     #[Test]
-    #[DataProvider('getDocuments')]
-    public function everyCurveIsDocumentedWithItsReference(string $document): void
+    public function everyCurveIsDocumentedWithItsReference(): void
     {
         // Given
+        $document = self::KEYS_DOCUMENT;
         $constants = [];
         foreach ([Ec2Key::class, OkpKey::class] as $class) {
             $short = substr($class, strrpos($class, '\\') + 1);
@@ -510,20 +528,19 @@ final class RfcReferencesTest extends TestCase
     }
 
     /**
-     * The "This library implements" list and the "Documentation" section of the README, and the introduction and
-     * "References" section of the usage guide, name every RFC the tables refer to.
+     * The "This library implements" list of the README, and the introduction and "References" section of the
+     * documentation index, name every RFC the tables refer to.
      */
     #[Test]
     public function theImplementedRfcsAreDeclared(): void
     {
         // Given
         $readme = self::read('README.md');
-        $usage = self::read('doc/Usage.md');
+        $index = self::read(self::INDEX_DOCUMENT);
 
         $implements = self::section($readme, 'This library implements:', "\n## ");
-        $documentation = self::section($readme, '## Documentation', "\n## ");
-        $introduction = self::section($usage, '# How to Use COSE Library', "\n## ");
-        $references = self::section($usage, '## References', "\n## ");
+        $introduction = self::section($index, '# COSE Library for PHP', "\n## ");
+        $references = self::section($index, '## References', "\n## ");
 
         // Then
         foreach (self::IMPLEMENTED_RFCS as $rfc) {
@@ -531,9 +548,8 @@ final class RfcReferencesTest extends TestCase
             $alternative = sprintf('(https://www.rfc-editor.org/rfc/rfc%d.html)', $rfc);
             foreach ([
                 'README "This library implements"' => $implements,
-                'README "Documentation"' => $documentation,
-                'Usage.md introduction' => $introduction,
-                'Usage.md "References"' => $references,
+                'doc/README.md introduction' => $introduction,
+                'doc/README.md "References"' => $references,
             ] as $where => $text) {
                 static::assertTrue(
                     str_contains($text, $link) || str_contains($text, $alternative),
@@ -564,12 +580,19 @@ final class RfcReferencesTest extends TestCase
     }
 
     /**
+     * The README and every chapter of the documentation.
+     *
      * @return iterable<string, array{string}>
      */
     public static function getDocuments(): iterable
     {
-        foreach (self::DOCUMENTS as $document) {
-            yield basename($document) => [$document];
+        yield 'README.md' => ['README.md'];
+
+        $chapters = glob(self::ROOT . '/doc/*.md');
+        static::assertNotFalse($chapters);
+        static::assertNotSame([], $chapters, 'No documentation chapter found');
+        foreach ($chapters as $chapter) {
+            yield 'doc/' . basename($chapter) => ['doc/' . basename($chapter)];
         }
     }
 

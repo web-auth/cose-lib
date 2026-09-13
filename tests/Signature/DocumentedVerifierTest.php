@@ -29,7 +29,7 @@ use RuntimeException;
 use const STR_PAD_LEFT;
 
 /**
- * The COSE_Sign1 verifier documented in README.md and doc/Usage.md, run as it is written there.
+ * The COSE_Sign1 verifier documented in README.md and doc/Signing.md, run as it is written there.
  *
  * It drives CBOR\Tag\CoseSign1Tag, the class that replaces the deprecated Cose\Signature\CoseSign1Tag in 4.8.0, so
  * it doubles as the migration example: the message class comes from cbor-php, the header rules and the Sig_structure
@@ -188,7 +188,7 @@ final class DocumentedVerifierTest extends TestCase
     }
 
     /**
-     * The verifier of README.md and doc/Usage.md, copied as it is documented.
+     * The verifier of README.md and doc/Signing.md, copied as it is documented.
      */
     private static function documentedVerifier(string $encodedData, Ec2Key $key): bool
     {

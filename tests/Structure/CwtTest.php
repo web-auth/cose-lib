@@ -28,7 +28,7 @@ use function str_pad;
 use const STR_PAD_LEFT;
 
 /**
- * The CBOR Web Token flow documented in doc/Usage.md.
+ * The CBOR Web Token flow documented in doc/Cwt.md.
  *
  * A CWT (RFC 8392) is a claims map carried as the payload of a COSE message, optionally wrapped in tag 61. Nothing
  * about the COSE verification changes -- the payload is opaque bytes until the signature checks out -- which is

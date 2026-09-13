@@ -26,7 +26,7 @@ use function str_pad;
 use const STR_PAD_LEFT;
 
 /**
- * The COSE_Sign1 signer documented in README.md and doc/Usage.md, run as it is written there.
+ * The COSE_Sign1 signer documented in doc/Signing.md, run as it is written there.
  *
  * The documented creation snippet used to end at `ByteStringObject::create($yourSignatureBytes)` -- a placeholder
  * that made the example impossible to run, and left the one thing worth showing (that the signature covers the

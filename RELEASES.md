@@ -14,13 +14,10 @@ Such releases will be considered as "pre-releases".
 
 This matrix is the single source of truth for the branches under support; [SECURITY.md](SECURITY.md) refers to it.
 
-| Version | Supported                              |
-|---------|----------------------------------------|
-| 4.8.x   | :white_check_mark: (in development)    |
-| 4.7.x   | :white_check_mark:                     |
-| 4.6.x   | :white_check_mark: (security fix only) |
-| 4.5.x   | :white_check_mark: (security fix only) |
-| < 4.5.x | :x:                                    |
+| Version | Supported                           |
+|---------|-------------------------------------|
+| 4.9.x   | :white_check_mark: (in development) |
+| < 4.9.x | :x:                                 |
 
 ## Upgrading
 
@@ -70,7 +67,7 @@ and C.5.4 included; only the three RSAES-OAEP fixtures stay skipped. Points to k
 - **New dependency:** [spomky-labs/aes-key-wrap](https://github.com/Spomky-Labs/aes-key-wrap) `^7.0` (RFC 3394),
   which requires `ext-mbstring`.
 - RSAES-OAEP (-40, -41, -42) and COSE-HPKE are not implemented. See
-  [doc/Usage.md](doc/Usage.md#key-management-algorithms).
+  [doc/KeyManagement.md](doc/KeyManagement.md).
 
 **The hash algorithms of RFC 9054 are implemented.** `Cose\Algorithm\Hash` holds `SHA1` (-14), `SHA256_64` (-15),
 `SHA256` (-16), `SHA512_256` (-17), `SHAKE128` (-18), `SHA384` (-43), `SHA512` (-44) and `SHAKE256` (-45), with the
@@ -107,7 +104,7 @@ example of RFC 9679 §6 is reproduced byte for byte. Two points to know:
   the boolean. `PublicKeyLoader` reads a compressed `subjectPublicKey` too, and hands back a key that carries the
   uncompressed point. A key carrying `y` as a byte string is handled exactly as before.
 - **The thumbprint of a symmetric key is computed over the secret.** RFC 9679 §7 forbids it for passwords and other
-  low-entropy secrets; see [Key Thumbprints](doc/Usage.md#key-thumbprints).
+  low-entropy secrets; see [Key Thumbprints](doc/Keys.md#key-thumbprints).
 
 **The interoperability fixtures of the IETF COSE working group are part of the test suite.**
 [cose-wg/Examples](https://github.com/cose-wg/Examples) is vendored under `tests/fixtures/cose-wg/`, with a harness
@@ -126,7 +123,7 @@ with the missing identifier. Two behaviours changed on the way, both additive:
   `Key::TYPE_NAME_OCT_IANA` name the new forms, `Key::createFromData()` dispatches them, and the new
   `Key::typeIs(Key::TYPE_*)` answers for every form of a key type. `Key::type()` still returns the form supplied.
 - **The documentation names every RFC the library implements.** RFC 8230 (RSASSA-PSS, RSA keys) and RFC 8812
-  (RSASSA-PKCS1-v1_5, secp256k1) join RFC 9052, RFC 9053 and RFC 9864 in the README and in `doc/Usage.md`; every
+  (RSASSA-PKCS1-v1_5, secp256k1) join RFC 9052, RFC 9053 and RFC 9864 in the README and in the usage guide; every
   algorithm, key type and curve table carries a *Reference* column pointing at the defining section, and
   `tests/RfcReferencesTest.php` keeps those tables in step with the classes and with the IANA registry. The
   `keywords` of `composer.json` replace the obsolete `RFC8152` with the five RFCs implemented. No code changed.
@@ -152,7 +149,7 @@ know:
   that reason; their messages verify the per-target derivation all the same, since for a two-field target the
   version 2 value is the RFC 8152 one (RFC 9338 §1).
 - **A countersignature over a MAC or an encryption is worth the tag it covers.** RFC 9338 §6 requires a tag of at
-  least 256 bits for 128-bit security; nothing checks it. See [Countersignatures](doc/Usage.md#countersignatures).
+  least 256 bits for 128-bit security; nothing checks it. See [Countersignatures](doc/Countersignatures.md).
 
 **New: the AES-CBC-MAC algorithms of RFC 9053 §3.2.** `Cose\Algorithm\Mac\AESMAC128_64` (14), `AESMAC256_64` (15),
 `AESMAC128_128` (25) and `AESMAC256_128` (26), on the `AesCbcMac` base, implement the existing `Mac` interface and
@@ -169,7 +166,7 @@ RFC 9596 §2 forbids. `CoseHeaders::getCwtClaims()` returns the claims map carri
 first, and throws when the parameter appears in both buckets (RFC 9597 §2). The labels are `CoseHeaders::LABEL_TYP`
 (16) and `CoseHeaders::LABEL_CWT_CLAIMS` (15); the value checks are `HeaderMapHelper::assertContentTypeValue()` and
 `HeaderMapHelper::assertValidClaimLabels()`. Nothing existing changes: the raw lookups still hand both labels back
-unchecked. See [doc/Usage.md](doc/Usage.md#typ-and-cwt-claims).
+unchecked. See [doc/Cwt.md](doc/Cwt.md#typ-and-cwt-claims).
 
 **The X.509 header parameters of RFC 9360 have typed accessors.** `CoseHeaders::getX5Bag()`, `getX5Chain()`,
 `getX5T()` and `getX5U()` read `x5bag` (32), `x5chain` (33), `x5t` (34) and `x5u` (35), protected bucket first, and
@@ -184,7 +181,7 @@ through the RFC 9054 registry (SHA-1 accepted, this being the filtering use) and
 with the end-entity certificate of a chain in one call. **The library validates no chain and fetches no URI**: path
 validation, revocation and trust anchors are the application's, as is dereferencing an `x5u`. `getX5U()` returns a
 string. `HeaderMapHelper::assertUriValue()` is the value check behind it (a text string, tagged 32 or not, with a
-scheme). Nothing existing changes. See [doc/Usage.md](doc/Usage.md#x509-header-parameters).
+scheme). Nothing existing changes. See [doc/X509.md](doc/X509.md).
 
 **ML-DSA (RFC 9964) is implemented, over the new AKP key type.** `Cose\Algorithm\Signature\MLDSA\MLDSA44` (-48),
 `MLDSA65` (-49) and `MLDSA87` (-50), on the `MLDSA` base, implement `Signature` and enforce the key restrictions like
@@ -218,7 +215,7 @@ sides of the gate. Points to know:
   know the ML-DSA signature algorithm identifiers. A certificate holding an ML-DSA key and signed by a classical CA
   is.
 - **ML-DSA is unavailable on PHP 8.1 to 8.3, whatever the OpenSSL version**, and on any PHP running on OpenSSL
-  older than 3.5. Nothing else of the library is affected. See [doc/Usage.md](doc/Usage.md#ml-dsa).
+  older than 3.5. Nothing else of the library is affected. See [ML-DSA](doc/Algorithms.md#ml-dsa).
 
 - **The spomky-labs/pki-framework floor moves to 1.6.2** (`^1.6.2`, was `^1.0`). Every earlier release verifies a
   certificate signature over a re-encoded `tbsCertificate`, so a certificate that is not strict DER -- the cose-wg
@@ -237,7 +234,7 @@ $location)` returns the header entries, `payloadFor(Hash, $preimage)` the digest
 through the `Manager` of the application, and refused unless it is a `Hash`: SHA-1 and SHA-256/64 are *Filter Only*
 (RFC 9054 §2) and a payload standing for the content is not a filter — and compares with `hash_equals()`. **The
 library never fetches `payload-location`** (RFC 9995 §5.3), verifies no signature on the envelope's behalf, and
-leaves `COSE_Encrypt` out, as §5.2 does. Nothing existing changes. See [doc/Usage.md](doc/Usage.md#hash-envelope) and
+leaves `COSE_Encrypt` out, as §5.2 does. Nothing existing changes. See [doc/HashEnvelope.md](doc/HashEnvelope.md) and
 `examples/14-hash-envelope.php`.
 **The COSE receipts of RFC 9942 have typed accessors, and the `RFC9162_SHA256` proofs verify.**
 `CoseHeaders::getReceipts()` reads `receipts` (394) as a list of `CBOR\Tag\CoseSign1Tag` — protected bucket first,
@@ -267,7 +264,7 @@ the test suite. Two decisions to know:
   second, formerly private, reads a tag number from a head so that a `GenericTag` 18 from a decoder that does not
   register the class is recognized as a receipt.
 
-Nothing existing changes. See [doc/Usage.md](doc/Usage.md#cose-receipts).
+Nothing existing changes. See [doc/Receipts.md](doc/Receipts.md).
 
 **The Brainpool algorithms of RFC 9864 check their curve up front.** The Brainpool curves are compiled out of some
 OpenSSL builds and of every FIPS provider; `ESB256`, `ESB320`, `ESB384` and `ESB512` used to fail on such a build
@@ -275,7 +272,7 @@ inside `sign()` or `verify()`, with an OpenSSL error string. Each now exposes `i
 `openssl_get_curve_names()`, and `create()` throws a `RuntimeException` naming the curve when it is absent -- the
 contract `Ed448::isSupported()` already had. On a build with the curves nothing changes. A registry that must work on
 an unknown platform guards the four registrations with `isSupported()`, see
-[doc/Usage.md](doc/Usage.md#fully-specified-algorithms).
+[doc/Algorithms.md](doc/Algorithms.md#fully-specified-algorithms).
 
 **The IANA deprecation of -7, -8, -35 and -36 changes nothing here.** RFC 9864 marks ES256, EdDSA, ES384 and ES512
 as *Deprecated* in the COSE Algorithms registry. WebAuthn and CTAP authenticators emit -7 and -8 and will for years,
@@ -290,7 +287,7 @@ raise an `E_USER_DEPRECATED` on construction and are removed in 5.0.0. They were
 spomky-labs/cbor-php 3.4.0, as `CBOR\Tag\CoseSign1Tag` and its siblings, which is where a description of a CBOR
 structure belongs. The wire format is identical, so a message written by a deprecated class is read by its
 replacement and the reverse; the migration is documented in
-[doc/Usage.md](doc/Usage.md#upgrading-from-the-cosetag-classes). Two points are not mechanical: the four-argument
+[doc/Upgrading.md](doc/Upgrading.md). Two points are not mechanical: the four-argument
 `create()` becomes `createFromComponents()`, and the header accessors move to `Cose\Structure\CoseHeaders`.
 
 Their behaviour is otherwise frozen for the whole 4.8.x line: a deprecation is not the place to change what a class

@@ -149,7 +149,7 @@ final class PrehashedEdDSATest extends TestCase
     }
 
     /**
-     * doc/Usage.md used to describe Ed512 as "Ed448 (Ed512): EdDSA with Curve448". It is not: the curve check it
+     * the usage guide used to describe Ed512 as "Ed448 (Ed512): EdDSA with Curve448". It is not: the curve check it
      * inherits from EdDSA accepts Ed25519 only.
      */
     #[Test]
