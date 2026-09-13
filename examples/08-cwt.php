@@ -86,6 +86,7 @@ $message = CoseSign1Tag::create(ListObject::create([
 // Tag 61 is optional; it says "what follows is a CWT".
 $encoded = (string) CwtTag::create($message);
 example_hex('CWT', $encoded);
+example_dump('CWT', $encoded);
 example_assert(str_starts_with(bin2hex($encoded), 'd83d'), 'the outer head is tag 61');
 echo PHP_EOL;
 
@@ -116,6 +117,7 @@ example_assert($typ === 'application/cwt' || $typ === 61, 'the token says it is 
 // enough to trust. getCwtClaims() rejects the parameter when it appears in both buckets (RFC 9597 section 2).
 $claimsInHeader = $headers->getCwtClaims();
 example_assert($claimsInHeader !== null, 'the protected header carries CWT Claims');
+example_dump('protected header', $token->getProtectedHeaderAsMap());
 example_line('iss (header)', (string) HeaderMapHelper::findLabel($claimsInHeader, 1)?->normalize());
 
 // 2. Verify.
@@ -126,6 +128,7 @@ example_assert(
 );
 
 // 3. Only now, read the claims.
+example_dump('claims', $token->getPayload()->getValue());
 $decodedClaims = Decoder::create()
     ->decode(StringStream::create($token->getPayload()->getValue()))
     ->normalize();

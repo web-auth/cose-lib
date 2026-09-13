@@ -14,6 +14,12 @@ Every CBOR item is printed as hex in full, never truncated, so it can be pasted 
 [cbor.me](https://cbor.me) to see the structure the example just built: the message, and the `Sig_structure`,
 `MAC_structure` or `Enc_structure` it was computed over.
 
+Right under the hex, the same item is printed as the object tree cbor-php decodes it into, dumped with
+[symfony/var-dumper](https://symfony.com/doc/current/components/var_dumper.html) (a `require-dev` dependency): the
+class of every item, the number of every tag, the label of every map entry. Byte strings that are not printable text
+are written as `h'..'`, as cbor.me does; the protected header stays a byte string there because that is what the
+message carries, and the examples that need to look inside it decode it separately (`01-sign1.php`, `08-cwt.php`).
+
 | File | Topic |
 |---|---|
 | [`01-sign1.php`](01-sign1.php) | COSE_Sign1: sign, encode, decode, verify, and what a swapped payload does |

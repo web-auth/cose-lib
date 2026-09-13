@@ -95,6 +95,7 @@ $message = EncryptStructure::create($protectedHeader)
     ->encryptFor($algorithm, $plaintext, random_bytes($algorithm->nonceLength()), $recipients);
 $encoded = (string) $message;
 example_hex('COSE_Encrypt', $encoded);
+example_dump('COSE_Encrypt', $message);
 echo PHP_EOL;
 
 // --- each recipient opens the message ----------------------------------------------
@@ -233,6 +234,7 @@ $layered = CoseEncryptTag::create(ListObject::create([
     ]),
 ]));
 example_hex('layered COSE_Encrypt', (string) $layered);
+example_dump('layered COSE_Encrypt', $layered);
 
 // Bob opens it from the inside out: the inner recipient gives him the KEK, the outer one the CEK.
 $outerEntry = CoseRecipient::all($layered->getRecipients())[0];

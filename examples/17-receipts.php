@@ -86,6 +86,7 @@ $unprotected = MapObject::create([
 $signature = $algorithm->sign((string) Signature1::create($protected, ByteStringObject::create($rootOf8)), $issuerKey);
 $receipt = CoseSign1Tag::create(ListObject::create([$protected, $unprotected, NullObject::create(), ByteStringObject::create($signature)]));
 example_hex('receipt', (string) $receipt);
+example_dump('receipt', $receipt);
 
 // The statement that was logged, with the receipt attached in its unprotected header (RFC 9942 §4.3, Figure 2):
 // the receipts travel as byte strings, each wrapping the tagged COSE_Sign1.
@@ -102,6 +103,7 @@ $statement = CoseSign1Tag::create(ListObject::create([
     ByteStringObject::create($statementSignature),
 ]));
 example_hex('statement + receipt', (string) $statement);
+example_dump('statement + receipt', $statement);
 echo PHP_EOL;
 
 // --- 3. the verifier: read the receipts, verify the one it was given -------------------------------------------------

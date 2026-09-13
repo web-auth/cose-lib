@@ -91,6 +91,8 @@ $signedAsEs256 = $es256->sign((string) $toBeSigned(ES256::identifier()), $key);
 
 example_hex('Sig_structure (-7)', (string) $toBeSigned(ES256::identifier()));
 example_hex('Sig_structure (-9)', (string) $toBeSigned(ESP256::identifier()));
+example_dump('Sig_structure (-7)', (string) $toBeSigned(ES256::identifier()));
+example_dump('Sig_structure (-9)', (string) $toBeSigned(ESP256::identifier()));
 example_assert(
     $es256->verify((string) $toBeSigned(ES256::identifier()), $key->toPublic(), $signedAsEs256),
     'the ES256 signature verifies as ES256'
