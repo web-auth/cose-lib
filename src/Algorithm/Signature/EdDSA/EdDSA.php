@@ -14,6 +14,7 @@ use function extension_loaded;
 use function hash_equals;
 use InvalidArgumentException;
 use RuntimeException;
+use const SODIUM_CRYPTO_SIGN_BYTES;
 use function sodium_crypto_sign_detached;
 use function sodium_crypto_sign_publickey;
 use function sodium_crypto_sign_secretkey;
@@ -21,6 +22,7 @@ use function sodium_crypto_sign_seed_keypair;
 use function sodium_crypto_sign_verify_detached;
 use function sodium_memzero;
 use SodiumException;
+use function strlen;
 use Throwable;
 
 /**
@@ -91,6 +93,11 @@ class EdDSA implements Signature, KeyRestrictionAware
         $key = $this->handleKey($key, Key::OP_VERIFY);
         if ($key->curveId() !== OkpKey::CURVE_ED25519) {
             throw new InvalidArgumentException('Unsupported curve');
+        }
+        // RFC 8032 section 5.1.7: a signature is 64 bytes. Anything else is an invalid signature, not a caller
+        // error: webauthn-lib hands the bytes of an assertion straight to verify().
+        if (strlen($signature) !== SODIUM_CRYPTO_SIGN_BYTES) {
+            return false;
         }
         // Sodium reports a signature or a public key whose size is not the one Ed25519 defines with a
         // SodiumException; that is an invalid signature, not an error. Anything else — a missing extension above

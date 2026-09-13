@@ -122,6 +122,56 @@ final class RSAKeyTest extends TestCase
     }
 
     /**
+     * RFC 8230, section 4: "other" is an array of maps, each holding the r_i, d_i and t_i byte strings. A key whose
+     * "other" has another shape used to be reported by a TypeError from inside the PSS signature, where the values
+     * are first used.
+     */
+    #[Test]
+    #[DataProvider('getMalformedOtherPrimeInfos')]
+    public function malformedOtherPrimeInfosAreRejected(mixed $other, string $expectedMessage): void
+    {
+        // Given
+        $key = RsaKey::create([
+            RsaKey::TYPE => RsaKey::TYPE_RSA,
+            RsaKey::DATA_N => str_repeat("\xff", 256),
+            RsaKey::DATA_E => "\x01\x00\x01",
+            RsaKey::DATA_D => str_repeat("\x2a", 256),
+            RsaKey::DATA_OTHER => $other,
+        ]);
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($expectedMessage);
+
+        // When
+        $key->other();
+    }
+
+    /**
+     * @return iterable<string, array{mixed, string}>
+     */
+    public static function getMalformedOtherPrimeInfos(): iterable
+    {
+        yield 'not an array' => ['r_i', 'Invalid RSA key. The "other" parameter shall be an array'];
+        yield 'a prime info that is not a map' => [['r_i'], 'Invalid RSA key. Each "other" prime info shall be a map'];
+        yield 'a prime info without t_i' => [
+            [[
+                RsaKey::DATA_RI => "\x0b",
+                RsaKey::DATA_DI => "\x03",
+            ]],
+            'Invalid RSA key. Each "other" prime info shall hold the "r_i", "d_i" and "t_i" byte strings',
+        ];
+        yield 'a prime info with an integer r_i' => [
+            [[
+                RsaKey::DATA_RI => 11,
+                RsaKey::DATA_DI => "\x03",
+                RsaKey::DATA_TI => "\x05",
+            ]],
+            'Invalid RSA key. Each "other" prime info shall hold the "r_i", "d_i" and "t_i" byte strings',
+        ];
+    }
+
+    /**
      * @return iterable<string, array{mixed, mixed, string}>
      */
     public static function getInvalidKeys(): iterable

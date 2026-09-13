@@ -201,9 +201,26 @@ class Ec2Key extends Key
     ];
 
     /**
+     * The curve as the key carries it: the registry value, or one of the names of CURVE_NAME_TO_ID.
+     */
+    private readonly int|string $curve;
+
+    /**
+     * The registry value of the curve, whichever form the key carries it under.
+     */
+    private readonly int $curveId;
+
+    private readonly string $x;
+
+    /**
      * The y-coordinate as a byte string: the one the key carries, or the one decompressed from its sign bit.
      */
     private readonly string $y;
+
+    /**
+     * The private scalar, or null when the key is public.
+     */
+    private readonly ?string $d;
 
     /**
      * @param array<int|string, mixed> $data
@@ -223,32 +240,44 @@ class Ec2Key extends Key
             throw new InvalidArgumentException('Invalid EC2 key. The curve or the "x/y" coordinates are missing');
         }
         // The curve is checked first: the coordinate lengths below are read from a table indexed by the curve.
-        $curveId = self::toCurveId($data[self::DATA_CURVE]);
+        $curve = $data[self::DATA_CURVE];
+        if (! is_int($curve) && ! is_string($curve)) {
+            throw new InvalidArgumentException('The curve is not supported');
+        }
+        $curveId = self::toCurveId($curve);
         if ($curveId === null) {
             throw new InvalidArgumentException('The curve is not supported');
         }
         $length = self::CURVE_KEY_LENGTH[$curveId];
         // RFC 9053 section 7.1, table 19 types "x" and "d" as byte strings, and "y" as a byte string or a boolean.
-        if (! is_string($data[self::DATA_X])) {
+        $x = $data[self::DATA_X];
+        if (! is_string($x)) {
             throw new InvalidArgumentException('Invalid type for x coordinate');
         }
-        if (strlen($data[self::DATA_X]) !== $length) {
+        if (strlen($x) !== $length) {
             throw new InvalidArgumentException('Invalid length for x coordinate');
         }
-        if (is_bool($data[self::DATA_Y])) {
-            $this->y = self::decompressY($curveId, $data[self::DATA_X], $data[self::DATA_Y]);
-        } elseif (! is_string($data[self::DATA_Y])) {
+        $y = $data[self::DATA_Y];
+        if (is_bool($y)) {
+            $y = self::decompressY($curveId, $x, $y);
+        } elseif (! is_string($y)) {
             throw new InvalidArgumentException('Invalid type for y coordinate');
-        } elseif (strlen($data[self::DATA_Y]) !== $length) {
+        } elseif (strlen($y) !== $length) {
             throw new InvalidArgumentException('Invalid length for y coordinate');
-        } else {
-            $this->y = $data[self::DATA_Y];
         }
         // RFC 5915 section 3: the private key is "an octet string of length ceiling (log2(n)/8)".
-        if (array_key_exists(self::DATA_D, $data)
-            && (! is_string($data[self::DATA_D]) || strlen($data[self::DATA_D]) !== $length)) {
-            throw new InvalidArgumentException('Invalid length for d');
+        $d = null;
+        if (array_key_exists(self::DATA_D, $data)) {
+            $d = $data[self::DATA_D];
+            if (! is_string($d) || strlen($d) !== $length) {
+                throw new InvalidArgumentException('Invalid length for d');
+            }
         }
+        $this->curve = $curve;
+        $this->curveId = $curveId;
+        $this->x = $x;
+        $this->y = $y;
+        $this->d = $d;
     }
 
     /**
@@ -269,7 +298,7 @@ class Ec2Key extends Key
 
     public function x(): string
     {
-        return $this->get(self::DATA_X);
+        return $this->x;
     }
 
     /**
@@ -283,15 +312,12 @@ class Ec2Key extends Key
 
     public function isPrivate(): bool
     {
-        return array_key_exists(self::DATA_D, $this->getData());
+        return $this->d !== null;
     }
 
     public function d(): string
     {
-        if (! $this->isPrivate()) {
-            throw new InvalidArgumentException('The key is not private.');
-        }
-        return $this->get(self::DATA_D);
+        return $this->d ?? throw new InvalidArgumentException('The key is not private.');
     }
 
     /**
@@ -300,7 +326,7 @@ class Ec2Key extends Key
      */
     public function curve(): int|string
     {
-        return $this->get(self::DATA_CURVE);
+        return $this->curve;
     }
 
     /**
@@ -308,9 +334,7 @@ class Ec2Key extends Key
      */
     public function curveId(): int
     {
-        $curve = $this->curve();
-
-        return is_int($curve) ? $curve : self::CURVE_NAME_TO_ID[$curve];
+        return $this->curveId;
     }
 
     public function asPEM(): string
@@ -449,12 +473,12 @@ class Ec2Key extends Key
     /**
      * The registry value of a supported curve, or null when the value denotes no curve this class supports.
      */
-    private static function toCurveId(mixed $curve): ?int
+    private static function toCurveId(int|string $curve): ?int
     {
         if (is_int($curve)) {
             return in_array($curve, self::SUPPORTED_CURVES_INT, true) ? $curve : null;
         }
 
-        return is_string($curve) ? (self::CURVE_NAME_TO_ID[$curve] ?? null) : null;
+        return self::CURVE_NAME_TO_ID[$curve] ?? null;
     }
 }

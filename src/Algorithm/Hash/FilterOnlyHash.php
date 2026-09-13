@@ -32,6 +32,8 @@ interface FilterOnlyHash extends Algorithm
 
     /**
      * The length of the digest in bytes.
+     *
+     * @return positive-int
      */
     public function length(): int;
 }

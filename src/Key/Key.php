@@ -189,7 +189,12 @@ class Key
      */
     public function type(): int|string
     {
-        return $this->data[self::TYPE];
+        $type = $this->data[self::TYPE];
+        if (! is_int($type) && ! is_string($type)) {
+            throw new InvalidArgumentException('Invalid key: the type is neither an integer nor a text string');
+        }
+
+        return $type;
     }
 
     /**
@@ -200,7 +205,7 @@ class Key
     public function typeIs(int $type): bool
     {
         // Read raw rather than through type(): the value comes from the wire, and a "kty" that is neither an
-        // integer nor a string has to be answered with false, not with the TypeError of type()'s return type.
+        // integer nor a string has to be answered with false, not with the exception type() raises.
         $actual = $this->data[self::TYPE];
 
         return $actual === $type || in_array($actual, self::TYPE_NAMES[$type] ?? [], true);
@@ -359,7 +364,7 @@ class Key
     public function get(int|string $key): mixed
     {
         if (! array_key_exists($key, $this->data)) {
-            throw new InvalidArgumentException(sprintf('The key has no data at index %d', $key));
+            throw new InvalidArgumentException(sprintf('The key has no data at index %s', $key));
         }
 
         return $this->data[$key];

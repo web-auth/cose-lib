@@ -145,6 +145,39 @@ final class EdDSATest extends TestCase
     }
 
     /**
+     * RFC 8032, section 5.1.7: an Ed25519 signature is 64 bytes. Any other length is an invalid signature, reported
+     * as a verification outcome rather than as the SodiumException libsodium raises for it.
+     */
+    #[Test]
+    #[DataProvider('getMisSizedSignatures')]
+    public function aSignatureOfTheWrongLengthIsInvalid(string $signature): void
+    {
+        // Given
+        $algorithm = Ed25519::create();
+        $key = OkpKey::create([
+            OkpKey::DATA_X => base64_decode('11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo', true),
+            OkpKey::DATA_CURVE => OkpKey::CURVE_ED25519,
+            OkpKey::TYPE => OkpKey::TYPE_OKP,
+        ]);
+
+        // When
+        $isValid = $algorithm->verify('eyJhbGciOiJFZERTQSJ9.RXhhbXBsZSBvZiBFZDI1NTE5IHNpZ25pbmc', $key, $signature);
+
+        // Then
+        static::assertFalse($isValid);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function getMisSizedSignatures(): iterable
+    {
+        yield 'empty' => [''];
+        yield '63 bytes' => [str_repeat("\x2a", 63)];
+        yield '65 bytes' => [str_repeat("\x2a", 65)];
+    }
+
+    /**
      * GHSA-h7p4-6f74-7w4g: sign() built the libsodium secret key as `d . x`, so the caller-supplied public half
      * reached the EdDSA challenge k = SHA-512(R || A || M) unchecked. Because the nonce R depends only on the seed
      * and the message, signing one message twice under the same seed and two different halves produced two

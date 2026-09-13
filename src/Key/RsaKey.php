@@ -10,6 +10,7 @@ use function chunk_split;
 use function implode;
 use function in_array;
 use InvalidArgumentException;
+use function is_array;
 use function is_string;
 use function ltrim;
 use function ord;
@@ -107,88 +108,113 @@ class RsaKey extends Key
 
     public function n(): string
     {
-        return $this->get(self::DATA_N);
+        return $this->getString(self::DATA_N);
     }
 
     public function e(): string
     {
-        return $this->get(self::DATA_E);
+        return $this->getString(self::DATA_E);
     }
 
     public function d(): string
     {
         $this->checkKeyIsPrivate();
 
-        return $this->get(self::DATA_D);
+        return $this->getString(self::DATA_D);
     }
 
     public function p(): string
     {
         $this->checkKeyIsPrivate();
 
-        return $this->get(self::DATA_P);
+        return $this->getString(self::DATA_P);
     }
 
     public function q(): string
     {
         $this->checkKeyIsPrivate();
 
-        return $this->get(self::DATA_Q);
+        return $this->getString(self::DATA_Q);
     }
 
     public function dP(): string
     {
         $this->checkKeyIsPrivate();
 
-        return $this->get(self::DATA_DP);
+        return $this->getString(self::DATA_DP);
     }
 
     public function dQ(): string
     {
         $this->checkKeyIsPrivate();
 
-        return $this->get(self::DATA_DQ);
+        return $this->getString(self::DATA_DQ);
     }
 
     public function QInv(): string
     {
         $this->checkKeyIsPrivate();
 
-        return $this->get(self::DATA_QI);
+        return $this->getString(self::DATA_QI);
     }
 
     /**
      * The "other prime infos" of a multi-prime key (RFC 8230, section 4): one map per prime from the third one on,
      * each holding the DATA_RI, DATA_DI and DATA_TI entries.
      *
-     * @return array<int, array<int, string>>
+     * @throws InvalidArgumentException when the key is public, or when the parameter is not an array of maps that
+     *                                  each hold the three byte strings
+     * @return list<array<int, string>>
      */
     public function other(): array
     {
         $this->checkKeyIsPrivate();
+        $other = $this->get(self::DATA_OTHER);
+        if (! is_array($other)) {
+            throw new InvalidArgumentException('Invalid RSA key. The "other" parameter shall be an array');
+        }
+        $primeInfos = [];
+        foreach ($other as $primeInfo) {
+            if (! is_array($primeInfo)) {
+                throw new InvalidArgumentException('Invalid RSA key. Each "other" prime info shall be a map');
+            }
+            $rI = $primeInfo[self::DATA_RI] ?? null;
+            $dI = $primeInfo[self::DATA_DI] ?? null;
+            $tI = $primeInfo[self::DATA_TI] ?? null;
+            if (! is_string($rI) || ! is_string($dI) || ! is_string($tI)) {
+                throw new InvalidArgumentException(
+                    'Invalid RSA key. Each "other" prime info shall hold the "r_i", "d_i" and "t_i" byte strings'
+                );
+            }
+            $primeInfos[] = [
+                self::DATA_RI => $rI,
+                self::DATA_DI => $dI,
+                self::DATA_TI => $tI,
+            ];
+        }
 
-        return $this->get(self::DATA_OTHER);
+        return $primeInfos;
     }
 
     public function rI(): string
     {
         $this->checkKeyIsPrivate();
 
-        return $this->get(self::DATA_RI);
+        return $this->getString(self::DATA_RI);
     }
 
     public function dI(): string
     {
         $this->checkKeyIsPrivate();
 
-        return $this->get(self::DATA_DI);
+        return $this->getString(self::DATA_DI);
     }
 
     public function tI(): string
     {
         $this->checkKeyIsPrivate();
 
-        return $this->get(self::DATA_TI);
+        return $this->getString(self::DATA_TI);
     }
 
     public function hasPrimes(): bool
@@ -304,6 +330,21 @@ class RsaKey extends Key
         if (! $this->isPrivate()) {
             throw new InvalidArgumentException('The key is not private.');
         }
+    }
+
+    /**
+     * The byte string the key carries at the given label.
+     *
+     * @throws InvalidArgumentException when the key has no such entry, or when it is not a byte string
+     */
+    private function getString(int $label): string
+    {
+        $value = $this->get($label);
+        if (! is_string($value)) {
+            throw new InvalidArgumentException(sprintf('Invalid RSA key. The parameter %d shall be a byte string', $label));
+        }
+
+        return $value;
     }
 
     /**

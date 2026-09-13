@@ -24,6 +24,11 @@ class SymmetricKey extends Key
     final public const DATA_K = -1;
 
     /**
+     * @var non-empty-string
+     */
+    private readonly string $k;
+
+    /**
      * @param array<int|string, mixed> $data
      */
     public function __construct(array $data)
@@ -40,14 +45,16 @@ class SymmetricKey extends Key
         if (! isset($data[self::DATA_K])) {
             throw new InvalidArgumentException('Invalid symmetric key. The parameter "k" is missing');
         }
-        if (! is_string($data[self::DATA_K])) {
+        $k = $data[self::DATA_K];
+        if (! is_string($k)) {
             throw new InvalidArgumentException(
                 'Invalid symmetric key. The parameter "k" shall be a byte string (CBOR objects shall be normalized first)'
             );
         }
-        if ($data[self::DATA_K] === '') {
+        if ($k === '') {
             throw new InvalidArgumentException('Invalid symmetric key. The parameter "k" is empty');
         }
+        $this->k = $k;
     }
 
     /**
@@ -58,8 +65,11 @@ class SymmetricKey extends Key
         return new self($data);
     }
 
+    /**
+     * @return non-empty-string
+     */
     public function k(): string
     {
-        return $this->get(self::DATA_K);
+        return $this->k;
     }
 }

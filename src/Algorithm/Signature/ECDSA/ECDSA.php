@@ -41,6 +41,7 @@ abstract class ECDSA implements Signature, KeyRestrictionAware
         if (! openssl_sign($data, $signature, $privateKey, $this->getHashAlgorithm())) {
             throw new InvalidArgumentException('Unable to sign the data: ' . OpenSslError::lastMessage());
         }
+        /** @var string $signature */
 
         return ECSignature::fromAsn1($signature, $this->getSignaturePartLength());
     }

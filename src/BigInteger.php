@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Cose;
 
+use function bin2hex;
 use Brick\Math\BigInteger as BrickBigInteger;
 use Brick\Math\Exception\MathException;
 use function chr;
 use function hex2bin;
 use function strlen;
-use function unpack;
 
 /**
  * @internal
@@ -21,13 +21,16 @@ final class BigInteger
     ) {
     }
 
+    /**
+     * Reads a big-endian unsigned integer. The empty string is what toBytes() returns for zero, and reads back as such.
+     */
     public static function createFromBinaryString(string $value): self
     {
-        $res = unpack('H*', $value);
-        /** @var non-empty-string $data */
-        $data = current($res);
+        if ($value === '') {
+            return new self(BrickBigInteger::zero());
+        }
 
-        return new self(BrickBigInteger::fromBase($data, 16));
+        return new self(BrickBigInteger::fromBase(bin2hex($value), 16));
     }
 
     public static function createFromDecimal(int $value): self
@@ -46,9 +49,10 @@ final class BigInteger
 
         $temp = $this->value->toBase(16);
         $temp = 0 !== (strlen($temp) & 1) ? '0' . $temp : $temp;
-        $temp = hex2bin($temp);
 
-        return ltrim($temp, chr(0));
+        // hex2bin() only fails on an odd length or a non-hexadecimal digit, and neither can come out of toBase(16)
+        // once the string is padded to an even length.
+        return ltrim((string) hex2bin($temp), chr(0));
     }
 
     /**

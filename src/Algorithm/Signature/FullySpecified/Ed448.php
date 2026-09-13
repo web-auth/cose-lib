@@ -74,6 +74,7 @@ final class Ed448 implements Signature, KeyRestrictionAware
         if (! openssl_sign($data, $signature, $privateKey, self::NO_DIGEST)) {
             throw new InvalidArgumentException('Unable to sign the data: ' . OpenSslError::lastMessage());
         }
+        /** @var string $signature */
 
         return $signature;
     }

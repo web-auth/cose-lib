@@ -73,6 +73,44 @@ final class KeyTest extends TestCase
     }
 
     /**
+     * RFC 9052, section 7.1 types "kty" as "tstr / int". A generic key is still built around any other value, so that
+     * a map read from the wire can be inspected and the dedicated classes answer with their own message, but type()
+     * reports it through the exception this library documents rather than through the TypeError of its return type.
+     */
+    #[Test]
+    public function aKeyTypeThatIsNeitherAnIntegerNorAStringIsReportedByType(): void
+    {
+        // Given
+        $key = Key::create([
+            Key::TYPE => 1.5,
+        ]);
+
+        // Then
+        static::assertFalse($key->typeIs(Key::TYPE_OKP));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid key: the type is neither an integer nor a text string');
+
+        // When
+        $key->type();
+    }
+
+    #[Test]
+    public function aMissingEntryIsNamedByItsLabel(): void
+    {
+        // Given
+        $key = Key::create([
+            Key::TYPE => Key::TYPE_OKP,
+        ]);
+
+        // Then
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The key has no data at index kid');
+
+        // When
+        $key->get('kid');
+    }
+
+    /**
      * @return iterable<string, array{array<int|string, mixed>, class-string<Key>}>
      */
     public static function getKeys(): iterable
