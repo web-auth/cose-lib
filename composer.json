@@ -28,9 +28,6 @@
     "require-dev": {
         "spomky-labs/cbor-php": "^3.2.2"
     },
-    "replace": {
-        "symfony/polyfill-php81": "*"
-    },
     "suggest": {
         "ext-bcmath": "Recommended: without GMP or BCMath, signing with RSASSA-PSS (PS256/PS384/PS512) blinds its private exponentiation in pure PHP",
         "ext-gmp": "Recommended: without GMP or BCMath, signing with RSASSA-PSS (PS256/PS384/PS512) blinds its private exponentiation in pure PHP",
