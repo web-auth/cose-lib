@@ -1,4 +1,9 @@
-# COSE Library for PHP
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Spomky-Labs/brand/main/4-Web/svg/marques-de-projet/marque-cose-inverse.svg">
+  <img alt="COSE" width="141" height="48" src="https://raw.githubusercontent.com/Spomky-Labs/brand/main/4-Web/svg/marques-de-projet/marque-cose-couleur.svg">
+</picture>
+
+COSE signing, encryption and key management.
 
 [![CI](https://github.com/web-auth/cose-lib/actions/workflows/ci.yml/badge.svg)](https://github.com/web-auth/cose-lib/actions/workflows/ci.yml)
 [![Latest Stable Version](https://poser.pugx.org/web-auth/cose-lib/v)](https://packagist.org/packages/web-auth/cose-lib)
