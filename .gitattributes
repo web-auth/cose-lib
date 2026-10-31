@@ -3,6 +3,7 @@
 /.agents export-ignore
 /.ci-tools export-ignore
 /.github export-ignore
+/.oss-scanner export-ignore
 /doc export-ignore
 /tests export-ignore
 /.editorconfig export-ignore
