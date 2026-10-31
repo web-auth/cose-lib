@@ -24,9 +24,7 @@ use function glob;
 use const GLOB_BRACE;
 use function implode;
 use function in_array;
-use function is_array;
 use function is_int;
-use function is_string;
 use function json_decode;
 use const JSON_THROW_ON_ERROR;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -568,9 +566,9 @@ final class RfcReferencesTest extends TestCase
     {
         // Given
         $composer = json_decode(self::read('composer.json'), true, 512, JSON_THROW_ON_ERROR);
-        static::assertTrue(is_array($composer));
+        static::assertIsArray($composer);
         $keywords = $composer['keywords'] ?? [];
-        static::assertTrue(is_array($keywords));
+        static::assertIsArray($keywords);
 
         // Then
         static::assertNotContains('RFC8152', $keywords);
@@ -714,7 +712,7 @@ final class RfcReferencesTest extends TestCase
     private static function read(string $path): string
     {
         $content = file_get_contents(self::ROOT . '/' . $path);
-        static::assertTrue(is_string($content), 'Cannot read ' . $path);
+        static::assertIsString($content, 'Cannot read ' . $path);
 
         return $content;
     }

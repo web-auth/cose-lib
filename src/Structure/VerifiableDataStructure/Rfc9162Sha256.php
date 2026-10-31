@@ -128,11 +128,12 @@ final class Rfc9162Sha256
             array_push($stack, self::leafHash($entry));
             // Merge once per trailing 1 bit of the index: after leaf i, the i+1 leaves seen so far form complete
             // subtrees whose sizes are the set bits of i+1, and each trailing 1 of i is a subtree that closes here.
-            for ($merges = $i++; ($merges & 1) === 1; $merges >>= 1) {
+            for ($merges = $i; ($merges & 1) === 1; $merges >>= 1) {
                 $right = array_pop($stack);
                 $left = array_pop($stack);
                 array_push($stack, self::nodeHash((string) $left, (string) $right));
             }
+            ++$i;
         }
         if ($stack === []) {
             return self::emptyTreeHash();

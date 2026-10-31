@@ -240,7 +240,7 @@ final class X509FixtureTest extends TestCase
             return null;
         }
         $hexes = is_string($value) ? [$value] : $value;
-        static::assertTrue(is_array($hexes));
+        static::assertIsArray($hexes);
 
         return array_map(static fn (string $hex): string => CoseWgFixture::bytes($hex, $parameter), $hexes);
     }

@@ -550,7 +550,7 @@ final class CoseWgHarnessTest extends CoseWgFixtureTestCase
         $fixture = CoseWgFixture::load(Rfc9338FixtureTest::rfc9338FixtureRoot() . '/appendix-a/a-2-1-sign1.json');
         $document = $fixture->document();
         $cbor = $document['output']['cbor'];
-        static::assertTrue(is_string($cbor));
+        static::assertIsString($cbor);
         $offset = strpos($cbor, 'FBD1A5CF');
         static::assertNotFalse($offset, 'the countersignature of A.2.1 ends with FBD1A5CF');
         $document['output']['cbor'] = substr_replace($cbor, 'FBD1A5CE', $offset, 8);

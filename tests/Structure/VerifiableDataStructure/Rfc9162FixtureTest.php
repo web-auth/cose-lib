@@ -16,7 +16,6 @@ use function glob;
 use const GLOB_BRACE;
 use function in_array;
 use InvalidArgumentException;
-use function is_array;
 use function is_int;
 use function is_string;
 use const JSON_BIGINT_AS_STRING;
@@ -187,7 +186,7 @@ final class Rfc9162FixtureTest extends TestCase
         $json = file_get_contents(self::FIXTURES . '/' . $file);
         static::assertNotFalse($json);
         $probe = json_decode($json, true, 8, JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING);
-        static::assertTrue(is_array($probe));
+        static::assertIsArray($probe);
 
         return $probe;
     }
@@ -200,7 +199,7 @@ final class Rfc9162FixtureTest extends TestCase
         if ($list === null) {
             return [];
         }
-        static::assertTrue(is_array($list));
+        static::assertIsArray($list);
 
         return array_map(static function (mixed $b64): string {
             $bytes = base64_decode((string) $b64, true);

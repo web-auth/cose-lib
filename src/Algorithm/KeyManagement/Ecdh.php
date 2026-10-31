@@ -94,7 +94,7 @@ abstract class Ecdh implements KeyAgreement, KeyRestrictionAware
         $context = $wrap === null
             ? $layer->kdfContext()
             : $layer->kdfContext($wrap::identifier(), $wrap->keyLength());
-        $length = $wrap === null ? $layer->keyLength() : $wrap->keyLength();
+        $length = $wrap?->keyLength() ?? $layer->keyLength();
 
         return $this->hkdf()
             ->derive($secret, $layer->headers()->getSalt(), (string) $context, $length);

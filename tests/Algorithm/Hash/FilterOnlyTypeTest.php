@@ -11,7 +11,6 @@ use function exec;
 use function file;
 use function getenv;
 use function implode;
-use function is_array;
 use function is_executable;
 use function is_string;
 use function json_decode;
@@ -71,10 +70,10 @@ final class FilterOnlyTypeTest extends TestCase
         // Then
         static::assertSame(1, $status, 'PHPStan was expected to report errors: ' . $json);
         $report = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
-        static::assertTrue(is_array($report));
+        static::assertIsArray($report);
         static::assertSame([], $report['errors'] ?? null, 'PHPStan reported errors that are not about a file');
         $files = $report['files'] ?? [];
-        static::assertTrue(is_array($files));
+        static::assertIsArray($files);
         static::assertCount(1, $files);
         $messages = (array) (array_values($files)[0]['messages'] ?? []);
         static::assertCount(2, $messages, 'Exactly the two Filter Only calls are rejected: ' . $json);
@@ -83,7 +82,7 @@ final class FilterOnlyTypeTest extends TestCase
         sort($reportedLines);
         static::assertSame($expectedLines, $reportedLines);
         foreach ($messages as $message) {
-            static::assertTrue(is_string($message['message']));
+            static::assertIsString($message['message']);
             static::assertStringContainsString('of function integrity expects', (string) $message['message']);
             static::assertStringContainsString('expects Cose\Algorithm\Hash\Hash', (string) $message['message']);
             static::assertMatchesRegularExpression('/Cose\\\\Algorithm\\\\Hash\\\\SHA(1|256_64) given/', $message['message']);
