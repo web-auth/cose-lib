@@ -11,8 +11,6 @@ use CBOR\Tag\CoseMacTag;
 use CBOR\Tag\CoseSign1Tag;
 use CBOR\Tag\CoseSignTag;
 use function file_get_contents;
-use function is_array;
-use function is_string;
 use function json_decode;
 use const JSON_THROW_ON_ERROR;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -179,7 +177,7 @@ final class PackagingTest extends TestCase
     private static function composerJson(): array
     {
         $composer = json_decode(self::read('composer.json'), true, 512, JSON_THROW_ON_ERROR);
-        static::assertTrue(is_array($composer));
+        static::assertIsArray($composer);
 
         return $composer;
     }
@@ -187,7 +185,7 @@ final class PackagingTest extends TestCase
     private static function read(string $path): string
     {
         $content = file_get_contents(self::ROOT . '/' . $path);
-        static::assertTrue(is_string($content), 'Cannot read ' . $path);
+        static::assertIsString($content, 'Cannot read ' . $path);
 
         return $content;
     }
