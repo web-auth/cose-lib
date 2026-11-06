@@ -232,10 +232,24 @@ jobs:
       XDEBUG_MODE: 'off'
       PHP_VERSION: ${{ matrix.php-version }}
       COSE_ML_DSA_EXPECTED: ${{ matrix.ml-dsa }}
+      # RfcReferencesTest parses the documentation pages against the classes and the IANA COSE registry.
+      # They live in web-auth/cose-doc; without this checkout the test skips instead of failing.
+      COSE_DOC_PATH: ${{ github.workspace }}/cose-doc
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+
+      # One branch of the documentation is one version of the library, so the branch is named here the way
+      # edit_uri names it in mkdocs.yml: a new version branch updates both.
+      - name: Check out the documentation
+        uses: actions/checkout@v7.0.1
+        with:
+          repository: web-auth/cose-doc
+          ref: 4.9.x
+          path: cose-doc
+          persist-credentials: false
+
       - name: Install dependencies
         run: |
           if [ "${{ matrix.lowest-deps || 'false' }}" = "true" ]; then

@@ -20,10 +20,12 @@ use Cose\Key\SymmetricKey;
 use function count;
 use function explode;
 use function file_get_contents;
+use function getenv;
 use function glob;
 use const GLOB_BRACE;
 use function implode;
 use function in_array;
+use function is_file;
 use function is_int;
 use function json_decode;
 use const JSON_THROW_ON_ERROR;
@@ -55,16 +57,25 @@ final class RfcReferencesTest extends TestCase
     private const ROOT = __DIR__ . '/..';
 
     /**
-     * The chapter that lists every algorithm identifier, and the one that lists the key types and curves.
+     * The pages live in web-auth/cose-doc, one branch per version of the library. They are read from
+     * COSE_DOC_PATH, or from a checkout of that repository beside this one; without either, the tests that
+     * parse them are skipped, so a clone of the library alone still runs green.
      */
-    private const ALGORITHMS_DOCUMENT = 'doc/Algorithms.md';
+    private const DOCUMENTATION_ENV = 'COSE_DOC_PATH';
 
-    private const KEYS_DOCUMENT = 'doc/Keys.md';
+    private const DOCUMENTATION_SIBLING = '/../cose-doc';
 
     /**
-     * The index of the documentation, whose introduction and "References" section name every RFC implemented.
+     * The pages that carry the algorithm tables, and the ones that carry the key type and curve tables.
      */
-    private const INDEX_DOCUMENT = 'doc/README.md';
+    private const ALGORITHMS_DOCUMENTS = 'docs/algorithms';
+
+    private const KEYS_DOCUMENTS = 'docs/keys';
+
+    /**
+     * The page whose table and "References" section name every RFC implemented.
+     */
+    private const INDEX_DOCUMENT = 'docs/introduction/provided-features.md';
 
     /**
      * The RFCs the library implements, as the README and composer.json have to declare them.
@@ -252,6 +263,8 @@ final class RfcReferencesTest extends TestCase
     #[DataProvider('getAlgorithmClasses')]
     public function everyShippedAlgorithmIsDocumentedWithItsReference(string $class): void
     {
+        $this->requireDocumentation();
+
         // Given
         $identifier = $class::identifier();
         $shortName = substr($class, strrpos($class, '\\') + 1);
@@ -274,15 +287,16 @@ final class RfcReferencesTest extends TestCase
         }
 
         // When
-        $document = self::ALGORITHMS_DOCUMENT;
-        $row = self::findRow(self::algorithmRows($document), 'Algorithm', $name, 'Identifier', (string) $identifier);
+        $documents = self::documentsIn(self::ALGORITHMS_DOCUMENTS);
+        $where = self::ALGORITHMS_DOCUMENTS;
+        $row = self::findRow(self::algorithmRows($documents), 'Algorithm', $name, 'Identifier', (string) $identifier);
 
         // Then
-        static::assertNotNull($row, sprintf('%s has no row for %s (%d)', $document, $name, $identifier));
+        static::assertNotNull($row, sprintf('%s has no row for %s (%d)', $where, $name, $identifier));
         static::assertSame(
             $expectedReference,
             $row['Reference'],
-            sprintf('%s: the reference of %s (%d) is not the one IANA gives', $document, $name, $identifier)
+            sprintf('%s: the reference of %s (%d) is not the one IANA gives', $where, $name, $identifier)
         );
     }
 
@@ -316,8 +330,10 @@ final class RfcReferencesTest extends TestCase
     #[Test]
     public function everyDocumentedAlgorithmIsShipped(): void
     {
+        $this->requireDocumentation();
+
         // Given
-        $document = self::ALGORITHMS_DOCUMENT;
+        $where = self::ALGORITHMS_DOCUMENTS;
         $shipped = [];
         foreach (self::getAlgorithmClasses() as [$class]) {
             $shortName = substr($class, strrpos($class, '\\') + 1);
@@ -325,39 +341,50 @@ final class RfcReferencesTest extends TestCase
         }
 
         // When
-        $rows = self::algorithmRows($document);
+        $documents = self::documentsIn(self::ALGORITHMS_DOCUMENTS);
+        $rows = self::algorithmRows($documents);
+        $tables = 0;
+        foreach ($documents as $document) {
+            $tables += count(self::tablesWithColumn($document, 'Reference'));
+        }
 
         // Then
+        static::assertGreaterThanOrEqual(6, $tables, $where . ' has fewer reference tables than expected');
         static::assertCount(
             count(self::ALGORITHM_REFERENCES) + count(self::NON_STANDARD) + 1, // +1: EdDSA and Ed25519 share -8
             $rows,
-            $document . ' does not document the expected number of algorithms'
+            $where . ' does not document the expected number of algorithms'
         );
         foreach ($rows as $row) {
             $key = $row['Algorithm'] . ' ' . $row['Identifier'];
-            static::assertArrayHasKey($key, $shipped, sprintf('%s documents %s, which no class ships', $document, $key));
+            static::assertArrayHasKey($key, $shipped, sprintf('%s documents %s, which no class ships', $where, $key));
         }
     }
 
     /**
-     * The algorithm tables live in one chapter only: a second copy anywhere else would be a second thing to keep in
-     * step, which the README used to be.
+     * The algorithm tables live in one section of the documentation only: a second copy anywhere else would be a
+     * second thing to keep in step, which the README used to be.
      */
     #[Test]
     #[DataProvider('getDocuments')]
     public function theAlgorithmTablesAreNotDuplicated(string $document): void
     {
-        if ($document === self::ALGORITHMS_DOCUMENT) {
-            static::assertGreaterThanOrEqual(6, count(self::tablesWithColumn($document, 'Reference')), $document . ' has fewer reference tables than expected');
-
-            return;
-        }
+        $belongs = str_starts_with($document, self::ALGORITHMS_DOCUMENTS . '/');
 
         foreach (self::tablesWithColumn($document, 'Reference') as $table) {
+            if ($belongs) {
+                // An algorithm table is read by identifier, so it carries one.
+                static::assertArrayHasKey(
+                    'Identifier',
+                    $table[0],
+                    sprintf('%s: a reference table of the algorithms section has no Identifier column', $document)
+                );
+                continue;
+            }
             static::assertArrayNotHasKey(
                 'Algorithm',
                 $table[0],
-                sprintf('%s carries an algorithm table; the tables belong in %s', $document, self::ALGORITHMS_DOCUMENT)
+                sprintf('%s carries an algorithm table; the tables belong in %s', $document, self::ALGORITHMS_DOCUMENTS)
             );
         }
     }
@@ -411,13 +438,16 @@ final class RfcReferencesTest extends TestCase
     #[Test]
     public function everyKeyTypeIsDocumentedWithItsReference(): void
     {
+        $this->requireDocumentation();
+
         // Given
-        $document = self::KEYS_DOCUMENT;
+        $documents = self::documentsIn(self::KEYS_DOCUMENTS);
+        $document = self::KEYS_DOCUMENTS;
         $constants = (new ReflectionClass(Key::class))->getConstants();
         $types = array_filter($constants, static fn ($value, string $name): bool => str_starts_with($name, 'TYPE_') && is_int($value), ARRAY_FILTER_USE_BOTH);
         static::assertCount(count(self::KEY_TYPE_REFERENCES), $types);
 
-        $rows = self::tableWithColumns($document, ['Key type', 'kty', 'Class', 'Parameters', 'Reference']);
+        $rows = self::tableWithColumns($documents, ['Key type', 'kty', 'Class', 'Parameters', 'Reference']);
         static::assertCount(count(self::KEY_TYPE_REFERENCES), $rows, $document . ': the key-type table has the wrong number of rows');
 
         foreach ($types as $kty) {
@@ -441,8 +471,10 @@ final class RfcReferencesTest extends TestCase
     #[Test]
     public function theKeyTypeTableListsTheParameterLabelsOfEachClass(): void
     {
-        $document = self::KEYS_DOCUMENT;
-        $rows = self::tableWithColumns($document, ['Key type', 'kty', 'Class', 'Parameters', 'Reference']);
+        $this->requireDocumentation();
+
+        $document = self::KEYS_DOCUMENTS;
+        $rows = self::tableWithColumns(self::documentsIn(self::KEYS_DOCUMENTS), ['Key type', 'kty', 'Class', 'Parameters', 'Reference']);
         $expected = [
             'OKP' => [
                 'crv' => OkpKey::DATA_CURVE,
@@ -497,8 +529,10 @@ final class RfcReferencesTest extends TestCase
     #[Test]
     public function everyCurveIsDocumentedWithItsReference(): void
     {
+        $this->requireDocumentation();
+
         // Given
-        $document = self::KEYS_DOCUMENT;
+        $document = self::KEYS_DOCUMENTS;
         $constants = [];
         foreach ([Ec2Key::class, OkpKey::class] as $class) {
             $short = substr($class, strrpos($class, '\\') + 1);
@@ -510,7 +544,7 @@ final class RfcReferencesTest extends TestCase
         }
         static::assertCount(count(self::CURVE_REFERENCES), $constants);
 
-        $rows = self::tableWithColumns($document, ['Curve', 'crv', 'Key type', 'Constant', 'Reference']);
+        $rows = self::tableWithColumns(self::documentsIn(self::KEYS_DOCUMENTS), ['Curve', 'crv', 'Key type', 'Constant', 'Reference']);
         static::assertCount(count(self::CURVE_REFERENCES), $rows, $document . ': the curve table has the wrong number of rows');
 
         foreach (self::CURVE_REFERENCES as $crv => [$name, $constant, $reference]) {
@@ -527,18 +561,20 @@ final class RfcReferencesTest extends TestCase
     }
 
     /**
-     * The "This library implements" list of the README, and the introduction and "References" section of the
-     * documentation index, name every RFC the tables refer to.
+     * The "This library implements" list of the README, and the "What it implements" and "References" sections of
+     * the documentation, name every RFC the tables refer to.
      */
     #[Test]
     public function theImplementedRfcsAreDeclared(): void
     {
+        $this->requireDocumentation();
+
         // Given
         $readme = self::read('README.md');
         $index = self::read(self::INDEX_DOCUMENT);
 
         $implements = self::section($readme, 'This library implements:', "\n## ");
-        $introduction = self::section($index, '# COSE Library for PHP', "\n## ");
+        $implemented = self::section($index, '## What it implements', "\n## ");
         $references = self::section($index, '## References', "\n## ");
 
         // Then
@@ -547,8 +583,8 @@ final class RfcReferencesTest extends TestCase
             $alternative = sprintf('(https://www.rfc-editor.org/rfc/rfc%d.html)', $rfc);
             foreach ([
                 'README "This library implements"' => $implements,
-                'doc/README.md introduction' => $introduction,
-                'doc/README.md "References"' => $references,
+                self::INDEX_DOCUMENT . ' "What it implements"' => $implemented,
+                self::INDEX_DOCUMENT . ' "References"' => $references,
             ] as $where => $text) {
                 static::assertTrue(
                     str_contains($text, $link) || str_contains($text, $alternative),
@@ -579,7 +615,7 @@ final class RfcReferencesTest extends TestCase
     }
 
     /**
-     * The README and every chapter of the documentation.
+     * The README of the library, and every page of the documentation when its repository is at hand.
      *
      * @return iterable<string, array{string}>
      */
@@ -587,11 +623,16 @@ final class RfcReferencesTest extends TestCase
     {
         yield 'README.md' => ['README.md'];
 
-        $chapters = glob(self::ROOT . '/doc/*.md');
-        static::assertNotFalse($chapters);
-        static::assertNotSame([], $chapters, 'No documentation chapter found');
-        foreach ($chapters as $chapter) {
-            yield 'doc/' . basename($chapter) => ['doc/' . basename($chapter)];
+        $root = self::documentationRoot();
+        if ($root === null) {
+            return;
+        }
+        $pages = glob($root . '/docs/{*,*/*}.md', GLOB_BRACE);
+        static::assertNotFalse($pages);
+        static::assertNotSame([], $pages, 'No documentation page found');
+        foreach ($pages as $page) {
+            $relative = substr($page, strlen($root . '/'));
+            yield $relative => [$relative];
         }
     }
 
@@ -608,35 +649,41 @@ final class RfcReferencesTest extends TestCase
     }
 
     /**
-     * The rows of every algorithm table of the document, i.e. the tables headed Algorithm | Identifier | … | Reference.
+     * The rows of every algorithm table of the pages, i.e. the tables headed Algorithm | Identifier | … | Reference.
      *
+     * @param list<string> $documents
      * @return list<array<string, string>>
      */
-    private static function algorithmRows(string $document): array
+    private static function algorithmRows(array $documents): array
     {
         $rows = [];
-        foreach (self::tablesWithColumn($document, 'Reference') as $table) {
-            if (isset($table[0]['Algorithm'], $table[0]['Identifier'])) {
-                $rows = [...$rows, ...$table];
+        foreach ($documents as $document) {
+            foreach (self::tablesWithColumn($document, 'Reference') as $table) {
+                if (isset($table[0]['Algorithm'], $table[0]['Identifier'])) {
+                    $rows = [...$rows, ...$table];
+                }
             }
         }
-        static::assertNotSame([], $rows, $document . ' has no algorithm table');
+        static::assertNotSame([], $rows, implode(', ', $documents) . ' has no algorithm table');
 
         return $rows;
     }
 
     /**
+     * @param list<string> $documents
      * @param list<string> $columns
      * @return list<array<string, string>>
      */
-    private static function tableWithColumns(string $document, array $columns): array
+    private static function tableWithColumns(array $documents, array $columns): array
     {
-        foreach (self::tablesWithColumn($document, $columns[0]) as $table) {
-            if (array_keys($table[0]) === $columns) {
-                return $table;
+        foreach ($documents as $document) {
+            foreach (self::tablesWithColumn($document, $columns[0]) as $table) {
+                if (array_keys($table[0]) === $columns) {
+                    return $table;
+                }
             }
         }
-        static::fail(sprintf('%s has no table with the columns %s', $document, implode(' | ', $columns)));
+        static::fail(sprintf('%s has no table with the columns %s', implode(', ', $documents), implode(' | ', $columns)));
     }
 
     /**
@@ -711,9 +758,54 @@ final class RfcReferencesTest extends TestCase
 
     private static function read(string $path): string
     {
-        $content = file_get_contents(self::ROOT . '/' . $path);
+        $root = str_starts_with($path, 'docs/') ? self::documentationRoot() : self::ROOT;
+        static::assertNotNull($root, 'The documentation repository is not available');
+        $content = file_get_contents($root . '/' . $path);
         static::assertIsString($content, 'Cannot read ' . $path);
 
         return $content;
+    }
+
+    /**
+     * The checkout of web-auth/cose-doc to read the pages from, or null when there is none.
+     */
+    private static function documentationRoot(): ?string
+    {
+        foreach ([getenv(self::DOCUMENTATION_ENV) ?: null, self::ROOT . self::DOCUMENTATION_SIBLING] as $candidate) {
+            if ($candidate !== null && is_file($candidate . '/docs/README.md')) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Skips the test when the documentation repository is not beside this one.
+     */
+    private function requireDocumentation(): void
+    {
+        if (self::documentationRoot() === null) {
+            static::markTestSkipped(sprintf(
+                'The pages are in web-auth/cose-doc; clone it beside this repository or set %s.',
+                self::DOCUMENTATION_ENV
+            ));
+        }
+    }
+
+    /**
+     * Every page of a directory of the documentation, as paths to read().
+     *
+     * @return list<string>
+     */
+    private static function documentsIn(string $directory): array
+    {
+        $root = self::documentationRoot();
+        static::assertNotNull($root);
+        $files = glob($root . '/' . $directory . '/*.md');
+        static::assertNotFalse($files);
+        static::assertNotSame([], $files, 'No page found in ' . $directory);
+
+        return array_map(static fn (string $file): string => $directory . '/' . basename($file), $files);
     }
 }
