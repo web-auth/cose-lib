@@ -228,7 +228,7 @@ final class AesCbcMacTest extends TestCase
     }
 
     #[Test]
-    #[DataProvider('getAlgorithms')]
+    #[DataProvider('getEachAlgorithm')]
     public function theKeyTypeIsInvalid(AesCbcMac $algorithm): void
     {
         // Then
@@ -247,7 +247,7 @@ final class AesCbcMacTest extends TestCase
     }
 
     #[Test]
-    #[DataProvider('getAlgorithms')]
+    #[DataProvider('getEachAlgorithm')]
     public function theKeyValueIsMissing(AesCbcMac $algorithm): void
     {
         // Then
@@ -282,7 +282,7 @@ final class AesCbcMacTest extends TestCase
     }
 
     #[Test]
-    #[DataProvider('getAlgorithms')]
+    #[DataProvider('getEachAlgorithm')]
     public function theKeyValueIsEmpty(AesCbcMac $algorithm): void
     {
         // Then
@@ -363,6 +363,18 @@ final class AesCbcMacTest extends TestCase
         yield 'AES-MAC 256/64' => [AESMAC256_64::create(), 32, 8, 'AES-MAC 256/64'];
         yield 'AES-MAC 128/128' => [AESMAC128_128::create(), 16, 16, 'AES-MAC 128/128'];
         yield 'AES-MAC 256/128' => [AESMAC256_128::create(), 32, 16, 'AES-MAC 256/128'];
+    }
+
+    /**
+     * The algorithms alone, for the cases that only need one to reject a key.
+     *
+     * @return iterable<string, array{AesCbcMac}>
+     */
+    public static function getEachAlgorithm(): iterable
+    {
+        foreach (self::getAlgorithms() as $name => [$algorithm]) {
+            yield $name => [$algorithm];
+        }
     }
 
     /**

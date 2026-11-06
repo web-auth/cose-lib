@@ -109,7 +109,7 @@ final class MLDSATest extends TestCase
      * @param class-string<MLDSA> $class
      */
     #[Test]
-    #[DataProvider('getClasses')]
+    #[DataProvider('getAlgorithmClasses')]
     public function theAlgorithmIsBuiltWhereThePlatformSupportsIt(string $class): void
     {
         if (! $class::isSupported()) {
@@ -158,10 +158,22 @@ final class MLDSATest extends TestCase
     }
 
     /**
+     * The classes alone, for the cases that do not name the algorithm.
+     *
+     * @return iterable<string, array{class-string<MLDSA>}>
+     */
+    public static function getAlgorithmClasses(): iterable
+    {
+        foreach (self::getClasses() as $name => [$class]) {
+            yield $name => [$class];
+        }
+    }
+
+    /**
      * @param class-string<MLDSA> $class
      */
     #[Test]
-    #[DataProvider('getClasses')]
+    #[DataProvider('getAlgorithmClasses')]
     public function aSignatureMadeWithAFreshKeyPairVerifies(string $class): void
     {
         $this->requireMlDsa();
@@ -338,7 +350,7 @@ final class MLDSATest extends TestCase
      * @param class-string<MLDSA> $class
      */
     #[Test]
-    #[DataProvider('getClasses')]
+    #[DataProvider('getAlgorithmClasses')]
     public function aSignatureOfAnotherLengthIsInvalid(string $class): void
     {
         $this->requireMlDsa();
@@ -534,7 +546,7 @@ final class MLDSATest extends TestCase
      * operations.
      */
     #[Test]
-    #[DataProvider('getClasses')]
+    #[DataProvider('getAlgorithmClasses')]
     public function aPublicKeyThatDoesNotMatchTheSeedIsRefused(string $class): void
     {
         $this->requireMlDsa();
@@ -568,7 +580,7 @@ final class MLDSATest extends TestCase
      * @param class-string<MLDSA> $class
      */
     #[Test]
-    #[DataProvider('getClasses')]
+    #[DataProvider('getAlgorithmClasses')]
     public function aSeedOfTheWrongLengthCannotBeExpanded(string $class): void
     {
         $this->requireMlDsa();

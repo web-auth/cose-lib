@@ -50,7 +50,7 @@ final class BrainpoolAvailabilityTest extends TestCase
      * @param class-string<ESB256|ESB320|ESB384|ESB512> $class
      */
     #[Test]
-    #[DataProvider('getBrainpoolAlgorithms')]
+    #[DataProvider('getBrainpoolClasses')]
     public function theAlgorithmIsBuiltWhereTheCurveIsAvailable(string $class): void
     {
         if (! $class::isSupported()) {
@@ -90,7 +90,7 @@ final class BrainpoolAvailabilityTest extends TestCase
      * @param class-string<ESB256|ESB320|ESB384|ESB512> $class
      */
     #[Test]
-    #[DataProvider('getBrainpoolAlgorithms')]
+    #[DataProvider('getBrainpoolClasses')]
     public function theFixtureRegistrySkipsTheAlgorithmWhereTheCurveIsAbsent(string $class): void
     {
         // When
@@ -129,5 +129,17 @@ final class BrainpoolAvailabilityTest extends TestCase
         yield 'ESB320 (-266)' => [ESB320::class, Ec2Key::CURVE_NAME_BP320];
         yield 'ESB384 (-267)' => [ESB384::class, Ec2Key::CURVE_NAME_BP384];
         yield 'ESB512 (-268)' => [ESB512::class, Ec2Key::CURVE_NAME_BP512];
+    }
+
+    /**
+     * The classes alone, for the cases that do not name the curve.
+     *
+     * @return iterable<string, array{class-string<ESB256|ESB320|ESB384|ESB512>}>
+     */
+    public static function getBrainpoolClasses(): iterable
+    {
+        foreach (self::getBrainpoolAlgorithms() as $name => [$class]) {
+            yield $name => [$class];
+        }
     }
 }

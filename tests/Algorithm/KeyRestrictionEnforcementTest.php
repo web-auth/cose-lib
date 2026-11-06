@@ -84,7 +84,7 @@ final class KeyRestrictionEnforcementTest extends TestCase
      * before the restrictions were read.
      */
     #[Test]
-    #[DataProvider('getForbiddenCombinations')]
+    #[DataProvider('getForbiddenOperations')]
     public function theOperationIsPerformedWhenTheRestrictionsAreNotEnforced(
         KeyRestrictionAware $algorithm,
         Key $key,
@@ -443,6 +443,18 @@ final class KeyRestrictionEnforcementTest extends TestCase
             Key::OP_MAC_VERIFY,
             'The key does not allow the "MAC verify" operation',
         ];
+    }
+
+    /**
+     * The same combinations without the message, for the case that expects no exception.
+     *
+     * @return iterable<string, array{KeyRestrictionAware, Key, int}>
+     */
+    public static function getForbiddenOperations(): iterable
+    {
+        foreach (self::getForbiddenCombinations() as $name => [$algorithm, $key, $operation]) {
+            yield $name => [$algorithm, $key, $operation];
+        }
     }
 
     /**

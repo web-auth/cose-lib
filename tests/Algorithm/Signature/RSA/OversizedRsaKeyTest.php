@@ -84,7 +84,7 @@ final class OversizedRsaKeyTest extends TestCase
      * Signing is not a boolean operation: a key the library will not compute with is reported as what it is.
      */
     #[Test]
-    #[DataProvider('getOversizedKeys')]
+    #[DataProvider('getOversizedAlgorithmsAndKeys')]
     public function anOversizedKeyIsRefusedBySign(Signature $algorithm, RsaKey $key): void
     {
         // Then
@@ -123,6 +123,18 @@ final class OversizedRsaKeyTest extends TestCase
                 self::key($maximumModulus, $oversizedExponent),
                 str_repeat("\x00", self::MAXIMUM_MODULUS_OCTETS),
             ];
+        }
+    }
+
+    /**
+     * The algorithms and keys without a signature, for the case that only signs.
+     *
+     * @return iterable<string, array{Signature, RsaKey}>
+     */
+    public static function getOversizedAlgorithmsAndKeys(): iterable
+    {
+        foreach (self::getOversizedKeys() as $name => [$algorithm, $key]) {
+            yield $name => [$algorithm, $key];
         }
     }
 

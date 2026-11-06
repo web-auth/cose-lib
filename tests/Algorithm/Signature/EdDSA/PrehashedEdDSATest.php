@@ -71,7 +71,7 @@ final class PrehashedEdDSATest extends TestCase
 
     #[Test]
     #[WithoutErrorHandler]
-    #[DataProvider('getAlgorithmNames')]
+    #[DataProvider('getAlgorithmClasses')]
     public function acknowledgingTheConstructionSilencesTheWarning(string $class): void
     {
         // Given
@@ -93,6 +93,18 @@ final class PrehashedEdDSATest extends TestCase
     {
         yield 'Ed256 (-260)' => [Ed256::class, Ed256::NON_STANDARD_ALGORITHM_MESSAGE];
         yield 'Ed512 (-261)' => [Ed512::class, Ed512::NON_STANDARD_ALGORITHM_MESSAGE];
+    }
+
+    /**
+     * The classes alone, for the case that does not read the message of the warning.
+     *
+     * @return iterable<string, array{class-string<Ed256|Ed512>}>
+     */
+    public static function getAlgorithmClasses(): iterable
+    {
+        foreach (self::getAlgorithmNames() as $name => [$class]) {
+            yield $name => [$class];
+        }
     }
 
     /**
