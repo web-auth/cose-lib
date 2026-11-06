@@ -40,7 +40,7 @@ This library implements:
   Defined in RFC 3161: `3161-ttc` and `3161-ctt`, carried and bound to the message, not validated
 
 Every identifier the library ships is listed with the RFC section that defines it in
-[Supported Algorithms](doc/Algorithms.md), and a test keeps that list in step with the classes and with the IANA
+[Supported Algorithms](https://cose.spomky-labs.com/latest/algorithms/), and a test keeps that list in step with the classes and with the IANA
 registry.
 
 ## Installation
@@ -51,7 +51,7 @@ composer require web-auth/cose-lib "spomky-labs/cbor-php:^3.4"
 
 PHP 8.1 or later, with `ext-openssl`; `ext-sodium` for Ed25519, `ext-gmp` or `ext-bcmath` recommended. The
 platform-dependent algorithms (Ed448, the Brainpool curves, AES-CCM, ChaCha20/Poly1305, SHAKE, and ML-DSA, which
-needs PHP 8.4 and OpenSSL 3.5 at runtime) each expose an `isSupported()`. See [Installation](doc/Installation.md).
+needs PHP 8.4 and OpenSSL 3.5 at runtime) each expose an `isSupported()`. See [Installation](https://cose.spomky-labs.com/latest/introduction/installation/).
 
 ## Quick Start
 
@@ -123,29 +123,22 @@ $isValid = $algorithm->verify((string) $sigStructure, $key, $coseSign1->getSigna
 > the shape they take. `tests/Signature/DocumentedVerifierTest.php` runs exactly this code.
 
 Signing is the same structure the other way round; [`examples/01-sign1.php`](examples/01-sign1.php) is the whole
-round trip, key generation included, and [Signing and Verifying](doc/Signing.md) explains each step.
+round trip, key generation included, and [Signing and Verifying](https://cose.spomky-labs.com/latest/signing/) explains each step.
 
 ## Documentation
 
-The [documentation index](doc/README.md) lists every chapter:
+The official documentation is available as **<https://cose.spomky-labs.com/>**, one version per maintained branch of
+the library. It covers the messages and their headers, signing and verifying, message authentication codes,
+encryption and key management, the keys, every algorithm identifier with its RFC reference, and the header parameters
+of RFC 9360, 9995, 9942 and 9921.
 
-| Chapter | What it covers |
-|---|---|
-| [Installation](doc/Installation.md) | Requirements, optional extensions and platform checks, performance, running the tests |
-| [Messages, Structures and Headers](doc/Messages.md) | The six COSE tags, the `Sig_structure` / `MAC_structure` / `Enc_structure` classes, reading headers the RFC 9052 way |
-| [Signing and Verifying](doc/Signing.md) | `COSE_Sign1` and `COSE_Sign`, what the application must check, verifying with a certificate |
-| [Countersignatures](doc/Countersignatures.md) | The version 2 countersignatures of RFC 9338, full and abbreviated, on any of the eight targets |
-| [Message Authentication Codes](doc/Mac.md) | `COSE_Mac0` and `COSE_Mac` |
-| [Encryption](doc/Encryption.md) | `COSE_Encrypt0` and `COSE_Encrypt`, the nonce |
-| [Key Management](doc/KeyManagement.md) | `direct`, HKDF, AES Key Wrap and ECDH recipients |
-| [CBOR Web Tokens](doc/Cwt.md) | Verifying a CWT, `typ` and `CWT Claims` |
-| [X.509 Header Parameters](doc/X509.md) | `x5bag`, `x5chain`, `x5t`, `x5u`, and where the library stops |
-| [Hash Envelope](doc/HashEnvelope.md) | RFC 9995: a signature over the digest of a payload kept elsewhere |
-| [COSE Receipts](doc/Receipts.md) | RFC 9942: `receipts`, `vds`, `vdp` and the `RFC9162_SHA256` Merkle proofs, and where the library stops |
-| [RFC 3161 Timestamp Tokens](doc/Timestamps.md) | RFC 9921: `3161-ttc` and `3161-ctt`, the message imprint of each mode, and where the library stops |
-| [Supported Algorithms](doc/Algorithms.md) | Every identifier with its RFC reference; the `Manager` |
-| [Keys](doc/Keys.md) | Key types and curves, AKP keys, `alg` / `key_ops` restrictions, key validation, thumbprints |
-| [Upgrading](doc/Upgrading.md) | Moving off the deprecated `Cose\...Tag` classes |
+Start with [Signing and verifying](https://cose.spomky-labs.com/latest/signing/) and, before you rely on a
+verification that returned `true`, with
+[What the application must check](https://cose.spomky-labs.com/latest/signing/what-the-application-must-check/).
+[Security recommendations](https://cose.spomky-labs.com/latest/introduction/security-recommendations/) collects in one
+page every decision the library leaves to you.
+
+The pages live in [web-auth/cose-doc](https://github.com/web-auth/cose-doc); corrections are welcome there.
 
 [`examples/`](examples/README.md) holds a runnable program per topic, and [RELEASES.md](RELEASES.md) the supported
 branches and what changed in each release.
@@ -158,8 +151,8 @@ branches and what changed in each release.
   validated, no URI is fetched and no trust is established by this library.
 - **Weak-but-needed algorithms warn until acknowledged.** `RS1` (SHA-1), the non-standard `Ed256`/`Ed512`, an HMAC
   key shorter than the hash output and an RSA modulus below 2048 bits emit an `E_USER_WARNING` today and will throw
-  in the next major version; each has an explicit acknowledgement, see [Algorithms](doc/Algorithms.md#non-standard-and-insecure-algorithms)
-  and [Keys](doc/Keys.md).
+  in the next major version; each has an explicit acknowledgement, see [Algorithms](https://cose.spomky-labs.com/latest/algorithms/insecure-algorithms/)
+  and [Keys](https://cose.spomky-labs.com/latest/keys/).
 - **ES256 (-7) and EdDSA (-8) stay first-class** although RFC 9864 marks them *Deprecated* at IANA: WebAuthn
   authenticators emit them and will for years. Register the fully-specified identifiers next to them.
 - **Key restrictions (`alg`, `key_ops`) are enforced by default** by the content encryption and key management
@@ -169,7 +162,7 @@ branches and what changed in each release.
 
 Contributions are welcome! Please see [CONTRIBUTING.md](.github/CONTRIBUTING.md) for details. The test suite runs
 with `castor phpunit` in the project QA container, or `composer test` on a host that provides PHPUnit 11 as
-`phpunit-11`; see [Running the test suite](doc/Installation.md#running-the-test-suite).
+`phpunit-11`; see [Running the test suite](https://cose.spomky-labs.com/latest/introduction/installation/#running-the-test-suite).
 
 For security vulnerabilities, do not open an issue: report them privately through GitHub private vulnerability
 reporting or by e-mail to **security [at] spomky-labs.com**. See [SECURITY.md](SECURITY.md).

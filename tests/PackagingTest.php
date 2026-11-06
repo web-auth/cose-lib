@@ -92,7 +92,7 @@ final class PackagingTest extends TestCase
     }
 
     /**
-     * README.md and doc/Installation.md document "composer test"; the script has to exist.
+     * README.md and the installation page of the documentation document "composer test"; the script has to exist.
      */
     #[Test]
     public function theDocumentedComposerScriptsExist(): void
