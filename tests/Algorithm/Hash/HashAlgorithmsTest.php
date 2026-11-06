@@ -66,7 +66,7 @@ final class HashAlgorithmsTest extends TestCase
     private const FILTER_ONLY = [SHA1::class, SHA256_64::class];
 
     #[Test]
-    #[DataProvider('getAlgorithms')]
+    #[DataProvider('getAlgorithmIdentifiers')]
     public function theAlgorithmHasTheRegisteredIdentifier(string $class, int $identifier, int $constant): void
     {
         // Then
@@ -80,7 +80,7 @@ final class HashAlgorithmsTest extends TestCase
      * Every hash is a FilterOnlyHash: a parameter of that type takes all eight.
      */
     #[Test]
-    #[DataProvider('getAlgorithms')]
+    #[DataProvider('getAlgorithmClasses')]
     public function everyHashCanFilter(string $class): void
     {
         static::assertInstanceOf(FilterOnlyHash::class, $class::create());
@@ -91,7 +91,7 @@ final class HashAlgorithmsTest extends TestCase
      * Hash refuses them, and the six IANA recommends do. {@see FilterOnlyTypeTest} checks that PHPStan sees it.
      */
     #[Test]
-    #[DataProvider('getAlgorithms')]
+    #[DataProvider('getAlgorithmClasses')]
     public function onlyTheRecommendedHashesAreGeneralPurpose(string $class): void
     {
         // When
@@ -127,6 +127,30 @@ final class HashAlgorithmsTest extends TestCase
     {
         foreach (self::ALGORITHMS as $class => [$identifier, $constant, $length]) {
             yield substr($class, strrpos($class, '\\') + 1) => [$class, $identifier, $constant, $length];
+        }
+    }
+
+    /**
+     * The classes and their identifiers, for the cases that do not look at the digest length.
+     *
+     * @return iterable<string, array{class-string<FilterOnlyHash>, int, int}>
+     */
+    public static function getAlgorithmIdentifiers(): iterable
+    {
+        foreach (self::getAlgorithms() as $name => [$class, $identifier, $constant]) {
+            yield $name => [$class, $identifier, $constant];
+        }
+    }
+
+    /**
+     * The classes alone, for the cases that do not look at the identifier or the digest length.
+     *
+     * @return iterable<string, array{class-string<FilterOnlyHash>}>
+     */
+    public static function getAlgorithmClasses(): iterable
+    {
+        foreach (self::getAlgorithms() as $name => [$class]) {
+            yield $name => [$class];
         }
     }
 

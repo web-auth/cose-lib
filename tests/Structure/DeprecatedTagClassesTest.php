@@ -60,10 +60,22 @@ final class DeprecatedTagClassesTest extends TestCase
     }
 
     /**
+     * The classes and their replacements, for the cases that do not look at the tag number.
+     *
+     * @return iterable<string, array{class-string, class-string}>
+     */
+    public static function getDeprecatedClassesAndReplacements(): iterable
+    {
+        foreach (self::getDeprecatedClasses() as $name => [$class, $replacement]) {
+            yield $name => [$class, $replacement];
+        }
+    }
+
+    /**
      * @param class-string $class
      */
     #[Test]
-    #[DataProvider('getDeprecatedClasses')]
+    #[DataProvider('getDeprecatedClassesAndReplacements')]
     public function constructingTheClassRaisesTheDeprecation(string $class, string $replacement): void
     {
         // When
@@ -104,7 +116,7 @@ final class DeprecatedTagClassesTest extends TestCase
      * @param class-string $replacement
      */
     #[Test]
-    #[DataProvider('getDeprecatedClasses')]
+    #[DataProvider('getDeprecatedClassesAndReplacements')]
     public function aMessageWrittenByTheDeprecatedClassIsReadByItsReplacement(
         string $class,
         string $replacement
@@ -129,7 +141,7 @@ final class DeprecatedTagClassesTest extends TestCase
      * @param class-string $replacement
      */
     #[Test]
-    #[DataProvider('getDeprecatedClasses')]
+    #[DataProvider('getDeprecatedClassesAndReplacements')]
     public function theReplacementRaisesNoDeprecation(string $class, string $replacement): void
     {
         // When

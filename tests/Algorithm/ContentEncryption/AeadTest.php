@@ -68,6 +68,18 @@ final class AeadTest extends TestCase
         yield 'ChaCha20/Poly1305' => [ChaCha20Poly1305::create(), 24, 32, 12, 16];
     }
 
+    /**
+     * The algorithms alone, for the cases that do not look at the lengths of the registry entry.
+     *
+     * @return iterable<string, array{Aead}>
+     */
+    public static function eachAlgorithm(): iterable
+    {
+        foreach (self::algorithms() as $name => [$algorithm]) {
+            yield $name => [$algorithm];
+        }
+    }
+
     #[Test]
     #[DataProvider('algorithms')]
     public function theAlgorithmHasTheParametersOfItsRegistryEntry(
@@ -157,7 +169,7 @@ final class AeadTest extends TestCase
     }
 
     #[Test]
-    #[DataProvider('algorithms')]
+    #[DataProvider('eachAlgorithm')]
     public function theContentRoundTrips(Aead $algorithm): void
     {
         $this->skipUnlessSupported($algorithm);
@@ -179,7 +191,7 @@ final class AeadTest extends TestCase
      * key type, key length, and algorithm are correct".
      */
     #[Test]
-    #[DataProvider('algorithms')]
+    #[DataProvider('eachAlgorithm')]
     public function aKeyOfAnotherLengthIsRejected(Aead $algorithm): void
     {
         $this->skipUnlessSupported($algorithm);
@@ -208,7 +220,7 @@ final class AeadTest extends TestCase
      * primitive runs: OpenSSL would take a 12-byte nonce for AES-CCM and derive another L from it.
      */
     #[Test]
-    #[DataProvider('algorithms')]
+    #[DataProvider('eachAlgorithm')]
     public function aNonceOfAnotherLengthIsRejected(Aead $algorithm): void
     {
         $this->skipUnlessSupported($algorithm);
@@ -326,7 +338,7 @@ final class AeadTest extends TestCase
      * the start for these algorithms, unlike the signature and MAC ones which predate the check.
      */
     #[Test]
-    #[DataProvider('algorithms')]
+    #[DataProvider('eachAlgorithm')]
     public function theKeyRestrictionsAreEnforcedByDefault(Aead $algorithm): void
     {
         $this->skipUnlessSupported($algorithm);
