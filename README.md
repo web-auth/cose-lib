@@ -138,7 +138,8 @@ verification that returned `true`, with
 [Security recommendations](https://docs.spomky-labs.com/cose/latest/introduction/security-recommendations/) collects in one
 page every decision the library leaves to you.
 
-The pages live in [web-auth/cose-doc](https://github.com/web-auth/cose-doc); corrections are welcome there.
+The pages live in [Spomky-Labs/docs](https://github.com/Spomky-Labs/docs/tree/main/projects/cose), one directory per
+version of the library; corrections are welcome there.
 
 [`examples/`](examples/README.md) holds a runnable program per topic, and [RELEASES.md](RELEASES.md) the supported
 branches and what changed in each release.

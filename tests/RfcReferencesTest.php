@@ -57,13 +57,16 @@ final class RfcReferencesTest extends TestCase
     private const ROOT = __DIR__ . '/..';
 
     /**
-     * The pages live in web-auth/cose-doc, one branch per version of the library. They are read from
-     * COSE_DOC_PATH, or from a checkout of that repository beside this one; without either, the tests that
-     * parse them are skipped, so a clone of the library alone still runs green.
+     * The pages live in Spomky-Labs/docs, one directory per version of the library: a new version branch updates
+     * DOCUMENTATION_DIRECTORY here and in the CI workflow. They are read from COSE_DOC_PATH, or from a clone of that
+     * repository beside this one; without either, the tests that parse them are skipped, so a clone of the library
+     * alone still runs green.
      */
     private const DOCUMENTATION_ENV = 'COSE_DOC_PATH';
 
-    private const DOCUMENTATION_SIBLING = '/../cose-doc';
+    private const DOCUMENTATION_DIRECTORY = 'projects/cose/4.9';
+
+    private const DOCUMENTATION_SIBLING = '/../docs/' . self::DOCUMENTATION_DIRECTORY;
 
     /**
      * The pages that carry the algorithm tables, and the ones that carry the key type and curve tables.
@@ -767,7 +770,7 @@ final class RfcReferencesTest extends TestCase
     }
 
     /**
-     * The checkout of web-auth/cose-doc to read the pages from, or null when there is none.
+     * The directory of this version in a checkout of Spomky-Labs/docs, or null when there is none.
      */
     private static function documentationRoot(): ?string
     {
@@ -787,7 +790,8 @@ final class RfcReferencesTest extends TestCase
     {
         if (self::documentationRoot() === null) {
             static::markTestSkipped(sprintf(
-                'The pages are in web-auth/cose-doc; clone it beside this repository or set %s.',
+                'The pages are in %s of Spomky-Labs/docs; clone it beside this repository or set %s to that directory.',
+                self::DOCUMENTATION_DIRECTORY,
                 self::DOCUMENTATION_ENV
             ));
         }
