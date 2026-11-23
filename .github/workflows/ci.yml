@@ -233,21 +233,23 @@ jobs:
       PHP_VERSION: ${{ matrix.php-version }}
       COSE_ML_DSA_EXPECTED: ${{ matrix.ml-dsa }}
       # RfcReferencesTest parses the documentation pages against the classes and the IANA COSE registry.
-      # They live in web-auth/cose-doc; without this checkout the test skips instead of failing.
-      COSE_DOC_PATH: ${{ github.workspace }}/cose-doc
+      # They live in Spomky-Labs/docs, under projects/cose/; without this checkout the test skips instead of failing.
+      COSE_DOC_PATH: ${{ github.workspace }}/slabs-docs/projects/cose/4.9
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
-      # One branch of the documentation is one version of the library, so the branch is named here the way
-      # edit_uri names it in mkdocs.yml: a new version branch updates both.
+      # One directory of Spomky-Labs/docs is one version of the library, so COSE_DOC_PATH above names the one of this
+      # branch: a new version branch updates that directory name there and in tests/RfcReferencesTest.php. The
+      # sparse checkout fetches projects/cose alone, not the pages of the other libraries.
       - name: Check out the documentation
         uses: actions/checkout@v7.0.1
         with:
-          repository: web-auth/cose-doc
-          ref: 4.9.x
-          path: cose-doc
+          repository: Spomky-Labs/docs
+          ref: main
+          path: slabs-docs
+          sparse-checkout: projects/cose
           persist-credentials: false
 
       - name: Install dependencies
