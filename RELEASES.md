@@ -17,7 +17,8 @@ This matrix is the single source of truth for the branches under support; [SECUR
 | Version | Supported                           |
 |---------|-------------------------------------|
 | 4.9.x   | :white_check_mark: (in development) |
-| < 4.9.x | :x:                                 |
+| 4.8.x   | :white_check_mark:                  |
+| < 4.8.x | :x:                                 |
 
 ## Upgrading
 
