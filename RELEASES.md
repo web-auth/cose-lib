@@ -14,13 +14,11 @@ Such releases will be considered as "pre-releases".
 
 This matrix is the single source of truth for the branches under support; [SECURITY.md](SECURITY.md) refers to it.
 
-| Version | Supported                              |
-|---------|----------------------------------------|
-| 4.8.x   | :white_check_mark: (in development)    |
-| 4.7.x   | :white_check_mark:                     |
-| 4.6.x   | :white_check_mark: (security fix only) |
-| 4.5.x   | :white_check_mark: (security fix only) |
-| < 4.5.x | :x:                                    |
+| Version | Supported                           |
+|---------|-------------------------------------|
+| 4.9.x   | :white_check_mark: (in development) |
+| 4.8.x   | :white_check_mark:                  |
+| < 4.8.x | :x:                                 |
 
 ## Upgrading
 
